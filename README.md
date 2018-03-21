@@ -35,5 +35,5 @@ If `opts` is specified, the default options (shown below) will be overridden.
 
 #### Not yet implemented:
 - dynamically resize canvas
-- add custom canvas, image, or video source
+- add custom canvas, image, video, shader, or fbo source
 - pass in (json?) chain of functions to render rather than

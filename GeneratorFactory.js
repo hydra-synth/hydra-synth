@@ -72,7 +72,8 @@ function formatArguments (userArgs, defaultArgs) {
 }
 
 
-var GeneratorFactory = function () {
+var GeneratorFactory = function (defaultOutput) {
+
   let self = this
   self.functions = {}
   Object.keys(glslTransforms).forEach((method) => {
@@ -90,7 +91,7 @@ var GeneratorFactory = function () {
           glslString += ')'
           return glslString
         }
-
+        obj.defaultOutput = defaultOutput
         obj.uniforms = []
         inputs.forEach((input, index) => {
           if (input.isUniform) {
@@ -185,10 +186,10 @@ Generator.prototype.glsl = function () {
 }
 
 Generator.prototype.out = function (_output) {
-  console.log('UNIFORMS', this.uniforms)
+  console.log('UNIFORMS', this.uniforms, output)
 
   // console.log("FRAG", frag)
-  var output = _output || window.o0
+  var output = _output || this.defaultOutput
   var frag = this.compile()
   output.frag = frag
   var uniformObj = {}

@@ -13,19 +13,14 @@ var hydraSynth = function ({
   numSources = 4,
   numOutputs = 4,
   makeGlobal = true,
+  autoLoop = true,
   canvas
-}) {
+} = {}) {
   const self = this
 //  Creates functions from 'composable-glsl-functions'
-// to do: make function rather than object
+// to do: make into a function rather than an object
 
-  const gen = new GeneratorFactory()
-  Object.keys(gen.functions).forEach((key)=>{
-    self[key] = gen.functions[key]
-    if(makeGlobal === true) {
-      window[key] = gen.functions[key]
-    }
-  })
+
 
   this.pb = pb
   this.width = width
@@ -70,6 +65,14 @@ var hydraSynth = function ({
     return o
   })
 
+
+  const gen = new GeneratorFactory(this.o[0])
+  Object.keys(gen.functions).forEach((key)=>{
+    self[key] = gen.functions[key]
+    if(makeGlobal === true) {
+      window[key] = gen.functions[key]
+    }
+  })
   this.output = this.o[0]
 
   this.s = (Array(numOutputs)).fill().map((el, index) => {
@@ -182,8 +185,8 @@ var hydraSynth = function ({
     count: 3,
     depth: { enable: false }
   })
-  //  window.s0 = this.s[0]
-  loop(function (dt) {
+
+  self.tick = function (dt, uniforms) {
   // this.regl.frame(function () {
     self.time += dt * 0.001
     // console.log(self.time)
@@ -219,7 +222,9 @@ var hydraSynth = function ({
         resolution: [self.canvas.width, self.canvas.height]
       })
     }
-  }).start()
+  }
+  //  window.s0 = this.s[0]
+  if(autoLoop) loop(self.tick).start()
 }
 
 module.exports = hydraSynth
