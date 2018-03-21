@@ -26,7 +26,7 @@ var hydraSynth = function ({
       window[key] = gen.functions[key]
     }
   })
-  
+
   this.pb = pb
   this.width = width
   this.height = height
@@ -63,7 +63,7 @@ var hydraSynth = function ({
   })
 
   this.o = (Array(numOutputs)).fill().map((el, index) => {
-    var o = new Output({regl: this.regl, width: width, height: height})
+    var o = new Output({regl: this.regl, width: this.width, height: this.height})
     o.render()
     o.id = index
     if (makeGlobal) window['o' + index] = o
@@ -73,7 +73,7 @@ var hydraSynth = function ({
   this.output = this.o[0]
 
   this.s = (Array(numOutputs)).fill().map((el, index) => {
-    var s = new Source({regl: this.regl, pb: this.pb})
+    var s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height})
     if (makeGlobal) window['s' + index] = s
     return s
   })

@@ -4,7 +4,8 @@
   "description": "base synth for hydra-editor",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "example": "budo --ssl ./example/index.js"
   },
   "repository": {
     "type": "git",
@@ -24,6 +25,7 @@
   },
   "homepage": "https://github.com/ojack/hydra-synth#readme",
   "dependencies": {
+    "getusermedia": "^2.0.1",
     "mouse-change": "^1.4.0",
     "raf-loop": "^1.1.3",
     "regl": "^1.3.1"
