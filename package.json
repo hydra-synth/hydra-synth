@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "example": "budo --ssl ./example/index.js"
+    "example": "budo ./example/index.js --ssl --open --live "
   },
   "repository": {
     "type": "git",
@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/ojack/hydra-synth#readme",
   "dependencies": {
+    "enumerate-devices": "^1.1.1",
     "getusermedia": "^2.0.1",
     "mouse-change": "^1.4.0",
     "raf-loop": "^1.1.3",
