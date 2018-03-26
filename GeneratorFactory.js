@@ -186,7 +186,7 @@ Generator.prototype.glsl = function () {
 }
 
 Generator.prototype.out = function (_output) {
-  console.log('UNIFORMS', this.uniforms, output)
+//  console.log('UNIFORMS', this.uniforms, output)
 
   // console.log("FRAG", frag)
   var output = _output || this.defaultOutput

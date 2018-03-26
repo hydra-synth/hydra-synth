@@ -2,6 +2,8 @@ const Output = require('./output.js')
 const loop = require('raf-loop')
 const Source = require('./source.js')
 const GeneratorFactory = require('./GeneratorFactory.js')
+const Analyzer = require('web-audio-analyser')
+const getUserMedia = require('getusermedia')
 const mouse = require('mouse-change')()
 
 // to do: add ability to pass in certain uniforms and transforms
@@ -14,6 +16,7 @@ var hydraSynth = function ({
   numOutputs = 4,
   makeGlobal = true,
   autoLoop = true,
+  detectAudio = true,
   canvas
 } = {}) {
   const self = this
@@ -26,7 +29,23 @@ var hydraSynth = function ({
   this.width = width
   this.height = height
   this.time = 0
+  self.detectAudio = false
 
+  if(detectAudio) {
+    getUserMedia({audio: true, video: false}, function (err, stream) {
+    //  console.log('audio', stream)
+      if(err) {
+        console.log(err)
+      } else {
+        self.audio = Analyzer(stream, {audible: false})
+        self.fft = self.audio.frequencies()
+        self.detectAudio = true
+        window.fft = (freq, mult) => () => (self.fft[freq]*mult)
+
+      //  console.log(window.audio)
+      }
+    })
+  }
   // create main output canvas and add to screen
   if (canvas) {
     this.canvas = canvas
@@ -187,6 +206,7 @@ var hydraSynth = function ({
   })
 
   self.tick = function (dt, uniforms) {
+    if(self.detectAudio === true) self.fft = self.audio.frequencies()
   // this.regl.frame(function () {
     self.time += dt * 0.001
     // console.log(self.time)

@@ -78,6 +78,35 @@ module.exports = {
       return texture2D(_tex,_st);
     }`
   },
+  solid: {
+    type: 'src',
+    inputs: [
+      {
+        name: 'r',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'g',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'b',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'a',
+        type: 'float',
+        default: 1.0
+      }
+    ],
+    notes: '',
+    glsl: `vec4 solid(vec4 c0, float _r, float _g, float _b, float _a){
+      return vec4(_r, _g, _b, _a);
+    }`
+  },
   rotate: {
     type: 'coord',
     inputs: [
