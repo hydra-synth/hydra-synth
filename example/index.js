@@ -21,8 +21,8 @@ function init () {
   window.hydra = hydra
 
 
-  s0.init({ src: canvas})
-  src(s0).out()
+  hydra.s[0].init({ src: canvas})
+  hydra.src(hydra.s[0]).out()
   var x = 0
   loop(() => {
     x++
@@ -30,6 +30,9 @@ function init () {
     ctx.lineTo(200, 100);
     ctx.stroke();
   }).start()
+
+
+
   // s0.initCam(1)
   //
   // getUserMedia({audio: true, video: false}, function (err, stream) {
