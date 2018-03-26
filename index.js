@@ -1,8 +1,8 @@
-const Output = require('./output.js')
+const Output = require('./src/output.js')
 const loop = require('raf-loop')
-const Source = require('./hydra-source.js')
-const GeneratorFactory = require('./GeneratorFactory.js')
-const Analyzer = require('web-audio-analyser')
+const Source = require('./src/hydra-source.js')
+const GeneratorFactory = require('./src/GeneratorFactory.js')
+//const Analyzer = require('web-audio-analyser')
 const getUserMedia = require('getusermedia')
 const mouse = require('mouse-change')()
 

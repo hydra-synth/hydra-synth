@@ -112,7 +112,7 @@ osc((t) => (100*Math.sin(t*0.1))).out()
 ```
 
 #### Using Custom Sources
-Any canvas, video, or image element can serve as a source in addition to the built-in source functions for sharing camera, screen capture, and remote streams.
+Any canvas, video, or image element can serve as a source in addition to the built-in source functions for sharing camera, screen capture, and remote streams. Video and images must be fully loaded before being passed to hydra.
 
 Add a custom source:
 
