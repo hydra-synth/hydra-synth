@@ -17,7 +17,7 @@ const Hydra = require('hydra-synth')
 window.onload = function () {
   const hydra = new Hydra()
 
-  // by default, hydra makes everything global for easy use in live coding.
+  // by default, hydra makes everything global.
   // see options to change parameters
   osc().out(o0)
 }
@@ -36,4 +36,3 @@ If `opts` is specified, the default options (shown below) will be overridden.
 #### Not yet implemented:
 - dynamically resize canvas
 - add custom canvas, image, video, shader, or fbo source
-- pass in (json?) chain of functions to render rather than

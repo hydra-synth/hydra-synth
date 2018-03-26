@@ -1,6 +1,6 @@
 const Output = require('./output.js')
 const loop = require('raf-loop')
-const Source = require('./source.js')
+const Source = require('./hydra-source.js')
 const GeneratorFactory = require('./GeneratorFactory.js')
 const Analyzer = require('web-audio-analyser')
 const getUserMedia = require('getusermedia')
@@ -22,9 +22,6 @@ var hydraSynth = function ({
   const self = this
 //  Creates functions from 'composable-glsl-functions'
 // to do: make into a function rather than an object
-
-
-
   this.pb = pb
   this.width = width
   this.height = height
