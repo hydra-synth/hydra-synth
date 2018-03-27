@@ -30,6 +30,8 @@ function init () {
     ctx.moveTo(x, 0);
     ctx.lineTo(200, 100);
     ctx.stroke();
+    ctx.fillStyle = 'green';
+    ctx.fillRect(10, 10, 100, 100);
     hydra.tick(dt)
   }).start()
 
