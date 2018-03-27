@@ -15,7 +15,7 @@ function init () {
   ctx.stroke();
 //  document.body.appendChild(canvas)
   var hydra = new Hydra({
-
+    autoLoad: false
   })
 
   window.hydra = hydra
@@ -24,11 +24,13 @@ function init () {
   hydra.s[0].init({ src: canvas})
   hydra.src(hydra.s[0]).out()
   var x = 0
-  loop(() => {
+  loop((dt) => {
     x++
+
     ctx.moveTo(x, 0);
     ctx.lineTo(200, 100);
     ctx.stroke();
+    hydra.tick(dt)
   }).start()
 
 
