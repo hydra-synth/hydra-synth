@@ -72,6 +72,14 @@ module.exports = {
             return vec4(r, g, b, 1.0);
           }`
   },
+  gradient: {
+    type: 'src',
+    inputs: [],
+    glsl: `vec4 gradient(vec2 _st) {
+      return vec4(_st, sin(time), 1.0);
+    }
+    `
+  },
   src: {
     type: 'src',
     inputs: [

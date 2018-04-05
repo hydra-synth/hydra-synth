@@ -24,7 +24,7 @@ function init () {
   hydra.s[0].init({ src: canvas})
   //hydra.src(hydra.s[0]).out()
 
-  osc().posterize().out()
+  gradient().posterize(100).out()
   var x = 0
   loop((dt) => {
     x++
