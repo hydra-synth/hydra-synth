@@ -170,6 +170,30 @@ module.exports = {
       return (floor(st * xy) + 0.5)/xy;
     }`
   },
+  posterize: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'bins',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'gamma',
+        type: 'float',
+        default: 0.6
+      }
+    ],
+    glsl: `vec4 posterize(vec4 c, float bins, float gamma){
+      vec4 c2 = pow(c, vec4(gamma));
+      c2 *= vec4(bins);
+      c2 = floor(c2);
+      c2/= vec4(bins);
+      c2 = pow(c2, vec4(1.0/gamma));
+      return vec4(c2.xyz, c.a);
+    }`
+
+  },
   kaleid: {
     type: 'coord',
     inputs: [

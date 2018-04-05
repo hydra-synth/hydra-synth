@@ -15,18 +15,19 @@ function init () {
   ctx.stroke();
 //  document.body.appendChild(canvas)
   var hydra = new Hydra({
-    autoLoad: false
+  //  autoLoad: false
   })
 
   window.hydra = hydra
 
 
   hydra.s[0].init({ src: canvas})
-  hydra.src(hydra.s[0]).out()
+  //hydra.src(hydra.s[0]).out()
+
+  osc().posterize().out()
   var x = 0
   loop((dt) => {
     x++
-
     ctx.moveTo(x, 0);
     ctx.lineTo(200, 100);
     ctx.stroke();

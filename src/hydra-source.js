@@ -10,7 +10,6 @@ class HydraSource  {
     this.width = opts.width
     this.height = opts.height
     this.tex = this.regl.texture({
-    //  flipY: true
       shape: [opts.width, opts.height]
     })
     this.pb = opts.pb
@@ -34,14 +33,12 @@ class HydraSource  {
 
   initStream (streamName) {
     if (streamName && this.pb) {
-      //  console.log("STREAM", opts.stream)
-        const video = document.createElement('video')
-        //  video.src = URL.createObjectURL(localStream)
-        video.srcObject = opts.stream
-        video.addEventListener('loadedmetadata', () => {
-          self.src = video
-          self.tex = self.regl.texture(self.src)
-        })
+       var self = this
+      this.pb.initSource(streamName)
+      pb.on('got video', function(id, video){
+            self.src = video
+            self.tex = self.regl.texture(self.src)
+      })
     }
   }
 
