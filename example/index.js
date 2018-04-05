@@ -6,6 +6,7 @@ const loop = require('raf-loop')
 function init () {
 
   canvas = document.createElement('canvas')
+  canvas.style.backgroundColor = "#000"
   canvas.width = 800
   canvas.height = 200
 
@@ -24,7 +25,7 @@ function init () {
   hydra.s[0].init({ src: canvas})
   //hydra.src(hydra.s[0]).out()
 
-  shape(10).scale(1, 1, 2).out()
+  shape(30, 0.2, 0.1).scale(1, 1, 2).out()
   var x = 0
   loop((dt) => {
     x++
