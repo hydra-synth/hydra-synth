@@ -25,7 +25,7 @@ function init () {
   hydra.s[0].init({ src: canvas})
   //hydra.src(hydra.s[0]).out()
 
-  shape(30, 0.2, 0.1).scale(1, 1, 2).out()
+  shape(3, 0.2, 0.1).repeatX(10, 0.6).repeatY(6, 2.2).scale(1, 1, 2).out()
   var x = 0
   loop((dt) => {
     x++

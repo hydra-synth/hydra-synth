@@ -246,6 +246,46 @@ module.exports = {
     }`
 
   },
+  repeatX: {
+    type: 'coord',
+    inputs: [
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      }, {
+          name: 'offset',
+          type: 'float',
+          default: 0.0
+        }
+    ],
+    glsl: `vec2 repeatX(vec2 _st, float reps, float offset){
+      vec2 st = _st * vec2(reps, 1.0);
+    //  float f =  mod(_st.y,2.0);
+      st.y += step(1., mod(st.x,2.0))* offset;
+      return fract(st);
+    }`
+  },
+  repeatY: {
+    type: 'coord',
+    inputs: [
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      }, {
+          name: 'offset',
+          type: 'float',
+          default: 0.0
+        }
+    ],
+    glsl: `vec2 repeatY(vec2 _st, float reps, float offset){
+      vec2 st = _st * vec2(1.0, reps);
+    //  float f =  mod(_st.y,2.0);
+      st.x += step(1., mod(st.y,2.0))* offset;
+      return fract(st);
+    }`
+  },
   kaleid: {
     type: 'coord',
     inputs: [
