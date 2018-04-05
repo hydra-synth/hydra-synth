@@ -72,11 +72,45 @@ module.exports = {
             return vec4(r, g, b, 1.0);
           }`
   },
+  shape: {
+    type: 'src',
+    inputs: [
+      {
+        name: 'sides',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'radius',
+        type: 'float',
+        default: 0.3
+      },
+      {
+        name: 'smoothing',
+        type: 'float',
+        default: 0.01
+      }
+    ],
+    glsl: `vec4 shape(vec2 _st, float sides, float radius, float smoothing){
+      vec2 st = _st * 2. - 1.;
+      // Angle and radius from the current pixel
+      float a = atan(st.x,st.y)+3.1416;
+      float r = (2.*3.1416)/sides;
+      float d = cos(floor(.5+a/r)*r-a)*length(st);
+      return vec4(vec3(1.0-smoothstep(radius,radius + smoothing,d)), 1.0);
+    }`
+  },
   gradient: {
     type: 'src',
-    inputs: [],
-    glsl: `vec4 gradient(vec2 _st) {
-      return vec4(_st, sin(time), 1.0);
+    inputs: [
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec4 gradient(vec2 _st, float speed) {
+      return vec4(_st, sin(time*speed), 1.0);
     }
     `
   },
@@ -150,11 +184,21 @@ module.exports = {
         name: 'amount',
         type: 'float',
         default: 1.5
+      },
+      {
+        name: 'xMult',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'yMult',
+        type: 'float',
+        default: 1.0
       }
     ],
-    glsl: `vec2 scale(vec2 st, float amount){
+    glsl: `vec2 scale(vec2 st, float amount, float xMult, float yMult){
       vec2 xy = st - vec2(0.5);
-      xy*=(1.0/amount);
+      xy*=(1.0/vec2(amount*xMult, amount*yMult));
       xy+=vec2(0.5);
       return xy;
     }
