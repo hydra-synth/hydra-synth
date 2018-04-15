@@ -1,7 +1,7 @@
 /* globals tex */
+import { seq } from './timingUtils.js'
 const glslTransforms = require('./composable-glsl-functions.js')
 const counter = require('./counter.js')
-
 
 var Generator = function (param) {
   return Object.create(Generator.prototype)
@@ -42,12 +42,16 @@ function formatArguments (userArgs, defaultArgs) {
     typedArg.isUniform = true
 
     if (userArgs.length > index) {
+
       typedArg.value = userArgs[index]
       // if argument passed in contains transform property, i.e. is of type generator, do not add uniform
       if (userArgs[index].transform) typedArg.isUniform = false
 
       if (typeof userArgs[index] === 'function') {
         typedArg.value = (context, props, batchId) => (userArgs[index](props))
+      } else if (userArgs[index].constructor === Array) {
+        console.log("is Array")
+        typedArg.value = (context, props, batchId) => seq(userArgs[index])(props)
       }
     } else {
       // use default value for argument
