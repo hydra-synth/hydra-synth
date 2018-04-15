@@ -17,7 +17,6 @@ class HydraSynth {
     numOutputs = 4,
     makeGlobal = true,
     autoLoop = true,
-    detectAudio = false,
     canvas
   } = {}) {
 
