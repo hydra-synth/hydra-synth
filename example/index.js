@@ -26,6 +26,8 @@ function init () {
   //hydra.src(hydra.s[0]).out()
 
   shape([3, 4, 4], 0.2, 0.1).repeatX(10, 0.6).repeatY(6, 2.2).scale(1, 1, 2).out()
+  a.show()
+
   var x = 0
   loop((dt) => {
     x++

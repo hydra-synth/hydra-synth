@@ -4,7 +4,7 @@ const Source = require('./src/hydra-source.js')
 const GeneratorFactory = require('./src/GeneratorFactory.js')
 const getUserMedia = require('getusermedia')
 const mouse = require('mouse-change')()
-
+const Audio = require('./src/audio.js')
 // to do: add ability to pass in certain uniforms and transforms
 class HydraSynth {
 
@@ -16,9 +16,11 @@ class HydraSynth {
     numOutputs = 4,
     makeGlobal = true,
     autoLoop = true,
+    detectAudio = true,
     canvas
   } = {}) {
 
+    this.bpm = 60
     this.pb = pb
     this.width = width
     this.height = height
@@ -32,10 +34,21 @@ class HydraSynth {
     this._initSources(numSources)
     this._generateGlslTransforms()
 
+    if(detectAudio) this._initAudio()
+    if(makeGlobal) {
+      window['render'] = this.render.bind(this)
+    //  window.bpm = this.bpm
+     window.bpm = this._setBpm.bind(this)
+    }
     if(autoLoop) loop(this.tick.bind(this)).start()
-    if(makeGlobal) window['render'] = this.render.bind(this)
   }
 
+  _initAudio () {
+    this.audio = new Audio({
+      numBins: 4
+    })
+    if(this.makeGlobal) window.a = this.audio
+  }
   // create main output canvas and add to screen
   _initCanvas (canvas) {
     if (canvas) {
@@ -182,6 +195,10 @@ class HydraSynth {
     }
   }
 
+  _setBpm(bpm) {
+    this.bpm = bpm
+  }
+
   createSource () {
     let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height})
     if(this.makeGlobal) {
@@ -220,16 +237,17 @@ class HydraSynth {
     // this.regl.clear({
     //   color: [0, 0, 0, 1]
     // })
-
+    this.audio.tick()
     for (let i = 0; i < this.s.length; i++) {
       this.s[i].tick(this.time)
     }
 
     for (let i = 0; i < this.o.length; i++) {
+      console.log(this.bpm)
       this.o[i].tick({
         time: this.time,
         mouse: mouse,
-        //  bpm: this.audio.bpm,
+        bpm: this.bpm,
         resolution: [this.canvas.width, this.canvas.height]
       })
     }
