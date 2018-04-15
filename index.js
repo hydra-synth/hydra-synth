@@ -243,7 +243,6 @@ class HydraSynth {
     }
 
     for (let i = 0; i < this.o.length; i++) {
-      console.log(this.bpm)
       this.o[i].tick({
         time: this.time,
         mouse: mouse,

@@ -1,5 +1,5 @@
 /* globals tex */
-import { seq } from './timingUtils.js'
+import { seq, sin, ramp, createFades } from './timingUtils.js'
 const glslTransforms = require('./composable-glsl-functions.js')
 const counter = require('./counter.js')
 
@@ -81,6 +81,9 @@ var GeneratorFactory = function (defaultOutput) {
   let self = this
   self.functions = {}
 
+  window.sin = sin
+  window.ramp = ramp
+  createFades(6)
   // extend Array prototype
   Array.prototype.fast = function(speed) {
   //  console.log("array fast", speed, this)
