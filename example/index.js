@@ -1,3 +1,5 @@
+//const Hydra = require('./../src/index.js')
+
 const Hydra = require('./../index.js')
 const Analyzer = require('web-audio-analyser')
 const getUserMedia = require('getusermedia')

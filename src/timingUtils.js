@@ -53,4 +53,9 @@ function createFades (numFades) {
   }
 }
 
-export { seq, sin, ramp, createFades }
+module.exports = {
+  seq: seq,
+  sin: sin,
+  ramp: ramp,
+  createFades: createFades
+}

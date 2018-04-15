@@ -1,5 +1,5 @@
 /* globals tex */
-import { seq, sin, ramp, createFades } from './timingUtils.js'
+const { seq, sin, ramp, createFades } = require('./timingUtils.js')
 const glslTransforms = require('./composable-glsl-functions.js')
 const counter = require('./counter.js')
 
