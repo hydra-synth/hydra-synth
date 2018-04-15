@@ -2,7 +2,6 @@ const Output = require('./src/output.js')
 const loop = require('raf-loop')
 const Source = require('./src/hydra-source.js')
 const GeneratorFactory = require('./src/GeneratorFactory.js')
-//const Analyzer = require('web-audio-analyser')
 const getUserMedia = require('getusermedia')
 const mouse = require('mouse-change')()
 
@@ -24,7 +23,6 @@ class HydraSynth {
     this.width = width
     this.height = height
     this.time = 0
-    this.detectAudio = detectAudio
     this.makeGlobal = makeGlobal
     this.renderAll = false
 
