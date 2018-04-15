@@ -42,7 +42,7 @@ function formatArguments (userArgs, defaultArgs) {
     typedArg.isUniform = true
 
     if (userArgs.length > index) {
-
+      console.log("arg", userArgs[index])
       typedArg.value = userArgs[index]
       // if argument passed in contains transform property, i.e. is of type generator, do not add uniform
       if (userArgs[index].transform) typedArg.isUniform = false
@@ -80,6 +80,14 @@ var GeneratorFactory = function (defaultOutput) {
 
   let self = this
   self.functions = {}
+
+  // extend Array prototype
+  Array.prototype.fast = function(speed) {
+  //  console.log("array fast", speed, this)
+    this.speed = speed
+    return this
+  }
+
   Object.keys(glslTransforms).forEach((method) => {
     const transform = glslTransforms[method]
 
