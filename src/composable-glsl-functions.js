@@ -124,7 +124,7 @@ module.exports = {
     ],
     glsl: `vec4 src(vec2 _st, sampler2D _tex){
     //  vec2 uv = gl_FragCoord.xy/vec2(1280., 720.);
-      return texture2D(_tex,_st);
+      return texture2D(_tex, fract(_st));
     }`
   },
   solid: {
