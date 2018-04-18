@@ -438,6 +438,7 @@ module.exports = {
       return c0*(1.0-amount)+(c0*c1)*amount;
     }`
   },
+
   diff: {
     type: 'combine',
     inputs: [
@@ -491,9 +492,15 @@ module.exports = {
   },
   invert: {
     type: 'color',
-    inputs: [],
-    glsl: `vec4 invert(vec4 c0){
-      return vec4(1.0-c0.rgb, c0.a);
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
+    glsl: `vec4 invert(vec4 c0, float amount){
+      return vec4((1.0-c0.rgb)*amount + c0.rgb*(1.0-amount), c0.a);
     }`
   },
   contrast: {
@@ -530,6 +537,18 @@ module.exports = {
     glsl: `float luminance(vec3 rgb){
       const vec3 W = vec3(0.2125, 0.7154, 0.0721);
       return dot(rgb, W);
+    }`
+  },
+  mask: {
+    type: 'combine',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      }
+    ],
+    glsl: `vec4 mask(vec4 c0, vec4 c1){
+      return vec4(c0.rgb, luminance(c1.rgb));
     }`
   },
   luma: {
