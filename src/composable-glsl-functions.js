@@ -65,7 +65,7 @@ module.exports = {
       }
     ],
     glsl: `vec4 osc(vec2 _st, float freq, float sync, float offset){
-            vec2 st = _st - vec2(0.5);
+            vec2 st = _st;
             float r = sin((st.x-offset/freq+time*sync)*freq)*0.5  + 0.5;
             float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
             float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
@@ -245,6 +245,37 @@ module.exports = {
       return vec4(c2.xyz, c.a);
     }`
 
+  },
+  repeat: {
+    type: 'coord',
+    inputs: [
+      {
+        name: 'repeatX',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'repeatY',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'offsetX',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'offsetY',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec2 repeat(vec2 _st, float repeatX, float repeatY, float offsetX, float offsetY){
+        vec2 st = _st * vec2(repeatX, repeatY);
+        st.x += step(1., mod(st.y,2.0)) * offsetX;
+        st.y += step(1., mod(st.x,2.0)) * offsetY;
+        return fract(st);
+    }`
   },
   repeatX: {
     type: 'coord',
