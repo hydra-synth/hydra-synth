@@ -7,14 +7,15 @@ class Audio {
     cutoff = 2,
     smooth = 0.4,
     max = 15,
+    scale = 10,
     isDrawing = false
   }) {
     this.vol = 0
-    this.setBins(numBins)
-
+    this.scale = scale
     this.max = max
     this.cutoff = cutoff
     this.smooth = smooth
+    this.setBins(numBins)
 
     this.canvas = document.createElement('canvas')
     this.canvas.width = 100
@@ -96,11 +97,15 @@ class Audio {
     this.bins = Array(numBins).fill(0)
     this.prevBins = Array(numBins).fill(0)
     this.fft = Array(numBins).fill(0)
-
+    this.range = Array(numBins).fill(0).map(() => ({
+      cutoff: this.cutoff,
+      scale: this.scale
+    }))
     // to do: what to do in non-global mode?
     this.bins.forEach((bin, index) => {
       window['a' + index] = (scale = 1, offset = 0) => () => (a.fft[index] * scale + offset)
     })
+    console.log(this.range)
   }
 
   setMax(max) {
@@ -127,9 +132,23 @@ class Audio {
       var height = bin * scale
 
      this.ctx.fillRect(index * spacing, this.canvas.height - height, spacing, height)
+
+  //   console.log(this.range[index])
+     var y = this.canvas.height - scale*this.range[index].cutoff
+     this.ctx.beginPath()
+     this.ctx.moveTo(index*spacing, y)
+     this.ctx.lineTo((index+1)*spacing, y)
+     this.ctx.stroke()
+
+     var yMax = this.canvas.height - scale*(this.range[index].scale + this.range[index].cutoff)
+     this.ctx.beginPath()
+     this.ctx.moveTo(index*spacing, yMax)
+     this.ctx.lineTo((index+1)*spacing, yMax)
+     this.ctx.stroke()
     })
 
-    var y = this.canvas.height - scale*this.cutoff
+
+    /*var y = this.canvas.height - scale*this.cutoff
     this.ctx.beginPath()
     this.ctx.moveTo(0, y)
     this.ctx.lineTo(this.canvas.width, y)
@@ -139,7 +158,7 @@ class Audio {
     this.ctx.beginPath()
     this.ctx.moveTo(0, yMax)
     this.ctx.lineTo(this.canvas.width, yMax)
-    this.ctx.stroke()
+    this.ctx.stroke()*/
   }
 }
 

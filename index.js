@@ -5,6 +5,8 @@ const GeneratorFactory = require('./src/GeneratorFactory.js')
 const getUserMedia = require('getusermedia')
 const mouse = require('mouse-change')()
 const Audio = require('./src/audio.js')
+const nanoKONTROL = require('korg-nano-kontrol');
+
 // to do: add ability to pass in certain uniforms and transforms
 class HydraSynth {
 
@@ -33,6 +35,26 @@ class HydraSynth {
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
+
+    nanoKONTROL.connect()
+    .then(function(device){
+      console.log('connected!' + device.name);
+      window.midi = device
+
+      window.midi.on1 = function(name, callback) {
+        window.midi.removeAllListeners(name)
+        window.midi.on(name, callback)
+      }
+      // catch all slider/knob/button events
+      // device.on('slider:*', function(value){
+      //   console.log(this.event+' => '+value);
+      // });
+      // do something
+    })
+    .catch(function(err){
+      console.log('no midi device found')
+    });
+
 
     if(detectAudio) this._initAudio()
     if(makeGlobal) {
