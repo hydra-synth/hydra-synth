@@ -1,3 +1,10 @@
+// to add: ripple: https://www.shadertoy.com/view/4djGzz
+// mask
+// convolution
+// basic sdf shapes
+// repeat
+// iq color palletes
+
 module.exports = {
   random: {
     type: 'util',
@@ -162,6 +169,30 @@ module.exports = {
       vec2 xy = vec2(pixelX, pixelY);
       return (floor(st * xy) + 0.5)/xy;
     }`
+  },
+  posterize: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'bins',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'gamma',
+        type: 'float',
+        default: 0.6
+      }
+    ],
+    glsl: `vec4 posterize(vec4 c, float bins, float gamma){
+      vec4 c2 = pow(c, vec4(gamma));
+      c2 *= vec4(bins);
+      c2 = floor(c2);
+      c2/= vec4(bins);
+      c2 = pow(c2, vec4(1.0/gamma));
+      return vec4(c2.xyz, c.a);
+    }`
+
   },
   kaleid: {
     type: 'coord',
@@ -353,7 +384,21 @@ module.exports = {
     ],
     glsl: `vec4 contrast(vec4 c0, float amount) {
       vec4 c = (c0-vec4(0.5))*vec4(amount) + vec4(0.5);
-      return vec4(c.rgb, 1.0);
+      return vec4(c.rgb, c0.a);
+    }
+    `
+  },
+  brightness: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 0.4
+      }
+    ],
+    glsl: `vec4 brightness(vec4 c0, float amount){
+      return vec4(c0.rgb + vec3(amount), c0.a);
     }
     `
   },
@@ -447,6 +492,37 @@ module.exports = {
         vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
         vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }`
+  },
+  saturate: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 2.0
+      }
+    ],
+    glsl: `vec4 saturate(vec4 c0, float amount){
+      const vec3 W = vec3(0.2125, 0.7154, 0.0721);
+      vec3 intensity = vec3(dot(c0.rgb, W));
+      return vec4(mix(intensity, c0.rgb, amount), c0.a);
+    }`
+  },
+  hue: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'hue',
+        type: 'float',
+        default: 0.4
+      }
+    ],
+    glsl: `vec4 hue(vec4 c0, float hue){
+      vec3 c = rgbToHsv(c0.rgb);
+      c.r += hue;
+    //  c.r = fract(c.r);
+      return vec4(hsvToRgb(c), c0.a);
     }`
   },
   colorama: {

@@ -7,9 +7,10 @@ class HydraSource  {
     this.regl = opts.regl
     this.src = null
     this.dynamic = true
+    this.width = opts.width
+    this.height = opts.height
     this.tex = this.regl.texture({
-    //  flipY: true
-      shape: [640, 480]
+      shape: [opts.width, opts.height]
     })
     this.pb = opts.pb
   }
@@ -25,9 +26,8 @@ class HydraSource  {
   initCam (index) {
     const self = this
     Webcam(index).then((response) => {
-      self.video = response.video
-      self.src = self.video
-      self.tex = self.regl.texture(self.video)
+      self.src = response.video
+      self.tex = self.regl.texture(self.src)
     })
   }
 
@@ -43,9 +43,8 @@ class HydraSource  {
           video.addEventListener('loadedmetadata', () => {
             self.video = video
             self.tex = self.regl.texture(self.video)
+            self.src = self.video
           })
-          self.video = video
-          self.src = self.video
         })
       //  console.log("STREAM", opts.stream)
 
@@ -55,9 +54,8 @@ class HydraSource  {
   initScreen () {
     const self = this
     Screen().then(function (response) {
-       self.video = response.video
-       self.src = self.video
-       self.tex = self.regl.texture(self.video)
+       self.src = response.video
+       self.tex = self.regl.texture(self.src)
      //  console.log("received screen input")
      })
   }
@@ -65,7 +63,7 @@ class HydraSource  {
   clear () {
     this.src = null
     this.tex = this.regl.texture({
-      shape: [640, 480]
+      shape: [this.width, this.height]
     })
   }
 
