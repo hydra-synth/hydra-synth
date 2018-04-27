@@ -26,28 +26,37 @@ class HydraSource  {
     const self = this
     Webcam(index).then((response) => {
       self.video = response.video
+      self.src = self.video
       self.tex = self.regl.texture(self.video)
     })
   }
 
   initStream (streamName) {
+    console.log("initing stream!", streamName)
+    let self = this
     if (streamName && this.pb) {
-      //  console.log("STREAM", opts.stream)
-        const video = document.createElement('video')
-        //  video.src = URL.createObjectURL(localStream)
-        video.srcObject = opts.stream
-        video.addEventListener('loadedmetadata', () => {
+        this.pb.initSource(streamName, function(stream){
+          console.log("GOT STREAM", stream)
+          const video = document.createElement('video')
+          //  video.src = URL.createObjectURL(localStream)
+          video.srcObject = stream
+          video.addEventListener('loadedmetadata', () => {
+            self.video = video
+            self.tex = self.regl.texture(self.video)
+          })
           self.video = video
-          self.tex = self.regl.texture(self.video)
+          self.src = self.video
         })
+      //  console.log("STREAM", opts.stream)
+
     }
   }
 
-  // to do: handle electron case
   initScreen () {
     const self = this
     Screen().then(function (response) {
        self.video = response.video
+       self.src = self.video
        self.tex = self.regl.texture(self.video)
      //  console.log("received screen input")
      })
