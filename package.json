@@ -1,6 +1,6 @@
 {
   "name": "hydra-synth",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "base synth for hydra-editor",
   "main": "index.js",
   "scripts": {
