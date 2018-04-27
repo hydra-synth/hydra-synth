@@ -35,18 +35,14 @@ class HydraSource  {
     console.log("initing stream!", streamName)
     let self = this
     if (streamName && this.pb) {
-        this.pb.initSource(streamName, function(stream){
-          console.log("GOT STREAM", stream)
-          const video = document.createElement('video')
-          //  video.src = URL.createObjectURL(localStream)
-          video.srcObject = stream
-          video.addEventListener('loadedmetadata', () => {
-            self.video = video
-            self.tex = self.regl.texture(self.video)
-            self.src = self.video
-          })
+        this.pb.initSource(streamName)
+
+        this.pb.on("got video", function(nick, video){
+          if(nick === streamName) {
+            self.src = video
+            self.tex = self.regl.texture(self.src)
+          }
         })
-      //  console.log("STREAM", opts.stream)
 
     }
   }
