@@ -2,6 +2,7 @@
 const { seq, sin, ramp, createFades } = require('./timingUtils.js')
 const glslTransforms = require('./composable-glsl-functions.js')
 const counter = require('./counter.js')
+const shaderManager = require('./shaderManager.js')
 
 var Generator = function (param) {
   return Object.create(Generator.prototype)
@@ -83,6 +84,8 @@ var GeneratorFactory = function (defaultOutput) {
 
   window.sin = sin
   window.ramp = ramp
+  window.frag = shaderManager(defaultOutput)
+  
   createFades(6)
   // extend Array prototype
   Array.prototype.fast = function(speed) {
