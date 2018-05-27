@@ -305,10 +305,10 @@ module.exports = {
         type: 'float',
         default: 3.0
       }, {
-          name: 'offset',
-          type: 'float',
-          default: 0.0
-        }
+        name: 'offset',
+        type: 'float',
+        default: 0.0
+      }
     ],
     glsl: `vec2 repeatY(vec2 _st, float reps, float offset){
       vec2 st = _st * vec2(1.0, reps);
@@ -470,7 +470,80 @@ module.exports = {
             return fract(st+(c1.xy-0.5)*amount);
           }`
   },
-
+  modulateScale: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'multiple',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 1.0
+      }
+    ],
+    glsl: `vec2 modulateScale(vec2 st, vec4 c1, float multiple, float offset){
+      vec2 xy = st - vec2(0.5);
+      xy*=(1.0/vec2(offset + multiple*c1.r, offset + multiple*c1.g));
+      xy+=vec2(0.5);
+      return xy;
+    }`
+  },
+  modulatePixelate: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'multiple',
+        type: 'float',
+        default: 10.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 3.0
+      }
+    ],
+    glsl: `vec2 modulatePixelate(vec2 st, vec4 c1, float multiple, float offset){
+      vec2 xy = vec2(offset + c1.x*multiple, offset + c1.y*multiple);
+      return (floor(st * xy) + 0.5)/xy;
+    }`
+  },
+  modulateRotate: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'multiple',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec2 modulateRotate(vec2 st, vec4 c1, float multiple, float offset){
+        vec2 xy = st - vec2(0.5);
+        float angle = offset + c1.x * multiple;
+        xy = mat2(cos(angle),-sin(angle), sin(angle),cos(angle))*xy;
+        xy += 0.5;
+        return xy;
+    }`
+  },
   modulateHue: {
     type: 'combineCoord',
     notes: 'changes coordinates based on hue of second input. Based on: https://www.shadertoy.com/view/XtcSWM',

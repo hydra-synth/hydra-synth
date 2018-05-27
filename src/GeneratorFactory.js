@@ -82,6 +82,7 @@ var GeneratorFactory = function (defaultOutput) {
   let self = this
   self.functions = {}
 
+  // set global utility functions. to do: make global optional
   window.sin = sin
   window.ramp = ramp
   window.frag = shaderManager(defaultOutput)
