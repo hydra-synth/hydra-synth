@@ -2,9 +2,10 @@ const Output = require('./src/output.js')
 const loop = require('raf-loop')
 const Source = require('./src/hydra-source.js')
 const GeneratorFactory = require('./src/GeneratorFactory.js')
-//const Analyzer = require('web-audio-analyser')
 const getUserMedia = require('getusermedia')
 const mouse = require('mouse-change')()
+const Audio = require('./src/audio.js')
+const nanoKONTROL = require('korg-nano-kontrol');
 
 // to do: add ability to pass in certain uniforms and transforms
 class HydraSynth {
@@ -17,15 +18,15 @@ class HydraSynth {
     numOutputs = 4,
     makeGlobal = true,
     autoLoop = true,
-    detectAudio = false,
+    detectAudio = true,
     canvas
   } = {}) {
 
+    this.bpm = 60
     this.pb = pb
     this.width = width
     this.height = height
     this.time = 0
-    this.detectAudio = detectAudio
     this.makeGlobal = makeGlobal
     this.renderAll = false
 
@@ -35,10 +36,41 @@ class HydraSynth {
     this._initSources(numSources)
     this._generateGlslTransforms()
 
+    nanoKONTROL.connect()
+    .then(function(device){
+      console.log('connected!' + device.name);
+      window.midi = device
+
+      window.midi.on1 = function(name, callback) {
+        window.midi.removeAllListeners(name)
+        window.midi.on(name, callback)
+      }
+      // catch all slider/knob/button events
+      // device.on('slider:*', function(value){
+      //   console.log(this.event+' => '+value);
+      // });
+      // do something
+    })
+    .catch(function(err){
+      console.log('no midi device found')
+    });
+
+
+    if(detectAudio) this._initAudio()
+    if(makeGlobal) {
+      window['render'] = this.render.bind(this)
+    //  window.bpm = this.bpm
+     window.bpm = this._setBpm.bind(this)
+    }
     if(autoLoop) loop(this.tick.bind(this)).start()
-    if(makeGlobal) window['render'] = this.render.bind(this)
   }
 
+  _initAudio () {
+    this.audio = new Audio({
+      numBins: 4
+    })
+    if(this.makeGlobal) window.a = this.audio
+  }
   // create main output canvas and add to screen
   _initCanvas (canvas) {
     if (canvas) {
@@ -185,6 +217,10 @@ class HydraSynth {
     }
   }
 
+  _setBpm(bpm) {
+    this.bpm = bpm
+  }
+
   createSource () {
     let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height})
     if(this.makeGlobal) {
@@ -223,7 +259,7 @@ class HydraSynth {
     // this.regl.clear({
     //   color: [0, 0, 0, 1]
     // })
-
+    this.audio.tick()
     for (let i = 0; i < this.s.length; i++) {
       this.s[i].tick(this.time)
     }
@@ -232,7 +268,7 @@ class HydraSynth {
       this.o[i].tick({
         time: this.time,
         mouse: mouse,
-        //  bpm: this.audio.bpm,
+        bpm: this.bpm,
         resolution: [this.canvas.width, this.canvas.height]
       })
     }

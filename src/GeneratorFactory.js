@@ -1,7 +1,8 @@
 /* globals tex */
+const { seq, sin, ramp, createFades } = require('./timingUtils.js')
 const glslTransforms = require('./composable-glsl-functions.js')
 const counter = require('./counter.js')
-
+const shaderManager = require('./shaderManager.js')
 
 var Generator = function (param) {
   return Object.create(Generator.prototype)
@@ -42,12 +43,16 @@ function formatArguments (userArgs, defaultArgs) {
     typedArg.isUniform = true
 
     if (userArgs.length > index) {
+      console.log("arg", userArgs[index])
       typedArg.value = userArgs[index]
       // if argument passed in contains transform property, i.e. is of type generator, do not add uniform
       if (userArgs[index].transform) typedArg.isUniform = false
 
       if (typeof userArgs[index] === 'function') {
         typedArg.value = (context, props, batchId) => (userArgs[index](props))
+      } else if (userArgs[index].constructor === Array) {
+        console.log("is Array")
+        typedArg.value = (context, props, batchId) => seq(userArgs[index])(props)
       }
     } else {
       // use default value for argument
@@ -76,6 +81,20 @@ var GeneratorFactory = function (defaultOutput) {
 
   let self = this
   self.functions = {}
+
+  // set global utility functions. to do: make global optional
+  window.sin = sin
+  window.ramp = ramp
+  window.frag = shaderManager(defaultOutput)
+  
+  createFades(6)
+  // extend Array prototype
+  Array.prototype.fast = function(speed) {
+  //  console.log("array fast", speed, this)
+    this.speed = speed
+    return this
+  }
+
   Object.keys(glslTransforms).forEach((method) => {
     const transform = glslTransforms[method]
 
