@@ -32,17 +32,21 @@ class HydraSource  {
   }
 
   initStream (streamName) {
+    console.log("initing stream!", streamName)
+    let self = this
     if (streamName && this.pb) {
-       var self = this
-      this.pb.initSource(streamName)
-      pb.on('got video', function(id, video){
+        this.pb.initSource(streamName)
+
+        this.pb.on("got video", function(nick, video){
+          if(nick === streamName) {
             self.src = video
             self.tex = self.regl.texture(self.src)
-      })
+          }
+        })
+
     }
   }
 
-  // to do: handle electron case
   initScreen () {
     const self = this
     Screen().then(function (response) {
