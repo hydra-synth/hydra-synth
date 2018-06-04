@@ -244,7 +244,40 @@ module.exports = {
       c2 = pow(c2, vec4(1.0/gamma));
       return vec4(c2.xyz, c.a);
     }`
-
+  },
+  shift: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'r',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'g',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'b',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'a',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec4 shift(vec4 c, float r, float g, float b, float a){
+      vec4 c2 = vec4(c);
+      c2.r = fract(c2.r + r);
+      c2.g = fract(c2.g + g);
+      c2.b = fract(c2.b + b);
+      c2.a = fract(c2.a + a);
+      return vec4(c2.rgba);
+    }
+    `
   },
   repeat: {
     type: 'coord',
@@ -277,6 +310,41 @@ module.exports = {
         return fract(st);
     }`
   },
+  modulateRepeat: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'repeatX',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'repeatY',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'offsetX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'offsetY',
+        type: 'float',
+        default: 0.5
+      }
+    ],
+    glsl: `vec2 modulateRepeat(vec2 _st, vec4 c1, float repeatX, float repeatY, float offsetX, float offsetY){
+        vec2 st = _st * vec2(repeatX, repeatY);
+        st.x += step(1., mod(st.y,2.0)) + c1.r * offsetX;
+        st.y += step(1., mod(st.x,2.0)) + c1.g * offsetY;
+        return fract(st);
+    }`
+  },
   repeatX: {
     type: 'coord',
     inputs: [
@@ -293,7 +361,34 @@ module.exports = {
     glsl: `vec2 repeatX(vec2 _st, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
     //  float f =  mod(_st.y,2.0);
+
       st.y += step(1., mod(st.x,2.0))* offset;
+      return fract(st);
+    }`
+  },
+  modulateRepeatX: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      },
+      {
+          name: 'offset',
+          type: 'float',
+          default: 0.5
+      }
+    ],
+    glsl: `vec2 modulateRepeatX(vec2 _st, vec4 c1, float reps, float offset){
+      vec2 st = _st * vec2(reps, 1.0);
+    //  float f =  mod(_st.y,2.0);
+      st.y += step(1., mod(st.x,2.0)) + c1.r * offset;
+
       return fract(st);
     }`
   },
@@ -317,6 +412,31 @@ module.exports = {
       return fract(st);
     }`
   },
+  modulateRepeatY: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0.5
+      }
+    ],
+    glsl: `vec2 modulateRepeatY(vec2 _st, vec4 c1, float reps, float offset){
+      vec2 st = _st * vec2(reps, 1.0);
+    //  float f =  mod(_st.y,2.0);
+      st.x += step(1., mod(st.y,2.0)) + c1.r * offset;
+      return fract(st);
+    }`
+  },
   kaleid: {
     type: 'coord',
     inputs: [
@@ -334,6 +454,29 @@ module.exports = {
       a = mod(a,pi/nSides);
       a = abs(a-pi/nSides/2.);
       return r*vec2(cos(a), sin(a));
+    }`
+  },
+  modulateKaleid: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'nSides',
+        type: 'float',
+        default: 4.0
+      }
+    ],
+    glsl: `vec2 modulateKaleid(vec2 st, vec4 c1, float nSides){
+      st -= 0.5;
+      float r = length(st);
+      float a = atan(st.y, st.x);
+      float pi = 2.*3.1416;
+      a = mod(a,pi/nSides);
+      a = abs(a-pi/nSides/2.);
+      return (c1.r+r)*vec2(cos(a), sin(a));
     }`
   },
   scrollX: {
@@ -355,6 +498,29 @@ module.exports = {
       return fract(st);
     }`
   },
+  modulateScrollX: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'scrollX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec2 modulateScrollX(vec2 st, vec4 c1, float amount, float speed){
+      st.x += c1.r*amount + time*speed;
+      return fract(st);
+    }`
+  },
   scrollY: {
     type: 'coord',
     inputs: [
@@ -371,6 +537,29 @@ module.exports = {
     ],
     glsl: `vec2 scrollY(vec2 st, float amount, float speed){
       st.y += amount + time*speed;
+      return fract(st);
+    }`
+  },
+  modulateScrollY: {
+    type: 'combineCoord',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'scrollY',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec2 modulateScrollY(vec2 st, vec4 c1, float amount, float speed){
+      st.y += c1.r*amount + time*speed;
       return fract(st);
     }`
   },
