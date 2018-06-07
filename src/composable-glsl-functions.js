@@ -38,10 +38,15 @@ module.exports = {
         type: 'float',
         name: 'scale',
         default: 100
+      },
+      {
+        type: 'float',
+        name: 'offset',
+        default : 0
       }
     ],
-    glsl: `vec4 noise(vec2 st, float scale){
-      return vec4(vec3(_noise(st*scale)), 1.0);
+    glsl: `vec4 noise(vec2 st, float scale, float offset){
+      return vec4(vec3(_noise(st*scale+(time*offset))), 1.0);
     }`
   },
 
