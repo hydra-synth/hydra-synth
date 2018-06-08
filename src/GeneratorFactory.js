@@ -86,7 +86,7 @@ var GeneratorFactory = function (defaultOutput) {
   window.sin = sin
   window.ramp = ramp
   window.frag = shaderManager(defaultOutput)
-  
+
   createFades(6)
   // extend Array prototype
   Array.prototype.fast = function(speed) {
@@ -118,6 +118,22 @@ var GeneratorFactory = function (defaultOutput) {
           }
         })
 
+        obj.passes = []
+        let pass = {
+          transform: (x) => {
+            var glslString = `${method}(${x}`
+            glslString += generateGlsl(inputs)
+            glslString += ')'
+            return glslString
+          },
+          uniforms: []
+        }
+        inputs.forEach((input, index) => {
+          if (input.isUniform) {
+            pass.uniforms.push(input)
+          }
+        })
+        obj.passes.push(pass)
         return obj
       }
     } else {
