@@ -233,6 +233,7 @@ class HydraSynth {
   _generateGlslTransforms () {
     const self = this
     const gen = new GeneratorFactory(this.o[0])
+    window.generator = gen
     Object.keys(gen.functions).forEach((key)=>{
       self[key] = gen.functions[key]
       if(self.makeGlobal === true) {

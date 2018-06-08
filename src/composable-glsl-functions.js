@@ -657,11 +657,12 @@ module.exports = {
       {
         name: 'amount',
         type: 'float',
-        default: 0.5
+        default: 0.1
       }
     ],
     glsl: `vec2 modulate(vec2 st, vec4 c1, float amount){
-            return fract(st+(c1.xy-0.5)*amount);
+          //  return fract(st+(c1.xy-0.5)*amount);
+              return st + c1.xy*amount;
           }`
   },
   modulateScale: {
@@ -883,9 +884,9 @@ module.exports = {
       return vec4(mix((1.0-c0.rgb)*abs(c), c*c0.rgb, pos), c0.a);
     }`
   },
-  rgbToHsv: {
+  _rgbToHsv: {
     type: 'util',
-    glsl: `vec3 rgbToHsv(vec3 c){
+    glsl: `vec3 _rgbToHsv(vec3 c){
             vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
             vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
             vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
@@ -895,9 +896,9 @@ module.exports = {
             return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
         }`
   },
-  hsvToRgb: {
+  _hsvToRgb: {
     type: 'util',
-    glsl: `vec3 hsvToRgb(vec3 c){
+    glsl: `vec3 _hsvToRgb(vec3 c){
         vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
         vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
@@ -928,10 +929,10 @@ module.exports = {
       }
     ],
     glsl: `vec4 hue(vec4 c0, float hue){
-      vec3 c = rgbToHsv(c0.rgb);
+      vec3 c = _rgbToHsv(c0.rgb);
       c.r += hue;
     //  c.r = fract(c.r);
-      return vec4(hsvToRgb(c), c0.a);
+      return vec4(_hsvToRgb(c), c0.a);
     }`
   },
   colorama: {
@@ -944,9 +945,9 @@ module.exports = {
       }
     ],
     glsl: `vec4 colorama(vec4 c0, float amount){
-      vec3 c = rgbToHsv(c0.rgb);
+      vec3 c = _rgbToHsv(c0.rgb);
       c += vec3(amount);
-      c = hsvToRgb(c);
+      c = _hsvToRgb(c);
       c = fract(c);
       return vec4(c, c0.a);
     }`
