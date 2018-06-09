@@ -18,6 +18,7 @@ var Output = function (opts) {
     }),
     depthStencil: false
   }))
+  this.passes = []
   // console.log("position", this.positionBuffer)
 }
 
@@ -159,8 +160,40 @@ Output.prototype.render = function () {
   })
 }
 
+Output.prototype.renderPasses = function(passes) {
+  var self = this
+//  console.log("passes", passes)
+  this.passes = passes.map( (pass, passIndex) => {
+
+    //  console.log("get texture",index)
+    var uniforms = Object.assign(pass.uniforms, { prevBuffer:  () =>  {
+           var index = this.pingPongIndex ? 0 : 1
+        //  console.log('pass index', passIndex, 'fbo index', index)
+         return this.fbos[this.pingPongIndex ? 0 : 1]
+        }
+      })
+
+      return {
+        draw: self.regl({
+          frag: pass.frag,
+          vert: self.vert,
+          attributes: self.attributes,
+          uniforms: uniforms,
+          count: 3,
+          framebuffer: () => {
+
+            self.pingPongIndex = self.pingPongIndex ? 0 : 1
+          //  console.log('pass index', passIndex, 'render index',  self.pingPongIndex)
+            return self.fbos[self.pingPongIndex]
+          }
+        })
+      }
+  })
+}
+
 Output.prototype.tick = function (props) {
-  this.draw(props)
+//  this.draw(props)
+  this.passes.forEach((pass) => pass.draw(props))
 }
 
 module.exports = Output

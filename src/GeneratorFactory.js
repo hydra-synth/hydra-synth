@@ -152,6 +152,10 @@ var GeneratorFactory = function (defaultOutput) {
           this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(inputs[0].value.transform)(f)
 
           this.uniforms = this.uniforms.concat(inputs[0].value.uniforms)
+
+          var pass = this.passes[this.passes.length - 1]
+          pass.transform = this.transform
+          pass.uniform + this.uniform
         } else {
           var f1 = (x) => {
             var glslString = `${method}(${x}`
@@ -160,6 +164,7 @@ var GeneratorFactory = function (defaultOutput) {
             return glslString
           }
           this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(f1)
+          this.passes[this.passes.length - 1].transform = this.transform
         }
 
         inputs.forEach((input, index) => {
@@ -167,7 +172,7 @@ var GeneratorFactory = function (defaultOutput) {
             this.uniforms.push(input)
           }
         })
-
+        this.passes[this.passes.length - 1].uniforms = this.uniforms
         return this
       }
     }
@@ -179,10 +184,11 @@ var GeneratorFactory = function (defaultOutput) {
 //
 
 
-Generator.prototype.compile = function () {
+Generator.prototype.compile = function (pass) {
+  console.log("compiling", pass)
   var frag = `
   precision mediump float;
-  ${this.uniforms.map((uniform) => {
+  ${pass.uniforms.map((uniform) => {
     let type = ''
     switch (uniform.type) {
       case 'float':
@@ -210,7 +216,7 @@ Generator.prototype.compile = function () {
     vec4 c = vec4(1, 0, 0, 1);
     //vec2 st = uv;
     vec2 st = gl_FragCoord.xy/resolution;
-    gl_FragColor = ${this.transform('st')};
+    gl_FragColor = ${pass.transform('st')};
   }
   `
   return frag
@@ -220,13 +226,76 @@ Generator.prototype.glsl = function () {
   console.log(this.compile())
 }
 
+Generator.prototype.fragPass = function () {
+return `
+  precision mediump float;
+  uniform float time;
+  uniform vec2 resolution;
+  uniform sampler2D prevBuffer;
+  varying vec2 uv;
+
+  void main () {
+    vec4 c = vec4(1, 0, 0, 1);
+    //vec2 st = uv;
+    vec2 st = gl_FragCoord.xy/resolution;
+    vec4 col = texture2D(prevBuffer, fract(st));
+    gl_FragColor = vec4(col.r, 1.0, col.b, col.a);
+  }
+  `
+}
+
+Generator.prototype.fragPass2 = function () {
+return `
+  precision mediump float;
+  uniform float time;
+  uniform vec2 resolution;
+  uniform sampler2D prevBuffer;
+  varying vec2 uv;
+
+  void main () {
+    vec4 c = vec4(1, 0, 0, 1);
+    //vec2 st = uv;
+    vec2 st = gl_FragCoord.xy/resolution;
+    vec4 col = texture2D(prevBuffer, fract(st));
+    gl_FragColor = vec4(col.r - 1.0, col.g, col.b, col.a);
+  }
+  `
+}
+
 Generator.prototype.out = function (_output) {
 //  console.log('UNIFORMS', this.uniforms, output)
+  var output = _output || this.defaultOutput
+  this.passes.push({
+    frag: this.fragPass(),
+    uniforms: []
+  })
+  this.passes.push({
+    frag: this.fragPass2(),
+    uniforms: []
+  })
+  var passes = this.passes.map((pass) => {
+    var uniforms = {}
+    pass.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
+    if(pass.hasOwnProperty('transform')){
+      console.log(" rendering pass", pass)
+
+      return {
+        frag: this.compile(pass),
+        uniforms: Object.assign(output.uniforms, uniforms)
+      }
+    } else {
+      console.log(" not rendering pass", pass)
+      return {
+        frag: pass.frag,
+        uniforms:  Object.assign(output.uniforms, uniforms)
+      }
+    }
+  })
 
   // console.log("FRAG", frag)
-  var output = _output || this.defaultOutput
-  var frag = this.compile()
-  output.frag = frag
+  output.renderPasses(passes)
+  //var frag = this.compile(this.passes[this.passes.length-1])
+  //output.frag = frag
   var uniformObj = {}
   this.uniforms.forEach((uniform) => { uniformObj[uniform.name] = uniform.value })
   output.uniforms = Object.assign(output.uniforms, uniformObj)

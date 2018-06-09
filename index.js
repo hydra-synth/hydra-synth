@@ -277,10 +277,10 @@ class HydraSynth {
     // console.log("looping", self.o[0].fbo)
     if (this.isRenderingAll) {
       this.renderAll({
-        tex0: this.o[0].getTexture(),
-        tex1: this.o[1].getTexture(),
-        tex2: this.o[2].getTexture(),
-        tex3: this.o[3].getTexture(),
+        tex0: this.o[0].getCurrent(),
+        tex1: this.o[1].getCurrent(),
+        tex2: this.o[2].getCurrent(),
+        tex3: this.o[3].getCurrent(),
         resolution: [this.canvas.width, this.canvas.height]
       })
     } else {
