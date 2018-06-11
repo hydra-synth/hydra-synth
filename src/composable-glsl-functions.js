@@ -253,7 +253,7 @@ float _noise(vec3 v){
       }
     ],
     notes: '',
-    glsl: `vec4 solid(vec4 c0, float _r, float _g, float _b, float _a){
+    glsl: `vec4 solid(vec2 uv, float _r, float _g, float _b, float _a){
       return vec4(_r, _g, _b, _a);
     }`
   },
