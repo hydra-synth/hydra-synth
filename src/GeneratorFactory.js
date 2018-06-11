@@ -1,6 +1,11 @@
 /* globals tex */
 const { seq, sin, ramp, createFades } = require('./timingUtils.js')
 const glslTransforms = require('./composable-glsl-functions.js')
+
+// in progress: implementing multiple renderpasses within a single
+// function string
+const renderPassFunctions = require('./renderpass-functions.js')
+
 const counter = require('./counter.js')
 const shaderManager = require('./shaderManager.js')
 
@@ -43,7 +48,7 @@ function formatArguments (userArgs, defaultArgs) {
     typedArg.isUniform = true
 
     if (userArgs.length > index) {
-      console.log("arg", userArgs[index])
+    //  console.log("arg", userArgs[index])
       typedArg.value = userArgs[index]
       // if argument passed in contains transform property, i.e. is of type generator, do not add uniform
       if (userArgs[index].transform) typedArg.isUniform = false
@@ -51,7 +56,7 @@ function formatArguments (userArgs, defaultArgs) {
       if (typeof userArgs[index] === 'function') {
         typedArg.value = (context, props, batchId) => (userArgs[index](props))
       } else if (userArgs[index].constructor === Array) {
-        console.log("is Array")
+      //  console.log("is Array")
         typedArg.value = (context, props, batchId) => seq(userArgs[index])(props)
       }
     } else {
@@ -182,10 +187,8 @@ var GeneratorFactory = function (defaultOutput) {
 //
 //   iterate through transform types and create a function for each
 //
-
-
 Generator.prototype.compile = function (pass) {
-  console.log("compiling", pass)
+//  console.log("compiling", pass)
   var frag = `
   precision mediump float;
   ${pass.uniforms.map((uniform) => {
@@ -222,69 +225,113 @@ Generator.prototype.compile = function (pass) {
   return frag
 }
 
+// creates a fragment shader from an object containing uniforms and a snippet of
+// fragment shader code
+Generator.prototype.compileRenderPass = function (pass) {
+  var frag = `
+      precision mediump float;
+      ${pass.uniforms.map((uniform) => {
+        let type = ''
+        switch (uniform.type) {
+          case 'float':
+            type = 'float'
+            break
+          case 'texture':
+            type = 'sampler2D'
+            break
+        }
+        return `
+          uniform ${type} ${uniform.name};`
+      }).join('')}
+      uniform float time;
+      uniform vec2 resolution;
+      uniform sampler2D prevBuffer;
+      varying vec2 uv;
+
+      ${Object.values(renderPassFunctions).filter(transform => transform.type === 'renderpass_util')
+      .map((transform) => {
+      //  console.log(transform.glsl)
+        return `
+                ${transform.glsl}
+              `
+      }).join('')}
+
+      ${pass.glsl}
+  `
+  return frag
+}
+
 Generator.prototype.glsl = function () {
-  console.log(this.compile())
+//  console.log(this.compile())
 }
 
-Generator.prototype.fragPass = function () {
-return `
-  precision mediump float;
-  uniform float time;
-  uniform vec2 resolution;
-  uniform sampler2D prevBuffer;
-  varying vec2 uv;
-
-  void main () {
-    vec4 c = vec4(1, 0, 0, 1);
-    //vec2 st = uv;
-    vec2 st = gl_FragCoord.xy/resolution;
-    vec4 col = texture2D(prevBuffer, fract(st));
-    gl_FragColor = vec4(col.r, 1.0, col.b, col.a);
-  }
-  `
-}
-
-Generator.prototype.fragPass2 = function () {
-return `
-  precision mediump float;
-  uniform float time;
-  uniform vec2 resolution;
-  uniform sampler2D prevBuffer;
-  varying vec2 uv;
-
-  void main () {
-    vec4 c = vec4(1, 0, 0, 1);
-    //vec2 st = uv;
-    vec2 st = gl_FragCoord.xy/resolution;
-    vec4 col = texture2D(prevBuffer, fract(st));
-    gl_FragColor = vec4(col.r - 1.0, col.g, col.b, col.a);
-  }
-  `
-}
+// functions for testing multiple render passes
+// Generator.prototype.fragPass = function () {
+// return `
+//   precision mediump float;
+//   uniform float time;
+//   uniform vec2 resolution;
+//   uniform sampler2D prevBuffer;
+//   varying vec2 uv;
+//
+//   void main () {
+//     vec4 c = vec4(1, 0, 0, 1);
+//     //vec2 st = uv;
+//     vec2 st = gl_FragCoord.xy/resolution;
+//     vec4 col = texture2D(prevBuffer, fract(st));
+//     gl_FragColor = vec4(col.r, 1.0, col.b, col.a);
+//   }
+//   `
+// }
+//
+// Generator.prototype.fragPass2 = function () {
+// return `
+//   precision mediump float;
+//   uniform float time;
+//   uniform vec2 resolution;
+//   uniform sampler2D prevBuffer;
+//   varying vec2 uv;
+//
+//   void main () {
+//     vec4 c = vec4(1, 0, 0, 1);
+//     //vec2 st = uv;
+//     vec2 st = gl_FragCoord.xy/resolution;
+//     vec4 col = texture2D(prevBuffer, fract(st));
+//     gl_FragColor = vec4(col.r - 1.0, col.g, col.b, col.a);
+//   }
+//   `
+// }
 
 Generator.prototype.out = function (_output) {
 //  console.log('UNIFORMS', this.uniforms, output)
   var output = _output || this.defaultOutput
-  this.passes.push({
-    frag: this.fragPass(),
-    uniforms: []
-  })
-  this.passes.push({
-    frag: this.fragPass2(),
-    uniforms: []
-  })
+  // var pass = {
+  //   glsl: renderPassFunctions['edges'].glsl,
+  //   uniforms: []
+  // }
+  // var frag = this.compileRenderPass(pass)
+  // console.log('shader', frag)
+  //
+  // this.passes.push({
+  //   frag: frag,
+  //   uniforms: pass.uniforms
+  // })
+  // this.passes.push({
+  //   frag: this.fragPass2(),
+  //   uniforms: []
+  // })
   var passes = this.passes.map((pass) => {
     var uniforms = {}
     pass.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
     if(pass.hasOwnProperty('transform')){
-      console.log(" rendering pass", pass)
+    //  console.log(" rendering pass", pass)
 
       return {
         frag: this.compile(pass),
         uniforms: Object.assign(output.uniforms, uniforms)
       }
     } else {
-      console.log(" not rendering pass", pass)
+    //  console.log(" not rendering pass", pass)
       return {
         frag: pass.frag,
         uniforms:  Object.assign(output.uniforms, uniforms)
@@ -296,9 +343,9 @@ Generator.prototype.out = function (_output) {
   output.renderPasses(passes)
   //var frag = this.compile(this.passes[this.passes.length-1])
   //output.frag = frag
-  var uniformObj = {}
+/*  var uniformObj = {}
   this.uniforms.forEach((uniform) => { uniformObj[uniform.name] = uniform.value })
-  output.uniforms = Object.assign(output.uniforms, uniformObj)
+  output.uniforms = Object.assign(output.uniforms, uniformObj)*/
   output.render()
 }
 

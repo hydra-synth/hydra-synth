@@ -266,6 +266,7 @@ class HydraSynth {
     }
 
     for (let i = 0; i < this.o.length; i++) {
+    //  console.log('WIDTH', this.canvas.width, this.o[0].getCurrent())
       this.o[i].tick({
         time: this.time,
         mouse: mouse,

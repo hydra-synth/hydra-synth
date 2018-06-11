@@ -27,15 +27,15 @@ function init () {
   hydra.s[0].init({ src: canvas})
   //hydra.src(hydra.s[0]).out()
 
-//  s0.initCam()
-
-osc(40, 0).rotate(1.57, 0.0).thresh(0.6).out()
+  s0.initCam()
+  src(s0).out()
+/*osc(40, 0).rotate(1.57, 0.0).thresh(0.6).out()
 
   osc(50, 0).mult(osc(10).rotate(1.58)).out(o1)
 
   src(o2).scale(1.2).modulateRotate(osc(200, -0.02).rotate(0.5), -0.3).out(o3)
   src(o0).modulateRotate(o1, 2).out(o2)
-  render()
+  render()*/
 
 
   a.show()
