@@ -912,7 +912,8 @@ float _noise(vec3 v){
       }
     ],
     glsl: `vec4 mask(vec4 c0, vec4 c1){
-      return vec4(c0.rgb, luminance(c1.rgb));
+      float a = luminance(c1.rgb);
+      return vec4(c0.rgb*a, a);
     }`
   },
   luma: {
