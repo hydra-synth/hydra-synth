@@ -32,6 +32,14 @@ module.exports = function (defaultOutput) {
     var output = _output || defaultOutput
     var frag = this.compile()
     output.frag = frag
+    var pass = {
+      frag: frag,
+      uniforms: output.uniforms
+    }
+    console.log('rendering', pass)
+    var passes = []
+    passes.push(pass)
+    output.renderPasses([pass])
     // var uniformObj = {}
     // this.uniforms.forEach((uniform) => { uniformObj[uniform.name] = uniform.value })
     // output.uniforms = Object.assign(output.uniforms, uniformObj)
