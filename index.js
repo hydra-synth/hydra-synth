@@ -57,11 +57,13 @@ class HydraSynth {
 
 
     if(detectAudio) this._initAudio()
-    if(makeGlobal) {
+    //if(makeGlobal) {
+      window.mouse = mouse
+      window.time = this.time
       window['render'] = this.render.bind(this)
     //  window.bpm = this.bpm
      window.bpm = this._setBpm.bind(this)
-    }
+  //  }
     if(autoLoop) loop(this.tick.bind(this)).start()
   }
 
@@ -260,6 +262,7 @@ class HydraSynth {
     // this.regl.clear({
     //   color: [0, 0, 0, 1]
     // })
+    window.time = this.time
     this.audio.tick()
     for (let i = 0; i < this.s.length; i++) {
       this.s[i].tick(this.time)
