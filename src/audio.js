@@ -29,7 +29,7 @@ class Audio {
 
     this.isDrawing = isDrawing
     this.ctx = this.canvas.getContext('2d')
-    this.ctx.fillStyle="#FFF"
+    this.ctx.fillStyle="#DFFFFF"
     this.ctx.strokeStyle="#0ff"
     this.ctx.lineWidth=0.5
 
@@ -77,9 +77,16 @@ class Audio {
 
          return (bin * (1.0 - this.smooth) + this.prevBins[index] * this.smooth)
        })
-
-       this.fft = this.bins.map((bin) => (
-         Math.max(0, (bin - this.cutoff) / (this.max - this.cutoff))
+       // var y = this.canvas.height - scale*this.fftThresh[index].cutoff
+       // this.ctx.beginPath()
+       // this.ctx.moveTo(index*spacing, y)
+       // this.ctx.lineTo((index+1)*spacing, y)
+       // this.ctx.stroke()
+       //
+       // var yMax = this.canvas.height - scale*(this.fftThresh[index].scale + this.fftThresh[index].cutoff)
+       this.fft = this.bins.map((bin, index) => (
+        // Math.max(0, (bin - this.cutoff) / (this.max - this.cutoff))
+         Math.max(0, (bin - this.fftThresh[index].cutoff)/this.fftThresh[index].scale)
        ))
        if(this.isDrawing) this.draw()
      }
@@ -88,16 +95,21 @@ class Audio {
 
   setCutoff (cutoff) {
     this.cutoff = cutoff
+    this.fftThresh = this.fftThresh.map((el) => {
+      el.cutoff = cutoff
+      return el
+    })
   }
 
   setSmooth (smooth) {
     this.smooth = smooth
   }
+
   setBins (numBins) {
     this.bins = Array(numBins).fill(0)
     this.prevBins = Array(numBins).fill(0)
     this.fft = Array(numBins).fill(0)
-    this.range = Array(numBins).fill(0).map(() => ({
+    this.fftThresh = Array(numBins).fill(0).map(() => ({
       cutoff: this.cutoff,
       scale: this.scale
     }))
@@ -105,11 +117,20 @@ class Audio {
     this.bins.forEach((bin, index) => {
       window['a' + index] = (scale = 1, offset = 0) => () => (a.fft[index] * scale + offset)
     })
-    console.log(this.range)
+    console.log(this.fftThresh)
+  }
+
+  setScale(scale){
+    this.scale = scale
+    this.fftThresh = this.fftThresh.map((el) => {
+      el.scale = scale
+      return el
+    })
   }
 
   setMax(max) {
-    this.max = max
+    //this.max = max
+    console.log('set max is deprecated')
   }
   hide() {
     this.isDrawing = false
@@ -133,14 +154,14 @@ class Audio {
 
      this.ctx.fillRect(index * spacing, this.canvas.height - height, spacing, height)
 
-  //   console.log(this.range[index])
-     var y = this.canvas.height - scale*this.range[index].cutoff
+  //   console.log(this.fftThresh[index])
+     var y = this.canvas.height - scale*this.fftThresh[index].cutoff
      this.ctx.beginPath()
      this.ctx.moveTo(index*spacing, y)
      this.ctx.lineTo((index+1)*spacing, y)
      this.ctx.stroke()
 
-     var yMax = this.canvas.height - scale*(this.range[index].scale + this.range[index].cutoff)
+     var yMax = this.canvas.height - scale*(this.fftThresh[index].scale + this.fftThresh[index].cutoff)
      this.ctx.beginPath()
      this.ctx.moveTo(index*spacing, yMax)
      this.ctx.lineTo((index+1)*spacing, yMax)
