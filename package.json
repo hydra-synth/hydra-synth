@@ -1,6 +1,6 @@
 {
   "name": "hydra-synth",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "base synth for hydra-editor",
   "main": "index.js",
   "scripts": {
@@ -27,6 +27,7 @@
   },
   "homepage": "https://github.com/ojack/hydra-synth#readme",
   "dependencies": {
+    "budo": "^11.3.2",
     "enumerate-devices": "^1.1.1",
     "getusermedia": "^2.0.1",
     "meyda": "^4.1.3",

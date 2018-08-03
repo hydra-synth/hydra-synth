@@ -23,6 +23,12 @@ const compositionFunctions = {
 }
 // gl_FragColor = osc(modulate(osc(rotate(st, 10., 0.), 32., 0.1, 0.), st, 0.5), 199., 0.1, 0.);
 
+// hydra code: osc().rotate().color().repeat().out()
+// pseudo shader code: gl_FragColor = color(osc(rotate(repeat())))
+
+// hydra code: osc().rotate().add(s0).repeat().out()
+// gl_FragColor = osc(rotate(repeat())) + tex(repeat())
+
 // Parses javascript args to use in glsl
 function generateGlsl (inputs) {
   var str = ''

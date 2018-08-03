@@ -5,7 +5,7 @@ const GeneratorFactory = require('./src/GeneratorFactory.js')
 const getUserMedia = require('getusermedia')
 const mouse = require('mouse-change')()
 const Audio = require('./src/audio.js')
-//const nanoKONTROL = require('korg-nano-kontrol');
+const VidRecorder = require('./src/video-recorder.js')
 
 // to do: add ability to pass in certain uniforms and transforms
 class HydraSynth {
@@ -19,6 +19,7 @@ class HydraSynth {
     makeGlobal = true,
     autoLoop = true,
     detectAudio = true,
+    enableStreamCapture = true,
     canvas
   } = {}) {
 
@@ -30,31 +31,21 @@ class HydraSynth {
     this.makeGlobal = makeGlobal
     this.renderAll = false
 
+    // if stream capture is enabled, this object contains the capture stream
+    this.captureStream = null
+
     this._initCanvas(canvas)
     this._initRegl()
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
 
-    // nanoKONTROL.connect()
-    // .then(function(device){
-    //   console.log('connected!' + device.name);
-    //   window.midi = device
-    //
-    //   window.midi.on1 = function(name, callback) {
-    //     window.midi.removeAllListeners(name)
-    //     window.midi.on(name, callback)
-    //   }
-    //   // catch all slider/knob/button events
-    //   // device.on('slider:*', function(value){
-    //   //   console.log(this.event+' => '+value);
-    //   // });
-    //   // do something
-    // })
-    // .catch(function(err){
-    //   console.log('no midi device found')
-    // });
+    if (enableStreamCapture) {
+      this.captureStream = this.canvas.captureStream(25)
 
+      // to do: enable capture stream of specific sources and outputs
+      window.vidRecorder = new VidRecorder(this.captureStream)
+    }
 
     if(detectAudio) this._initAudio()
     //if(makeGlobal) {
@@ -62,7 +53,7 @@ class HydraSynth {
       window.time = this.time
       window['render'] = this.render.bind(this)
     //  window.bpm = this.bpm
-     window.bpm = this._setBpm.bind(this)
+      window.bpm = this._setBpm.bind(this)
   //  }
     if(autoLoop) loop(this.tick.bind(this)).start()
   }
