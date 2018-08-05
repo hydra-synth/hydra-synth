@@ -18,7 +18,8 @@ module.exports = function (deviceId) {
             reject(err)
           } else {
             const video = document.createElement('video')
-            video.src = window.URL.createObjectURL(stream)
+          //  video.src = window.URL.createObjectURL(stream)
+          video.srcObject = stream
             video.addEventListener('loadedmetadata', () => {
               video.play().then(() => resolve({video: video}))
             })
