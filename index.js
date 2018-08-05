@@ -31,6 +31,9 @@ class HydraSynth {
     this.makeGlobal = makeGlobal
     this.renderAll = false
 
+    // boolean to store when to save screenshot
+    this.saveFrame = false
+
     // if stream capture is enabled, this object contains the capture stream
     this.captureStream = null
 
@@ -39,6 +42,10 @@ class HydraSynth {
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
+
+    window.screencap = () => {
+      this.saveFrame = true
+    }
 
     if (enableStreamCapture) {
       this.captureStream = this.canvas.captureStream(25)
@@ -56,6 +63,28 @@ class HydraSynth {
       window.bpm = this._setBpm.bind(this)
   //  }
     if(autoLoop) loop(this.tick.bind(this)).start()
+  }
+
+
+  canvasToImage () {
+    const a = document.createElement('a')
+    a.style.display = 'none'
+
+    let d = new Date()
+    a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.png`
+    document.body.appendChild(a)
+
+    this.canvas.toBlob( (blob) => {
+      //  var url = window.URL.createObjectURL(blob)
+        a.href = URL.createObjectURL(blob)
+        console.log(a.href)
+        a.click()
+    }, 'image/png')
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(a.href);
+    }, 300);
+
   }
 
   _initAudio () {
@@ -285,7 +314,13 @@ class HydraSynth {
         resolution: [this.canvas.width, this.canvas.height]
       })
     }
+    if(this.saveFrame === true) {
+      this.canvasToImage()
+      this.saveFrame = false
+    }
   }
+
+
 }
 
 module.exports = HydraSynth

@@ -51,6 +51,7 @@ class VideoRecorder {
    console.log('MediaRecorder started', this.mediaRecorder)
  }
 
+  
    stop(){
      this.mediaRecorder.stop()
    }
