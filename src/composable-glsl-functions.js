@@ -6,50 +6,7 @@
 // iq color palletes
 
 module.exports = {
-  /*random: {
-    type: 'util',
-    glsl: `float random (vec2 _st){
-      return fract(sin(dot(_st.xy, vec2(12.9898,78.233)))*43758.5453123);
-    }`
-  },
-  _noise: {
-    type: 'util',
-    glsl: `float _noise (in vec2 st) {
-    vec2 i = floor(st);
-    vec2 f = fract(st);
 
-    // Four corners in 2D of a tile
-    float a = random(i);
-    float b = random(i + vec2(1.0, 0.0));
-    float c = random(i + vec2(0.0, 1.0));
-    float d = random(i + vec2(1.0, 1.0));
-
-    vec2 u = f * f * (3.0 - 2.0 * f);
-
-    return mix(a, b, u.x) +
-            (c - a)* u.y * (1.0 - u.x) +
-            (d - b) * u.x * u.y;
-          }`
-  },
-  noise: {
-    type: 'src',
-    inputs: [
-      {
-        type: 'float',
-        name: 'scale',
-        default: 100
-      },
-      {
-        type: 'float',
-        name: 'offset',
-        default : 0
-      }
-    ],
-    glsl: `vec4 noise(vec2 st, float scale, float offset){
-      return vec4(vec3(_noise(st*scale+(time*offset))), 1.0);
-    }`
-  },
-  */
   _noise: {
     type: 'util',
     glsl: `
@@ -144,6 +101,61 @@ float _noise(vec3 v){
     ],
     glsl: `vec4 noise(vec2 st, float scale, float offset){
       return vec4(vec3(_noise(vec3(st*scale, offset*time))), 1.0);
+    }`
+  },
+  voronoi: {
+    type: 'src',
+    inputs: [
+      {
+        type: 'float',
+        name: 'scale',
+        default: 5
+      },
+      {
+        type: 'float',
+        name: 'speed',
+        default : 0.3
+      },
+      {
+        type: 'float',
+        name: 'blending',
+        default : 0.3
+      }
+    ],
+    notes: 'from https://thebookofshaders.com/edit.php#12/vorono-01.frag, https://www.shadertoy.com/view/ldB3zc',
+    glsl: `vec4 voronoi(vec2 st, float scale, float speed, float blending) {
+      vec3 color = vec3(.0);
+
+   // Scale
+   st *= scale;
+
+   // Tile the space
+   vec2 i_st = floor(st);
+   vec2 f_st = fract(st);
+
+   float m_dist = 10.;  // minimun distance
+   vec2 m_point;        // minimum point
+
+   for (int j=-1; j<=1; j++ ) {
+       for (int i=-1; i<=1; i++ ) {
+           vec2 neighbor = vec2(float(i),float(j));
+           vec2 p = i_st + neighbor;
+           vec2 point = fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
+           point = 0.5 + 0.5*sin(time*speed + 6.2831*point);
+           vec2 diff = neighbor + point - f_st;
+           float dist = length(diff);
+
+           if( dist < m_dist ) {
+               m_dist = dist;
+               m_point = point;
+           }
+       }
+   }
+
+   // Assign a color using the closest point position
+   color += dot(m_point,vec2(.3,.6));
+ color *= 1.0 - blending*m_dist;
+   return vec4(color, 1.0);
     }`
   },
   osc: {

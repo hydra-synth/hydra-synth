@@ -19,6 +19,7 @@ function init () {
 //  document.body.appendChild(canvas)
   var hydra = new Hydra({
   //  autoLoad: false
+    enableStreamCapture: true
   })
 
   window.hydra = hydra
@@ -27,8 +28,7 @@ function init () {
   hydra.s[0].init({ src: canvas})
   //hydra.src(hydra.s[0]).out()
 
-  s0.initCam()
-  src(s0).out()
+  voronoi(4, 0.2).out()
 /*osc(40, 0).rotate(1.57, 0.0).thresh(0.6).out()
 
   osc(50, 0).mult(osc(10).rotate(1.58)).out(o1)
