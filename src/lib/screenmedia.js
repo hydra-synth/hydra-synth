@@ -20,7 +20,8 @@ module.exports = function (options) {
     } else {
       console.log("got stream", stream)
       const video = document.createElement('video')
-      video.src = window.URL.createObjectURL(stream)
+      //video.src = window.URL.createObjectURL(stream)
+      video.srcObject = stream
      // document.body.appendChild(video)
       video.addEventListener('loadedmetadata', () => {
         video.play()

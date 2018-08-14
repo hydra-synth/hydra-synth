@@ -66,7 +66,8 @@ class HydraSource  {
   tick (time) {
   //  console.log("src", src)
     if (this.src !== null && this.dynamic === true) {
-        this.tex.subimage(this.src)
+        //this.tex.subimage(this.src)
+       this.tex = this.regl.texture(this.src)
     }
   }
 

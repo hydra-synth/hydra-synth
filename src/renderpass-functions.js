@@ -30,6 +30,23 @@ module.exports = {
       }
     `
   },
+  colorShift: {
+    type: 'renderpass',
+    glsl: `
+
+    void main() {
+      vec2 p = st;
+      vec4 shift = vec4(-0.01, 0.02, 0.03, -0.04);
+      vec2 rs = vec2(shift.x,-shift.y);
+      vec2 gs = vec2(shift.y,-shift.z);
+      vec2 bs = vec2(shift.z,-shift.x);
+
+      float r = texture2D(prevBuffer, p+rs, 0.0).x;
+      float g = texture2D(prevBuffer, p+gs, 0.0).y;
+      float b = texture2D(prevBuffer, p+bs, 0.0).z;
+    }
+    `
+  },
   edges: {
     type: 'renderpass',
     glsl: `

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "example": "budo ./example/index.js --ssl --open --live -- -t [ babelify --presets [env] ]",
+    "example": "budo ./example/index.js --ssl --open --live --port 8000-- -t [ babelify --presets [env] ]",
     "example-editor": "budo ./example/editor-example.js --ssl --open --live ",
     "build": "browserify ./src/index.js -t [ babelify --presets [env] ] -o index.js"
   },
