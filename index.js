@@ -65,26 +65,33 @@ class HydraSynth {
     if(autoLoop) loop(this.tick.bind(this)).start()
   }
 
+  getScreenImage(callback) {
+    this.imageCallback = callback
+    this.saveFrame = true
+  }
 
-  canvasToImage () {
+  canvasToImage (callback) {
     const a = document.createElement('a')
     a.style.display = 'none'
 
     let d = new Date()
     a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.png`
     document.body.appendChild(a)
-
+    var self = this
     this.canvas.toBlob( (blob) => {
       //  var url = window.URL.createObjectURL(blob)
         a.href = URL.createObjectURL(blob)
         console.log(a.href)
         a.click()
+        if(self.imageCallback){
+          self.imageCallback(blob)
+          delete self.imageCallback
+        }
     }, 'image/png')
     setTimeout(() => {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(a.href);
     }, 300);
-
   }
 
   _initAudio () {
