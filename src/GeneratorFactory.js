@@ -352,7 +352,7 @@ Generator.prototype.out = function (_output) {
 /*  var uniformObj = {}
   this.uniforms.forEach((uniform) => { uniformObj[uniform.name] = uniform.value })
   output.uniforms = Object.assign(output.uniforms, uniformObj)*/
-  output.render()
+//  output.render()
 }
 
 module.exports = GeneratorFactory

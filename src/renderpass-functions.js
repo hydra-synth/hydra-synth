@@ -30,7 +30,7 @@ module.exports = {
       }
     `
   },
-  colorShift: {
+  rgbShift: {
     type: 'renderpass',
     glsl: `
 

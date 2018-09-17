@@ -7,9 +7,11 @@ var Output = function (opts) {
     [0, -2],
     [2, 2]
   ])
-  // this.tex = this.regl.texture()
+
   this.clear()
   this.pingPongIndex = 0
+
+  // for each output, create two fbos to use for ping ponging
   this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
     color: this.regl.texture({
       width: opts.width,
@@ -18,18 +20,20 @@ var Output = function (opts) {
     }),
     depthStencil: false
   }))
+
+  // array containing render passes
   this.passes = []
   // console.log("position", this.positionBuffer)
 }
 
-Object.keys(transforms).forEach((method) => {
-  Output.prototype[method] = function (...args) {
-  //  console.log("applying", method, transforms[method])
-    this.applyTransform(transforms[method], args)
-
-    return this
-  }
-})
+// Object.keys(transforms).forEach((method) => {
+//   Output.prototype[method] = function (...args) {
+//   //  console.log("applying", method, transforms[method])
+//     this.applyTransform(transforms[method], args)
+//
+//     return this
+//   }
+// })
 
 Output.prototype.getCurrent = function () {
   // console.log("get current",this.pingPongIndex )
@@ -73,78 +77,36 @@ Output.prototype.clear = function () {
     time: this.regl.prop('time'),
     resolution: this.regl.prop('resolution')
   }
-  this.compileFragShader()
+//  this.compileFragShader()
+
+  this.frag = `
+       ${this.fragHeader}
+
+      void main () {
+        vec4 c = vec4(0, 0, 0, 0);
+        vec2 st = uv;
+        ${this.fragBody}
+        gl_FragColor = c;
+      }
+  `
   return this
 }
 
-Output.prototype.applyTransform = function (opts, args) {
-  if (opts.isSource) this.clear()
-  var fragAddition = opts.fragBody
-  if (opts.inputs) {
-    var uniforms = {}
-    // for each input on a given transform, add variable to shader header and add to body
-    opts.inputs.forEach((input, index) => {
-      const uniformName = input.name + this.transformIndex
 
-      uniforms[uniformName] = args.length > index ? args[index] : input.default
-      // if argument is a function, pass time in as the parameter
-      if (args[index] && typeof args[index] === 'function') {
-        uniforms[uniformName] = function (context, props, batchId) {
-          return args[index](props.time)
-        }
-      }
-
-      let header = ``
-      if (input.type === 'color') {
-        header = `uniform vec3 ${uniformName};`
-      } else if (input.type === 'float') {
-        header = `uniform float ${uniformName};`
-      } else if (input.type === 'image') {
-        header = `uniform sampler2D ${uniformName};`
-        if (args[index]) uniforms[uniformName] = () => args[index].getTexture()
-      }
-      this.fragHeader = `
-        ${this.fragHeader}
-        ${header}
-      `
-      let replaceString = '<' + index + '>'
-      fragAddition = fragAddition.replace(new RegExp(replaceString, 'g'), uniformName)
-    })
-    Object.assign(this.uniforms, uniforms)
-  }
-  if (opts.fragBody) {
-    // color transforms are added to end of shader, whereas coordinate transforms are added to the beginning
-    if (opts.transformType === 'color') {
-      this.fragBody = `
-        ${this.fragBody}
-        ${fragAddition}
-      `
-    } else {
-      this.fragBody = `
-        ${fragAddition}
-        ${this.fragBody}
-      `
-    }
-  }
-  this.transformIndex++
-  this.compileFragShader()
-  this.render()
-}
-
-Output.prototype.compileFragShader = function () {
-  var frag = `
-    ${this.fragHeader}
-
-    void main () {
-      vec4 c = vec4(0, 0, 0, 0);
-      vec2 st = uv;
-      ${this.fragBody}
-      gl_FragColor = c;
-    }
-  `
-// console.log("FRAG", frag)
-  this.frag = frag
-}
+// Output.prototype.compileFragShader = function () {
+//   var frag = `
+//     ${this.fragHeader}
+//
+//     void main () {
+//       vec4 c = vec4(0, 0, 0, 0);
+//       vec2 st = uv;
+//       ${this.fragBody}
+//       gl_FragColor = c;
+//     }
+//   `
+// // console.log("FRAG", frag)
+//   this.frag = frag
+// }
 
 Output.prototype.render = function () {
   this.draw = this.regl({
