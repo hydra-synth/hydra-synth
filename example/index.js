@@ -1,6 +1,6 @@
 //const Hydra = require('./../src/index.js')
 
-const Hydra = require('./../index.js')
+const Hydra = require('./../')
 const Analyzer = require('web-audio-analyser')
 const getUserMedia = require('getusermedia')
 const loop = require('raf-loop')
@@ -28,7 +28,12 @@ function init () {
   hydra.s[0].init({ src: canvas})
   //hydra.src(hydra.s[0]).out()
 
-  voronoi(4, 0.2).out()
+//  voronoi(4, 0.2).out()
+  s0.initCam()
+//  src(s0).sharpen().repeat().out()
+src(s0).sharpen().out()
+//  test()
+
 /*osc(40, 0).rotate(1.57, 0.0).thresh(0.6).out()
 
   osc(50, 0).mult(osc(10).rotate(1.58)).out(o1)

@@ -4,12 +4,10 @@
 // basic sdf shapes
 // repeat
 // iq color palletes
-var glsl = require('glslify')
 
 module.exports = {
   sharpen: {
     type: 'renderpass',
-    inputs: [],
-    frag: glsl('./shaders/sharpen.frag')
+    frag: glslify('./shaders/sharpen.frag')
   }
 }

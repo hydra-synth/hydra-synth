@@ -2,7 +2,8 @@ const Output = require('./src/output.js')
 const loop = require('raf-loop')
 const Source = require('./src/hydra-source.js')
 const GeneratorFactory = require('./src/GeneratorFactory.js')
-const getUserMedia = require('getusermedia')
+
+//const RenderPasses = require('./RenderPasses.js')
 const mouse = require('mouse-change')()
 const Audio = require('./src/audio.js')
 const VidRecorder = require('./src/video-recorder.js')
@@ -42,6 +43,7 @@ class HydraSynth {
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
+  //  this._generateRenderPasses()
 
     window.screencap = () => {
       this.saveFrame = true
@@ -270,6 +272,18 @@ class HydraSynth {
       }
     })
   }
+
+  // _generateRenderPasses () {
+  //     const self = this
+  //     const gen = new RenderPasses({ regl: this.regl, width: this.width, height: this.height})
+  //   //  window.generator = gen
+  //     Object.keys(gen.functions).forEach((key)=>{
+  //       self[key] = gen.functions[key]
+  //       if(self.makeGlobal === true) {
+  //         window[key] = gen.functions[key]
+  //       }
+  //     })
+  // }
 
   render (output) {
     if (output) {

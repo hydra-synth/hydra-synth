@@ -1,4 +1,4 @@
-const transforms = require('./glsl-transforms.js')
+//const transforms = require('./glsl-transforms.js')
 
 var Output = function (opts) {
   this.regl = opts.regl

@@ -1,4 +1,4 @@
-var adapter = require('webrtc-adapter');
+//var adapter = require('webrtc-adapter');
 // to do: clean up this code
 // cache for constraints and callback
 var cache = {};
@@ -15,7 +15,7 @@ module.exports = function (constraints, cb) {
     }
 
     if (window.navigator.userAgent.match('Chrome')) {
-      
+
         var chromever = parseInt(window.navigator.userAgent.match(/Chrome\/(.*) /)[1], 10);
         var maxver = 33;
 

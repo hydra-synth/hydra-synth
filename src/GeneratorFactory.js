@@ -115,12 +115,12 @@ var GeneratorFactory = function (defaultOutput) {
         var obj = Object.create(Generator.prototype)
         obj.name = method
         const inputs = formatArguments(args, transform.inputs)
-        obj.transform = (x) => {
-          var glslString = `${method}(${x}`
-          glslString += generateGlsl(inputs)
-          glslString += ')'
-          return glslString
-        }
+        // obj.transform = (x) => {
+        //   var glslString = `${method}(${x}`
+        //   glslString += generateGlsl(inputs)
+        //   glslString += ')'
+        //   return glslString
+        // }
         obj.defaultOutput = defaultOutput
         obj.uniforms = []
         inputs.forEach((input, index) => {
@@ -160,12 +160,13 @@ var GeneratorFactory = function (defaultOutput) {
             glslString += ')'
             return glslString
           }
-          this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(inputs[0].value.transform)(f)
+          var pass = this.passes[this.passes.length - 1]
+          pass.transform = compositionFunctions[glslTransforms[method].type](pass.transform)(inputs[0].value.transform)(f)
 
           this.uniforms = this.uniforms.concat(inputs[0].value.uniforms)
 
-          var pass = this.passes[this.passes.length - 1]
-          pass.transform = this.transform
+        //  var pass = this.passes[this.passes.length - 1]
+        //  pass.transform = this.transform
           pass.uniform + this.uniform
         } else {
           var f1 = (x) => {
@@ -174,8 +175,9 @@ var GeneratorFactory = function (defaultOutput) {
             glslString += ')'
             return glslString
           }
-          this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(f1)
-          this.passes[this.passes.length - 1].transform = this.transform
+          var pass = this.passes[this.passes.length - 1]
+          pass.transform = compositionFunctions[glslTransforms[method].type](pass.transform)(f1)
+          //this.passes[this.passes.length - 1].transform = this.transform
         }
 
         inputs.forEach((input, index) => {
@@ -186,6 +188,17 @@ var GeneratorFactory = function (defaultOutput) {
         this.passes[this.passes.length - 1].uniforms = this.uniforms
         return this
       }
+    }
+  })
+
+  Object.keys(renderPassFunctions).forEach((method) => {
+    const transform = renderPassFunctions[method]
+    Generator.prototype[method] = function (...args) {
+      this.passes.push({
+        frag: transform.frag,
+        uniforms: []
+      })
+      return this
     }
   })
 }
@@ -271,59 +284,42 @@ Generator.prototype.glsl = function () {
 //  console.log(this.compile())
 }
 
-// functions for testing multiple render passes
-// Generator.prototype.fragPass = function () {
-// return `
-//   precision mediump float;
-//   uniform float time;
-//   uniform vec2 resolution;
-//   uniform sampler2D prevBuffer;
-//   varying vec2 uv;
-//
-//   void main () {
-//     vec4 c = vec4(1, 0, 0, 1);
-//     //vec2 st = uv;
-//     vec2 st = gl_FragCoord.xy/resolution;
-//     vec4 col = texture2D(prevBuffer, fract(st));
-//     gl_FragColor = vec4(col.r, 1.0, col.b, col.a);
-//   }
-//   `
-// }
-//
-// Generator.prototype.fragPass2 = function () {
-// return `
-//   precision mediump float;
-//   uniform float time;
-//   uniform vec2 resolution;
-//   uniform sampler2D prevBuffer;
-//   varying vec2 uv;
-//
-//   void main () {
-//     vec4 c = vec4(1, 0, 0, 1);
-//     //vec2 st = uv;
-//     vec2 st = gl_FragCoord.xy/resolution;
-//     vec4 col = texture2D(prevBuffer, fract(st));
-//     gl_FragColor = vec4(col.r - 1.0, col.g, col.b, col.a);
-//   }
-//   `
-// }
+
 
 Generator.prototype.out = function (_output) {
 //  console.log('UNIFORMS', this.uniforms, output)
   var output = _output || this.defaultOutput
-  // var pass = {
-  //   glsl: renderPassFunctions['edges'].glsl,
-  //   uniforms: []
-  // }
-  // var frag = this.compileRenderPass(pass)
-  // console.log('shader', frag)
-  //
+//   var pass = {
+//     glsl: renderPassFunctions['sharpen'].glsl,
+//     uniforms: []
+//   }
+//
+// var frag = this.compileRenderPass(pass)
+//   // var frag2 = this.compileRenderPass({
+//   //   glsl: renderPassFunctions['sharpen'].glsl,
+//   //   uniforms: []
+//   // })
+//   this.passes.push({
+//     frag: renderPassFunctions['sharpen'].frag,
+//     uniforms: []
+//   })
+//   // this.passes.push({
+//   //   frag: frag2,
+//   //   uniforms: pass.uniforms
+//   // })
+//   // this.passes.push({
+//   //   frag: frag2,
+//   //   uniforms: pass.uniforms
+//   // })
+//   var frag = this.compileRenderPass(pass)
+//   console.log('shader', frag)
+
   // this.passes.push({
   //   frag: frag,
   //   uniforms: pass.uniforms
   // })
   // this.passes.push({
-  //   frag: this.fragPass2(),
+  //   frag: this.conv(),
   //   uniforms: []
   // })
   var passes = this.passes.map((pass) => {
