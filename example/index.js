@@ -7,15 +7,15 @@ const loop = require('raf-loop')
 
 function init () {
 
-  const canvas = document.createElement('canvas')
-  canvas.style.backgroundColor = "#000"
-  canvas.width = 800
-  canvas.height = 200
-
-  var ctx = canvas.getContext('2d')
-  ctx.moveTo(0, 0);
-  ctx.lineTo(200, 100);
-  ctx.stroke();
+  // const canvas = document.createElement('canvas')
+  // canvas.style.backgroundColor = "#000"
+  // canvas.width = 800
+  // canvas.height = 200
+  //
+  // var ctx = canvas.getContext('2d')
+  // ctx.moveTo(0, 0);
+  // ctx.lineTo(200, 100);
+  // ctx.stroke();
 //  document.body.appendChild(canvas)
   var hydra = new Hydra({
   //  autoLoad: false
@@ -25,13 +25,26 @@ function init () {
   window.hydra = hydra
 
 
-  hydra.s[0].init({ src: canvas})
+//  hydra.s[0].init({ src: canvas})
   //hydra.src(hydra.s[0]).out()
 
 //  voronoi(4, 0.2).out()
-  s0.initCam()
+// s0.initCam()
+
+osc(10, 0.01, 0.8)
+//  .saturate(0)
+//  .scale(1.001)
+  .blend(o0, 0.8)
+  .sharpen(1.0)
+  .scale(1.001)
+ .modulateHue(o0, 1)
+// .saturate(4)
+//.colorama(0.0001)
+  .out()
+
+//osc().sharpen().out()
 //  src(s0).sharpen().repeat().out()
-src(s0).sharpen().out()
+//osc().thresh().blend(osc().thresh().rotate(0, 0.1)).sharpen().out()
 //  test()
 
 /*osc(40, 0).rotate(1.57, 0.0).thresh(0.6).out()
@@ -47,12 +60,12 @@ src(s0).sharpen().out()
 
   var x = 0
   loop((dt) => {
-    x++
-    ctx.moveTo(x, 0);
-    ctx.lineTo(200, 100);
-    ctx.stroke();
-    ctx.fillStyle = 'green';
-    ctx.fillRect(10, 10, 100, 100);
+    // x++
+    // ctx.moveTo(x, 0);
+    // ctx.lineTo(200, 100);
+    // ctx.stroke();
+    // ctx.fillStyle = 'green';
+    // ctx.fillRect(10, 10, 100, 100);
     hydra.tick(dt)
   }).start()
 

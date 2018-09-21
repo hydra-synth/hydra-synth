@@ -42,15 +42,20 @@ function generateGlsl (inputs) {
 // creates unique names for variables requiring a uniform to be passed in (i.e. a texture)
 // returns an object that contains the type and value of each argument
 // to do: add much more type checking, validation, and transformation to this part
-function formatArguments (userArgs, defaultArgs) {
+function formatArguments (userArgs, defaultArgs, ignoreCounter) {
   return defaultArgs.map((input, index) => {
     var typedArg = {}
 
     // if there is a user input at a certain index, create a uniform for this variable so that the value is passed in on each render pass
     // to do (possibly): check whether this is a function in order to only use uniforms when needed
 
-    counter.increment()
-    typedArg.name = input.name + counter.get()
+    // counter insures that each uniform has a unique name
+    if(ignoreCounter === true) {
+      typedArg.name = input.name
+    } else {
+      counter.increment()
+      typedArg.name = input.name + counter.get()
+    }
     typedArg.isUniform = true
 
     if (userArgs.length > index) {
@@ -115,12 +120,12 @@ var GeneratorFactory = function (defaultOutput) {
         var obj = Object.create(Generator.prototype)
         obj.name = method
         const inputs = formatArguments(args, transform.inputs)
-        // obj.transform = (x) => {
-        //   var glslString = `${method}(${x}`
-        //   glslString += generateGlsl(inputs)
-        //   glslString += ')'
-        //   return glslString
-        // }
+        obj.transform = (x) => {
+          var glslString = `${method}(${x}`
+          glslString += generateGlsl(inputs)
+          glslString += ')'
+          return glslString
+        }
         obj.defaultOutput = defaultOutput
         obj.uniforms = []
         inputs.forEach((input, index) => {
@@ -154,19 +159,19 @@ var GeneratorFactory = function (defaultOutput) {
         if (transform.type === 'combine' || transform.type === 'combineCoord') {
         // composition function to be executed when all transforms have been added
         // c0 and c1 are two inputs.. (explain more)
+        // to do! :  keep track of render passes from both sources being com
           var f = (c0) => (c1) => {
             var glslString = `${method}(${c0}, ${c1}`
             glslString += generateGlsl(inputs.slice(1))
             glslString += ')'
             return glslString
           }
-          var pass = this.passes[this.passes.length - 1]
-          pass.transform = compositionFunctions[glslTransforms[method].type](pass.transform)(inputs[0].value.transform)(f)
+          this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(inputs[0].value.transform)(f)
 
           this.uniforms = this.uniforms.concat(inputs[0].value.uniforms)
 
-        //  var pass = this.passes[this.passes.length - 1]
-        //  pass.transform = this.transform
+          var pass = this.passes[this.passes.length - 1]
+          pass.transform = this.transform
           pass.uniform + this.uniform
         } else {
           var f1 = (x) => {
@@ -175,9 +180,8 @@ var GeneratorFactory = function (defaultOutput) {
             glslString += ')'
             return glslString
           }
-          var pass = this.passes[this.passes.length - 1]
-          pass.transform = compositionFunctions[glslTransforms[method].type](pass.transform)(f1)
-          //this.passes[this.passes.length - 1].transform = this.transform
+          this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(f1)
+          this.passes[this.passes.length - 1].transform = this.transform
         }
 
         inputs.forEach((input, index) => {
@@ -193,11 +197,22 @@ var GeneratorFactory = function (defaultOutput) {
 
   Object.keys(renderPassFunctions).forEach((method) => {
     const transform = renderPassFunctions[method]
+
     Generator.prototype[method] = function (...args) {
+      const inputs = formatArguments(args, transform.inputs, true)
+
       this.passes.push({
         frag: transform.frag,
-        uniforms: []
+        uniforms: inputs
       })
+
+      this.transform = (x) => (`_pass(${x})`)
+      this.uniforms = []
+      let pass = {
+        transform: (x) => (`_pass(${x})`),
+        uniforms: []
+      }
+      this.passes.push(pass)
       return this
     }
   })
@@ -226,6 +241,8 @@ Generator.prototype.compile = function (pass) {
   uniform float time;
   uniform vec2 resolution;
   varying vec2 uv;
+  uniform sampler2D prevBuffer;
+
 
   ${Object.values(glslTransforms).map((transform) => {
   //  console.log(transform.glsl)
@@ -289,54 +306,19 @@ Generator.prototype.glsl = function () {
 Generator.prototype.out = function (_output) {
 //  console.log('UNIFORMS', this.uniforms, output)
   var output = _output || this.defaultOutput
-//   var pass = {
-//     glsl: renderPassFunctions['sharpen'].glsl,
-//     uniforms: []
-//   }
-//
-// var frag = this.compileRenderPass(pass)
-//   // var frag2 = this.compileRenderPass({
-//   //   glsl: renderPassFunctions['sharpen'].glsl,
-//   //   uniforms: []
-//   // })
-//   this.passes.push({
-//     frag: renderPassFunctions['sharpen'].frag,
-//     uniforms: []
-//   })
-//   // this.passes.push({
-//   //   frag: frag2,
-//   //   uniforms: pass.uniforms
-//   // })
-//   // this.passes.push({
-//   //   frag: frag2,
-//   //   uniforms: pass.uniforms
-//   // })
-//   var frag = this.compileRenderPass(pass)
-//   console.log('shader', frag)
 
-  // this.passes.push({
-  //   frag: frag,
-  //   uniforms: pass.uniforms
-  // })
-  // this.passes.push({
-  //   frag: this.conv(),
-  //   uniforms: []
-  // })
   var passes = this.passes.map((pass) => {
     var uniforms = {}
     pass.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
     if(pass.hasOwnProperty('transform')){
-    //  console.log(" rendering pass", pass)
-
       return {
         frag: this.compile(pass),
-        uniforms: Object.assign(output.uniforms, uniforms)
+        uniforms: Object.assign({}, output.uniforms, uniforms)
       }
     } else {
-    //  console.log(" not rendering pass", pass)
       return {
         frag: pass.frag,
-        uniforms:  Object.assign(output.uniforms, uniforms)
+        uniforms:  Object.assign({}, output.uniforms, uniforms)
       }
     }
   })

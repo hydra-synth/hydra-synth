@@ -4,11 +4,13 @@ uniform vec2 resolution;
 uniform sampler2D prevBuffer;
 varying vec2 uv;
 
+uniform float amount;
+
 float kernel [9];
 
 vec4 _convolution (vec2 uv, float[9] _kernel, float kernelWeight, vec2 _scale) {
   vec2 st = uv/resolution;
-  vec2 onePixel = (vec2(1.0, 1.0) * _scale) / resolution;
+  vec2 onePixel = (vec2(amount, amount) * _scale) / resolution;
   vec4 colorSum =
     texture2D(prevBuffer, st + onePixel * vec2(-1, 1)) * _kernel[0] +
     texture2D(prevBuffer, st + onePixel * vec2( 0, 1)) * _kernel[1] +

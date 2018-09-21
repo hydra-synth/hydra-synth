@@ -9,7 +9,13 @@ var glsl = require('glslify')
 module.exports = {
   sharpen: {
     type: 'renderpass',
-    inputs: [],
+    inputs: [
+      {
+        type: 'float',
+        name: 'amount',
+        default: 1.0
+      }
+    ],
     frag: glsl('./shaders/sharpen.frag')
   }
 }

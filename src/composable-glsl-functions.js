@@ -227,6 +227,13 @@ float _noise(vec3 v){
     }
     `
   },
+  _pass: {
+    type: 'util',
+    glsl: `vec4 _pass(vec2 _st) {
+      return texture2D(prevBuffer, fract(_st));
+    }
+    `
+  },
   src: {
     type: 'src',
     inputs: [
