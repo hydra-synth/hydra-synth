@@ -16,7 +16,7 @@ class HydraSynth {
     width = 1280,
     height = 720,
     numSources = 4,
-    numOutputs = 4,
+    numOutputs = 1,
     makeGlobal = true,
     autoLoop = true,
     detectAudio = true,
@@ -231,7 +231,7 @@ class HydraSynth {
     const self = this
     this.o = (Array(numOutputs)).fill().map((el, index) => {
       var o = new Output({regl: this.regl, width: this.width, height: this.height})
-      o.render()
+    //  o.render()
       o.id = index
       if (self.makeGlobal) window['o' + index] = o
       return o
