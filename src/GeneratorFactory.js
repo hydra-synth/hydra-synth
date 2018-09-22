@@ -142,7 +142,8 @@ var GeneratorFactory = function (defaultOutput) {
             glslString += ')'
             return glslString
           },
-          uniforms: []
+          uniforms: [],
+          empty: false
         }
         inputs.forEach((input, index) => {
           if (input.isUniform) {
@@ -173,6 +174,7 @@ var GeneratorFactory = function (defaultOutput) {
           var pass = this.passes[this.passes.length - 1]
           pass.transform = this.transform
           pass.uniform + this.uniform
+
         } else {
           var f1 = (x) => {
             var glslString = `${method}(${x}`
@@ -189,6 +191,7 @@ var GeneratorFactory = function (defaultOutput) {
             this.uniforms.push(input)
           }
         })
+        this.passes[this.passes.length - 1].empty = false
         this.passes[this.passes.length - 1].uniforms = this.uniforms
         return this
       }
@@ -203,14 +206,19 @@ var GeneratorFactory = function (defaultOutput) {
 
       this.passes.push({
         frag: transform.frag,
-        uniforms: inputs
+        uniforms: inputs,
+        empty: false
       })
 
       this.transform = (x) => (`_pass(${x})`)
       this.uniforms = []
+
+      // initialize a base buffer pass for subsequent transforms.
+      // If boolean empty is still true when rendering, skip pass
       let pass = {
         transform: (x) => (`_pass(${x})`),
-        uniforms: []
+        uniforms: [],
+        empty: true
       }
       this.passes.push(pass)
       return this
@@ -307,7 +315,7 @@ Generator.prototype.out = function (_output) {
 //  console.log('UNIFORMS', this.uniforms, output)
   var output = _output || this.defaultOutput
 
-  var passes = this.passes.map((pass) => {
+  var passes = this.passes.filter((pass) => !pass.empty).map((pass) => {
     var uniforms = {}
     pass.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
     if(pass.hasOwnProperty('transform')){
