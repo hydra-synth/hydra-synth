@@ -30,7 +30,7 @@ function init () {
 
 // voronoi(4, 0.2).out()
  s0.initCam()
-src(s0).diff(o0).modulateHue(o0, 30).out()
+src(s0).diff(o0).out()
 //src(s0).dither().repeat().sharpen().out()
 // osc(10, 0.01, 0.8)
 // //  .saturate(0)

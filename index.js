@@ -16,7 +16,7 @@ class HydraSynth {
     width = 1280,
     height = 720,
     numSources = 4,
-    numOutputs = 1,
+    numOutputs = 4,
     makeGlobal = true,
     autoLoop = true,
     detectAudio = true,

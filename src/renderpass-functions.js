@@ -18,6 +18,21 @@ module.exports = {
     ],
     frag: glsl('./shaders/sharpen.frag')
   },
+  blur: {
+    type: 'renderpass',
+    inputs: [
+      {
+        type: 'float',
+        name: 'directionX',
+        default: 1.0
+      },{
+        type: 'float',
+        name: 'directionY',
+        default: 0.0
+      }
+    ],
+    frag: glsl('./shaders/gaussian.frag')
+  },
   halftone: {
     type: 'renderpass',
     inputs: [
