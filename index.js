@@ -30,6 +30,7 @@ class HydraSynth {
     this.time = 0
     this.makeGlobal = makeGlobal
     this.renderAll = false
+    this.detectAudio = detectAudio
 
     // boolean to store when to save screenshot
     this.saveFrame = false
@@ -290,7 +291,7 @@ class HydraSynth {
     //   color: [0, 0, 0, 1]
     // })
     window.time = this.time
-    this.audio.tick()
+    if(this.detectAudio === true) this.audio.tick()
     for (let i = 0; i < this.s.length; i++) {
       this.s[i].tick(this.time)
     }
