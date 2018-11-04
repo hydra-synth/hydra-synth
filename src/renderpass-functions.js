@@ -12,7 +12,12 @@ module.exports = {
     inputs: [
       {
         type: 'float',
-        name: 'amount',
+        name: 'amountX',
+        default: 1.0
+      },
+      {
+        type: 'float',
+        name: 'amountY',
         default: 1.0
       }
     ],
