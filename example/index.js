@@ -19,7 +19,8 @@ function init () {
 //  document.body.appendChild(canvas)
   var hydra = new Hydra({
   //  autoLoad: false
-    enableStreamCapture: true
+    enableStreamCapture: true,
+    detectAudio: false
   })
 
   window.hydra = hydra
