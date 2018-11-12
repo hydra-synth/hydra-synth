@@ -66,12 +66,11 @@ class HydraSource  {
   tick (time) {
 
     if (this.src !== null && this.dynamic === true) {
-<<<<<<< HEAD
-=======
+
         if(this.src.videoWidth && this.src.videoWidth !== this.tex.width) {
           this.tex.resize(this.src.videoWidth, this.src.videoHeight)
         }
->>>>>>> master
+
         this.tex.subimage(this.src)
        //this.tex = this.regl.texture(this.src)
     }
