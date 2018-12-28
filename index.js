@@ -81,12 +81,14 @@ class HydraSynth {
     var self = this
     this.canvas.toBlob( (blob) => {
       //  var url = window.URL.createObjectURL(blob)
-        a.href = URL.createObjectURL(blob)
-        console.log(a.href)
-        a.click()
+
         if(self.imageCallback){
           self.imageCallback(blob)
           delete self.imageCallback
+        } else {
+          a.href = URL.createObjectURL(blob)
+          console.log(a.href)
+          a.click()
         }
     }, 'image/png')
     setTimeout(() => {
