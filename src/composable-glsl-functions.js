@@ -981,16 +981,21 @@ float _noise(vec3 v){
         name: 'b',
         type: 'float',
         default: 1.0
+      },
+      {
+        name: 'a',
+        type: 'float',
+        default: 1.0
       }
     ],
     notes: 'https://www.youtube.com/watch?v=FpOEtm9aX0M',
-    glsl: `vec4 color(vec4 c0, float _r, float _g, float _b){
-      vec3 c = vec3(_r, _g, _b);
-      vec3 pos = step(0.0, c); // detect whether negative
+    glsl: `vec4 color(vec4 c0, float _r, float _g, float _b, float _a){
+      vec4 c = vec4(_r, _g, _b, _a);
+      vec4 pos = step(0.0, c); // detect whether negative
 
       // if > 0, return r * c0
       // if < 0 return (1.0-r) * c0
-      return vec4(mix((1.0-c0.rgb)*abs(c), c*c0.rgb, pos), c0.a);
+      return vec4(mix((1.0-c0)*abs(c), c*c0, pos));
     }`
   },
   _rgbToHsv: {
