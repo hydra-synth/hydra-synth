@@ -307,12 +307,22 @@ float _noise(vec3 v){
         name: 'yMult',
         type: 'float',
         default: 1.0
+      },
+      {
+        name: 'offsetX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'offsetY',
+        type: 'float',
+        default: 0.5
       }
     ],
-    glsl: `vec2 scale(vec2 st, float amount, float xMult, float yMult){
-      vec2 xy = st - vec2(0.5);
+    glsl: `vec2 scale(vec2 st, float amount, float xMult, float yMult, float offsetX, float offsetY){
+      vec2 xy = st - vec2(offsetX, offsetY);
       xy*=(1.0/vec2(amount*xMult, amount*yMult));
-      xy+=vec2(0.5);
+      xy+=vec2(offsetX, offsetY);
       return xy;
     }
     `

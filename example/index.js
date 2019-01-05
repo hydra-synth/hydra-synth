@@ -30,7 +30,19 @@ function init () {
   //hydra.src(hydra.s[0]).out()
 
   s0.initCam()
-  src(s0).layer(shape().color(1, 1.0, 1, 0.2)).out()
+
+  shape()
+//  .scrollY(0, -0.10)
+  .diff(o0)
+  .add(o0, 0.1)
+  //.color(0.8, 0.8, 0.8)
+  //.shift(-0.1, -0.10, 0, 0.2)
+ /// .scrollY(0.2, 0.1)
+//  .scrollX(0, -0.2)
+  .scale(1.01, 1.0, 1.0, 0.5,  -0.2)
+//  .scrollX(0.0, 0.2)
+ // .scrollY(-0.2, -0.1)
+  .out()
 //   voronoi(4, 0.2).out()
 // /*osc(40, 0).rotate(1.57, 0.0).thresh(0.6).out()
 //
