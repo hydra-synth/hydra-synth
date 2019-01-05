@@ -625,7 +625,7 @@ float _noise(vec3 v){
     ],
     glsl: `vec2 scrollX(vec2 st, float amount, float speed){
       st.x += amount + time*speed;
-      return fract(st);
+      return st;
     }`
   },
   modulateScrollX: {
@@ -648,7 +648,7 @@ float _noise(vec3 v){
     ],
     glsl: `vec2 modulateScrollX(vec2 st, vec4 c1, float amount, float speed){
       st.x += c1.r*amount + time*speed;
-      return fract(st);
+      return st;
     }`
   },
   scrollY: {
@@ -667,7 +667,7 @@ float _noise(vec3 v){
     ],
     glsl: `vec2 scrollY(vec2 st, float amount, float speed){
       st.y += amount + time*speed;
-      return fract(st);
+      return st;
     }`
   },
   modulateScrollY: {
@@ -690,7 +690,7 @@ float _noise(vec3 v){
     ],
     glsl: `vec2 modulateScrollY(vec2 st, vec4 c1, float amount, float speed){
       st.y += c1.r*amount + time*speed;
-      return fract(st);
+      return st;
     }`
   },
   add: {
