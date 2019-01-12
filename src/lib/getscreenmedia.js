@@ -1,4 +1,4 @@
-// var adapter = require('webrtc-adapter');
+var adapter = require('webrtc-adapter');
 
 // to do: clean up this code
 // cache for constraints and callback
