@@ -62,9 +62,14 @@ class HydraSynth {
       window['render'] = this.render.bind(this)
     //  window.bpm = this.bpm
       window.bpm = this._setBpm.bind(this)
-  //  }
-    if(autoLoop) loop(this.tick.bind(this)).start()
-  }
+
+      // allow text function to be called globally
+      // function defined on line 342
+      window.text = this.text;
+
+    //  }
+      if(autoLoop) loop(this.tick.bind(this)).start()
+    }
 
   getScreenImage(callback) {
     this.imageCallback = callback
@@ -328,6 +333,33 @@ class HydraSynth {
       this.canvasToImage()
       this.saveFrame = false
     }
+  }
+
+  // Function to map  text string to
+  // a number, offering a poetic way
+  // of settings values
+
+  // Example:
+  //   text('Zach', 100) returns [ 99,  17, 20, 28 ]
+  //   text('Zach', 255) returns [ 251, 42, 50, 70 ]
+
+  text( string, maxValue ){
+
+    if ( !maxValue ){
+      maxValue = 100;
+    }
+
+    var allChar = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    return string
+      .replace(/ /g, '')
+      .split('')
+      .map(
+        function(a){
+          return Math.ceil( allChar.indexOf( a ) / allChar.length * maxValue );
+        }
+      );
+
   }
 
 

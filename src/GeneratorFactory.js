@@ -44,6 +44,7 @@ function generateGlsl (inputs) {
 // to do: add much more type checking, validation, and transformation to this part
 function formatArguments (userArgs, defaultArgs) {
   return defaultArgs.map((input, index) => {
+
     var typedArg = {}
 
     // if there is a user input at a certain index, create a uniform for this variable so that the value is passed in on each render pass
@@ -83,6 +84,7 @@ function formatArguments (userArgs, defaultArgs) {
       }
     }
     typedArg.type = input.type
+
     return typedArg
   })
 }
