@@ -32,6 +32,7 @@ void main () {
   kernel[0] = 0.0; kernel[1] = -1.0; kernel[2] = 0.0;
   kernel[3] = -1.0; kernel[4] = 5.0; kernel[5] = -1.0;
   kernel[6] = 0.0; kernel[7] = -1.0; kernel[8] = 0.0;
+  vec4 original = texture2D(prevBuffer,  gl_FragCoord.xy);
   vec4 sum = _convolution( gl_FragCoord.xy, kernel, 1.0, vec2(10.0, 1.0));
-  gl_FragColor = vec4(sum.rgb, 1.0);
+  gl_FragColor = mix(vec4(sum.rgb, original.a), original, mixWithOriginal) ;
 }

@@ -19,6 +19,11 @@ module.exports = {
         type: 'float',
         name: 'amountY',
         default: 1.0
+      },
+      {
+        type: 'float',
+        name: 'mixWithOriginal',
+        default: 0.5
       }
     ],
     frag: glsl('./shaders/sharpen.frag')

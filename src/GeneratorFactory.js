@@ -305,14 +305,7 @@ Generator.prototype.compileRenderPass = function (pass) {
   return frag
 }
 
-Generator.prototype.glsl = function () {
-//  console.log(this.compile())
-}
-
-
-
-Generator.prototype.out = function (_output) {
-//  console.log('UNIFORMS', this.uniforms, output)
+Generator.prototype.glsl = function (_output) {
   var output = _output || this.defaultOutput
 
   var passes = this.passes.filter((pass) => !pass.empty).map((pass) => {
@@ -331,8 +324,35 @@ Generator.prototype.out = function (_output) {
     }
   })
 
+  return passes
+}
+
+
+
+Generator.prototype.out = function (_output) {
+  var output = _output || this.defaultOutput
+  var glsl = this.glsl(output)
+// //  console.log('UNIFORMS', this.uniforms, output)
+//   var output = _output || this.defaultOutput
+//
+//   var passes = this.passes.filter((pass) => !pass.empty).map((pass) => {
+//     var uniforms = {}
+//     pass.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
+//     if(pass.hasOwnProperty('transform')){
+//       return {
+//         frag: this.compile(pass),
+//         uniforms: Object.assign({}, output.uniforms, uniforms)
+//       }
+//     } else {
+//       return {
+//         frag: pass.frag,
+//         uniforms:  Object.assign({}, output.uniforms, uniforms)
+//       }
+//     }
+//   })
+
   // console.log("FRAG", frag)
-  output.renderPasses(passes)
+  output.renderPasses(glsl)
   //var frag = this.compile(this.passes[this.passes.length-1])
   //output.frag = frag
 /*  var uniformObj = {}
