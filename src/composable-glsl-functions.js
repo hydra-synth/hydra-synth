@@ -873,7 +873,7 @@ float _noise(vec3 v){
     ],
     glsl: `vec2 modulateHue(vec2 st, vec4 c1, float amount){
 
-            return st + (vec2(c1.g - c1.r, c1.b - c1.g) * amount * 1.0/resolution);
+            return st + (vec2(c1.g - c1.r, c1.b - c1.g) * amount * 1.0/resolution.xy);
           }`
   },
   invert: {

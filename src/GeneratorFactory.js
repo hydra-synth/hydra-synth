@@ -224,7 +224,7 @@ Generator.prototype.compile = function (pass) {
   void main () {
     vec4 c = vec4(1, 0, 0, 1);
     //vec2 st = uv;
-    vec2 st = gl_FragCoord.xy/resolution;
+    vec2 st = gl_FragCoord.xy/resolution.xy;
     gl_FragColor = ${pass.transform('st')};
   }
   `
