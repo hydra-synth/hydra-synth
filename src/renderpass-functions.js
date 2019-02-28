@@ -12,8 +12,8 @@ module.exports = {
       float kernel [9];
 
       vec4 _convolution (vec2 uv, float[9] _kernel, float kernelWeight) {
-        vec2 st = uv/resolution;
-        vec2 onePixel = vec2(4.0, 4.0) / resolution;
+        vec2 st = uv/resolution.xy;
+        vec2 onePixel = vec2(4.0, 4.0) / resolution.xy;
         //  vec2 onePixel = vec2(1.0, 1.0);
         vec4 colorSum =
           texture2D(prevBuffer, st + onePixel * vec2(-1, -1)) * _kernel[0] +
@@ -66,7 +66,7 @@ module.exports = {
 
         vec4 sum = _convolution( gl_FragCoord.xy, kernel, 10.0);
         gl_FragColor = clamp(sum , vec4(0.0), vec4(1.0));
-    //   vec2 st = gl_FragCoord.xy/resolution;
+    //   vec2 st = gl_FragCoord.xy/resolution.xy;
     //    vec4 col = texture2D(prevBuffer, fract(st));
     //  gl_FragColor = vec4(st, 1.0, 1.0);
       }
