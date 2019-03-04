@@ -1,5 +1,4 @@
 /* globals tex */
-const { seq, sin, ramp, createFades } = require('./timingUtils.js')
 const glslTransforms = require('./composable-glsl-functions.js')
 
 // in progress: implementing multiple renderpasses within a single
@@ -93,15 +92,11 @@ var GeneratorFactory = function (defaultOutput) {
   let self = this
   self.functions = {}
 
-  // set global utility functions. to do: make global optional
-  window.sin = sin
-  window.ramp = ramp
+
   window.frag = shaderManager(defaultOutput)
 
-  createFades(6)
   // extend Array prototype
   Array.prototype.fast = function(speed) {
-  //  console.log("array fast", speed, this)
     this.speed = speed
     return this
   }
@@ -231,41 +226,7 @@ Generator.prototype.compile = function (pass) {
   return frag
 }
 
-// creates a fragment shader from an object containing uniforms and a snippet of
-// fragment shader code
-Generator.prototype.compileRenderPass = function (pass) {
-  var frag = `
-      precision mediump float;
-      ${pass.uniforms.map((uniform) => {
-        let type = ''
-        switch (uniform.type) {
-          case 'float':
-            type = 'float'
-            break
-          case 'texture':
-            type = 'sampler2D'
-            break
-        }
-        return `
-          uniform ${type} ${uniform.name};`
-      }).join('')}
-      uniform float time;
-      uniform vec2 resolution;
-      uniform sampler2D prevBuffer;
-      varying vec2 uv;
 
-      ${Object.values(renderPassFunctions).filter(transform => transform.type === 'renderpass_util')
-      .map((transform) => {
-      //  console.log(transform.glsl)
-        return `
-                ${transform.glsl}
-              `
-      }).join('')}
-
-      ${pass.glsl}
-  `
-  return frag
-}
 
 Generator.prototype.glsl = function (_output) {
   var output = _output || this.defaultOutput
