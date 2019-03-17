@@ -34,7 +34,8 @@ class HydraSynth {
 
     // boolean to store when to save screenshot
     this.saveFrame = false
-
+    // boolean to store if webrtc is setup
+    this.webrtcsetup = false
     // if stream capture is enabled, this object contains the capture stream
     this.captureStream = null
 
@@ -48,6 +49,68 @@ class HydraSynth {
       this.saveFrame = true
     }
 
+    let peerConn = null;
+    window.webrtcsend = () => {
+      if (this.webrtcsetup) {
+        console.log("webrtc is setup")        
+      }
+      else {
+        console.log("webrtc setup")
+        // websocket begin
+        
+        window.socket = new WebSocket('ws://127.0.0.1:8088');
+        window.socket.onmessage = function(evt) {
+          var messageData = JSON.parse(evt.data);
+          if (messageData.sdp) {
+            console.log('Received SDP from remote peer');
+            peerConn.setRemoteDescription(new RTCSessionDescription(messageData.sdp));
+          } else if (messageData.candidate) {
+            console.log('Received ICECandidate from remote peer ' + messageData.candidate);
+          } else {
+            console.log('Received from remote peer ' + evt.data);
+          }
+        };
+        // websocket end
+        // webrtc begin
+        function onIceCandidateHandler(pc, event) {
+          if (window.socket) window.socket.send(JSON.stringify({ 'candidate': event.candidate })); 
+          console.log(`ICE candidate: ${event.candidate ? event.candidate.candidate : '(null)'}`);
+        }
+        // check duplicate of enableStreamCapture for window.vidRecorder
+        this.captureStream = this.canvas.captureStream(25)
+
+        console.log('Starting call');
+        const videoTracks = this.captureStream.getVideoTracks();
+        if (videoTracks.length > 0) {
+          console.log(`Using video device: ${videoTracks[0].label}`);
+        }
+        const servers = {
+          'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]
+        };
+        peerConn = new RTCPeerConnection(servers);
+        console.log('Created local peer connection object peerConn, ' + peerConn.signalingState);
+
+        peerConn.addStream(this.captureStream);
+        console.log('Added local captureStream to peerConn');
+      
+        console.log('peerConn createOffer start');
+        peerConn.createOffer(
+          function (offer) {
+            let off = new RTCSessionDescription(offer);
+            peerConn.setLocalDescription(new RTCSessionDescription(off),
+              function () {
+                window.socket.send(JSON.stringify({ 'sdp': off }));
+              },
+              function (error) { console.log('createAndSendOffer:' + error); }
+            );
+          },
+          function (error) { console.log('createAndSendOffer:' + error); }
+        );
+        peerConn.onicecandidate = e => onIceCandidateHandler(peerConn, e);
+        this.webrtcsetup = true
+      }
+    }
+    // webrtc end
     if (enableStreamCapture) {
       this.captureStream = this.canvas.captureStream(25)
 
