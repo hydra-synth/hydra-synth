@@ -20,7 +20,7 @@ function init () {
   var hydra = new Hydra({
   //  autoLoad: false
     enableStreamCapture: true,
-    detectAudio: false
+    detectAudio: true
   })
 
   window.hydra = hydra
@@ -33,22 +33,66 @@ function init () {
  //s0.initCam()
 //src(s0).sharpen(10, 1).out()
 //src(s0).dither().repeat().sharpen().out()
-shape(3, 0.1)
-//  .scrollY(0, -0.10)
-  .diff(o0)
-//  .add(o0, 1)
-  //.color(0.8, 0.8, 0.8)
-  //.shift(-0.1, -0.10, 0, 0.2)
-  .scrollY(0.2, 0.1)
-  .scale(1.001)
-  .blur(2, 2)
-  .sharpen(10.0, 1.0, 0.4)
-  .scrollY(-0.2, -0.1)
-  .out()
+// shape(3, 0.1)
+// //  .scrollY(0, -0.10)
+//   .diff(o0)
+// //  .add(o0, 1)
+//   //.color(0.8, 0.8, 0.8)
+//   //.shift(-0.1, -0.10, 0, 0.2)
+//   .scrollY(0.2, 0.1)
+//   .scale(1.001)
+//   .blur(2, 2)
+//   .sharpen(10.0, 1.0, 0.4)
+//   .scrollY(-0.2, -0.1)
+//   .out()
+//
+//   src(o0).scrollY(0.1).scrollX(0.1).scale(20).out(o1)
 
-  src(o0).scrollY(0.1).scrollX(0.1).scale(20).out(o1)
+var sinN = v => (Math.sin(v)+1)/2
+var cosN = v => (Math.cos(v)+1)/2
 
-  render(o1)
+
+osc(() => sinN(time*0.1)*4+10, 0.01, 1.1)
+	.modulate(noise(1, .1))
+	.kaleid(() => (sinN(time/1.5)**0.5)*10+3)
+	.color(() => sinN(time)*0.4 + 2.4,0.91,0.39)
+	.modulate(o0, () => (Math.sin(time * .3)+1)/20+0.05)
+	.rotate(0, 0.1)
+	.scale(1.1)
+	.modulate(noise(3, .21))
+  	.out(o0)
+
+  synth.setFunction('ooo', {
+        type: 'src',
+        inputs: [
+          {
+            name: 'frequency',
+            type: 'float',
+            default: 60.0
+          },
+          {
+            name: 'sync',
+            type: 'float',
+            default: 0.1
+          },
+          {
+            name: 'offset',
+            type: 'float',
+            default: 0.0
+          }
+        ],
+        glsl: `vec4 ooo(vec2 _st, float freq, float sync, float offset){
+                vec2 st = _st;
+                float r = sin((st.x-offset/freq+time*sync)*freq)*0.5  + 0.5;
+                float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
+                float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
+                return vec4(r, g, b, 1.0);
+              }`
+      })
+
+
+
+  //render(o0)
 //s0.initCam()
 //src(s0).scrollX().out()
 // osc(10, 0.01, 0.8)
@@ -76,10 +120,11 @@ shape(3, 0.1)
   render()*/
 
 
-  a.show()
+  //a.show()
 
   var x = 0
   loop((dt) => {
+    //console.log('looping')
     // x++
     // ctx.moveTo(x, 0);
     // ctx.lineTo(200, 100);

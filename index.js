@@ -1,13 +1,16 @@
 const Output = require('./src/output.js')
 const loop = require('raf-loop')
 const Source = require('./src/hydra-source.js')
-const GeneratorFactory = require('./src/GeneratorFactory.js')
+//const GeneratorFactory = require('./src/GeneratorFactory.js')
 
 //const RenderPasses = require('./RenderPasses.js')
 const mouse = require('mouse-change')()
 const Audio = require('./src/audio.js')
 const VidRecorder = require('./src/video-recorder.js')
 
+const synth = require('./src/createSynth.js')
+
+window.synth = synth
 // to do: add ability to pass in certain uniforms and transforms
 class HydraSynth {
 
@@ -44,7 +47,7 @@ class HydraSynth {
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
-  //  this._generateRenderPasses()
+  // this._generateRenderPasses()
 
     window.screencap = () => {
       this.saveFrame = true
@@ -265,15 +268,24 @@ class HydraSynth {
   }
 
   _generateGlslTransforms () {
-    const self = this
-    const gen = new GeneratorFactory(this.o[0])
-    window.generator = gen
-    Object.keys(gen.functions).forEach((key)=>{
-      self[key] = gen.functions[key]
-      if(self.makeGlobal === true) {
-        window[key] = gen.functions[key]
-      }
-    })
+    // const self = this
+    // const gen = new GeneratorFactory(this.o[0])
+    // window.generator = gen
+    // Object.keys(gen.functions).forEach((key)=>{
+    //   self[key] = gen.functions[key]
+    //   if(self.makeGlobal === true) {
+    //     window[key] = gen.functions[key]
+    //   }
+    // })
+
+    var functions = synth.init(this.o[0])
+   //console.log('functions', functions)
+    // Object.keys(functions).forEach((key)=>{
+    //   self[key] = functions[key]
+    //   if(self.makeGlobal === true) {
+    //     window[key] = functions[key]
+    //   }
+    // })
   }
 
   // _generateRenderPasses () {
