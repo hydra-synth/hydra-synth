@@ -18,7 +18,7 @@ module.exports = function (defaultOutput) {
 
   Frag.prototype.compile = function () {
     var frag = `
-    precision mediump float;
+    precision highp float;
     uniform float time;
     uniform vec2 resolution;
     varying vec2 uv;

@@ -196,7 +196,7 @@ var GeneratorFactory = function (defaultOutput) {
 Generator.prototype.compile = function (pass) {
 //  console.log("compiling", pass)
   var frag = `
-  precision mediump float;
+  precision highp float;
   ${pass.uniforms.map((uniform) => {
     let type = ''
     switch (uniform.type) {
@@ -235,7 +235,7 @@ Generator.prototype.compile = function (pass) {
 // fragment shader code
 Generator.prototype.compileRenderPass = function (pass) {
   var frag = `
-      precision mediump float;
+      precision highp float;
       ${pass.uniforms.map((uniform) => {
         let type = ''
         switch (uniform.type) {
