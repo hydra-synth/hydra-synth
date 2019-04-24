@@ -135,7 +135,7 @@ s0.clear()
 ```
 
 
-#### Non-global mode
+#### Non-global mode [in progress]
 If makeGlobal is set to false, buffers and functions can be accessed via the hydra instance. Note that sources and buffers are contained in an array and accessed by index. E.g.:
 ```
 hydra.s[0].initCam()
@@ -148,6 +148,13 @@ You can use your own render loop for triggering hydra updates, instead of the au
 hydra.tick(dt)
 ```
 where dt is the time elapsed in milliseconds since the last update
+
+### Directly using shader code
+You can get access to the hydra shader code without rendering using hydra. For example,
+```
+osc().rotate().glsl()
+```
+returns a fragment shader string and list of uniforms. For vertex shader and attribute implentation, see https://github.com/ojack/hydra-synth/blob/master/src/output.js.
 
 #### Adding/editing transformation functions
 
