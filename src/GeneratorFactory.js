@@ -191,7 +191,7 @@ var GeneratorFactory = function (defaultOutput) {
 Generator.prototype.compile = function (pass) {
 //  console.log("compiling", pass)
   var frag = `
-  precision mediump float;
+  precision highp float;
   ${pass.uniforms.map((uniform) => {
     let type = ''
     switch (uniform.type) {
@@ -226,7 +226,45 @@ Generator.prototype.compile = function (pass) {
   return frag
 }
 
+<<<<<<< HEAD
 
+=======
+// creates a fragment shader from an object containing uniforms and a snippet of
+// fragment shader code
+Generator.prototype.compileRenderPass = function (pass) {
+  var frag = `
+      precision highp float;
+      ${pass.uniforms.map((uniform) => {
+        let type = ''
+        switch (uniform.type) {
+          case 'float':
+            type = 'float'
+            break
+          case 'texture':
+            type = 'sampler2D'
+            break
+        }
+        return `
+          uniform ${type} ${uniform.name};`
+      }).join('')}
+      uniform float time;
+      uniform vec2 resolution;
+      uniform sampler2D prevBuffer;
+      varying vec2 uv;
+
+      ${Object.values(renderPassFunctions).filter(transform => transform.type === 'renderpass_util')
+      .map((transform) => {
+      //  console.log(transform.glsl)
+        return `
+                ${transform.glsl}
+              `
+      }).join('')}
+
+      ${pass.glsl}
+  `
+  return frag
+}
+>>>>>>> da8d6d038ff6875a21251998345ae62fcd5a6992
 
 Generator.prototype.glsl = function (_output) {
   var output = _output || this.defaultOutput

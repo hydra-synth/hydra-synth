@@ -50,7 +50,7 @@ Output.prototype.getTexture = function () {
 Output.prototype.clear = function () {
   this.transformIndex = 0
   this.fragHeader = `
-  precision mediump float;
+  precision highp float;
 
   uniform float time;
   varying vec2 uv;
@@ -62,7 +62,7 @@ Output.prototype.clear = function () {
   //   gl_FragColor = color;
   // }`
   this.vert = `
-  precision mediump float;
+  precision highp float;
   attribute vec2 position;
   varying vec2 uv;
 
