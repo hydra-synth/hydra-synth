@@ -86,13 +86,7 @@ module.exports = {
   }
     `
   },
-  _pass: {
-    type: 'util',
-    glsl: `vec4 _pass(vec2 _st) {
-      return texture2D(prevBuffer, fract(_st));
-    }
-    `
-  },
+
 
   _rgbToHsv: {
     type: 'util',

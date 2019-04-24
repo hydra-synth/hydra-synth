@@ -28,6 +28,21 @@ module.exports = {
     ],
     frag: glsl('./shaders/sharpen.frag')
   },
+  edges: {
+    type: 'renderpass',
+    inputs: [
+      {
+        type: 'float',
+        name: 'uWeakThreshold',
+        default: 0.4
+      },{
+        type: 'float',
+        name: 'uStrongThreshold',
+        default: 0.6
+      }
+    ],
+    frag: glsl('./shaders/edges.frag')
+  },
   blur: {
     type: 'renderpass',
     inputs: [

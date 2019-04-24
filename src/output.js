@@ -138,6 +138,7 @@ Output.prototype.clear = function () {
 // }
 
 Output.prototype.renderPasses = function(passes) {
+  console.log('rendering', passes)
   var self = this
 //  console.log("passes", passes)
 

@@ -29,6 +29,7 @@
     "budo": "^11.3.2",
     "enumerate-devices": "^1.1.1",
     "getusermedia": "^2.0.1",
+    "glsl-canny-edge-detection": "^1.0.6",
     "glsl-dither": "^1.0.1",
     "glsl-fast-gaussian-blur": "^1.0.2",
     "glsl-halftone": "^1.0.4",

@@ -52,15 +52,15 @@ var sinN = v => (Math.sin(v)+1)/2
 var cosN = v => (Math.cos(v)+1)/2
 
 
-osc(() => sinN(time*0.1)*4+10, 0.01, 1.1)
-	.modulate(noise(1, .1))
-	.kaleid(() => (sinN(time/1.5)**0.5)*10+3)
-	.color(() => sinN(time)*0.4 + 2.4,0.91,0.39)
-	.modulate(o0, () => (Math.sin(time * .3)+1)/20+0.05)
-	.rotate(0, 0.1)
-	.scale(1.1)
-	.modulate(noise(3, .21))
-  	.out(o0)
+// osc(() => sinN(time*0.1)*4+10, 0.01, 1.1)
+// 	.modulate(noise(1, .1))
+// 	.kaleid(() => (sinN(time/1.5)**0.5)*10+3)
+// 	.color(() => sinN(time)*0.4 + 2.4,0.91,0.39)
+// 	.modulate(o0, () => (Math.sin(time * .3)+1)/20+0.05)
+// 	.rotate(0, 0.1)
+// 	.scale(1.1)
+// 	.modulate(noise(3, .21))
+//   	.out(o0)
 
   synth.setFunction('ooo', {
         type: 'src',
@@ -90,7 +90,7 @@ osc(() => sinN(time*0.1)*4+10, 0.01, 1.1)
               }`
       })
 
-
+ooo(10, 0.01, 1.2).blur().out()
 
   //render(o0)
 //s0.initCam()

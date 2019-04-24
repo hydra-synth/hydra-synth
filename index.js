@@ -8,7 +8,7 @@ const mouse = require('mouse-change')()
 const Audio = require('./src/audio.js')
 const VidRecorder = require('./src/video-recorder.js')
 
-const synth = require('./src/createSynth.js')
+const synth = require('./src/create-synth.js')
 
 window.synth = synth
 // to do: add ability to pass in certain uniforms and transforms

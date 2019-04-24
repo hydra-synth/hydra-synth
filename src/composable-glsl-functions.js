@@ -1,9 +1,4 @@
-// to add: ripple: https://www.shadertoy.com/view/4djGzz
-// mask
-// convolution
-// basic sdf shapes
-// repeat
-// iq color palletes
+
 
 module.exports = {
   noise: {
@@ -969,5 +964,14 @@ module.exports = {
       c = fract(c);
       return vec4(c, c0.a);
     }`
-  }
+  },
+  prev: {
+    type: 'src',
+    notes: 'renders previous buffer',
+    inputs: [],
+    glsl: `vec4 prev(vec2 _st) {
+      return texture2D(prevBuffer, fract(_st));
+    }
+    `
+  },
 }
