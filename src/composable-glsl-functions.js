@@ -269,6 +269,25 @@ float _noise(vec3 v){
       return vec4(_r, _g, _b, _a);
     }`
   },
+  translate: {
+    type: 'coord',
+    inputs: [
+      {
+        name: 'x',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'y',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec2 translate(vec2 st, float x, float y){
+      st+=vec2(x,y);
+      return st;
+    }`
+  },
   rotate: {
     type: 'coord',
     inputs: [
