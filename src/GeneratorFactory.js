@@ -233,9 +233,7 @@ Generator.prototype.compile = function (pass) {
   return frag
 }
 
-<<<<<<< HEAD
 
-=======
 // creates a fragment shader from an object containing uniforms and a snippet of
 // fragment shader code
 Generator.prototype.compileRenderPass = function (pass) {
@@ -271,7 +269,7 @@ Generator.prototype.compileRenderPass = function (pass) {
   `
   return frag
 }
->>>>>>> da8d6d038ff6875a21251998345ae62fcd5a6992
+
 
 Generator.prototype.glsl = function (_output) {
   var output = _output || this.defaultOutput
