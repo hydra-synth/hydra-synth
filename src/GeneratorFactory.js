@@ -59,7 +59,14 @@ function formatArguments (userArgs, defaultArgs) {
       if (userArgs[index].transform) typedArg.isUniform = false
 
       if (typeof userArgs[index] === 'function') {
-        typedArg.value = (context, props, batchId) => (userArgs[index](props))
+        typedArg.value = (context, props, batchId) => {
+          try {
+            return userArgs[index](props)
+          } catch (e) {
+            console.log('ERROR', e)
+            return input.default
+          }
+        }
       } else if (userArgs[index].constructor === Array) {
       //  console.log("is Array")
         typedArg.value = (context, props, batchId) => seq(userArgs[index])(props)
