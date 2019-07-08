@@ -36,7 +36,12 @@ function generateGlsl (inputs) {
   })
   return str
 }
-
+// timing function that accepts a sequence of values as an array
+const seq = (arr = []) => ({time, bpm}) =>
+{
+   let speed = arr.speed ? arr.speed : 1
+   return arr[Math.floor(time * speed * (bpm / 60) % (arr.length))]
+}
 // when possible, reformats arguments to be the correct type
 // creates unique names for variables requiring a uniform to be passed in (i.e. a texture)
 // returns an object that contains the type and value of each argument
