@@ -58,6 +58,11 @@ If `opts` is specified, the default options (shown below) will be overridden.
 
 ```
 
+resize the hydra canvas (note: this changes the underlying resolution. To change appearance on the screen, you should edit the css)
+```
+hydra.resize(width, height)
+```
+
 render an oscillator with parameters frequency, sync, and rgb offset:
 ```
 osc(20, 0.1, 0.8).out()
