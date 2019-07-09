@@ -1,8 +1,4 @@
-//const Hydra = require('./../src/index.js')
-
 const Hydra = require('./../index.js')
-const Analyzer = require('web-audio-analyser')
-//const getUserMedia = require('getusermedia')
 const loop = require('raf-loop')
 
 function init () {
@@ -65,23 +61,6 @@ function init () {
     ctx.fillRect(10, 10, 100, 100);
     hydra.tick(dt)
   }).start()
-
-
-
-  // s0.initCam(1)
-  //
-  // getUserMedia({audio: true, video: false}, function (err, stream) {
-  //   console.log('audio', stream)
-  //   if(err) {
-  //     console.log(err)
-  //   } else {
-  //     window.audio = Analyzer(stream, {audible: false})
-  //     console.log(window.audio)
-  //   }
-  // })
-  // hydra.osc().out(hydra.o[0])
-  // hydra.osc().rotate(0.4).out(hydra.o[1])
-  // hydra.render()
 
 }
 
