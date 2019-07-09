@@ -26,6 +26,12 @@ var Output = function (opts) {
   // console.log("position", this.positionBuffer)
 }
 
+Output.prototype.resize = function(width, height) {
+  this.fbos.forEach((fbo) => {
+    fbo.resize(width, height)
+  })
+}
+
 // Object.keys(transforms).forEach((method) => {
 //   Output.prototype[method] = function (...args) {
 //   //  console.log("applying", method, transforms[method])

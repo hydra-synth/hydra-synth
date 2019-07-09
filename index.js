@@ -71,6 +71,20 @@ class HydraSynth {
     this.saveFrame = true
   }
 
+  resize(width, height) {
+    console.log(width, height)
+    this.canvas.width = width
+    this.canvas.height = height
+    this.width = width
+    this.height = height
+    this.regl.poll()
+    this.o.forEach((output) => {
+      output.resize(width, height)
+    })
+    this.s.forEach((source) => {
+      source.resize(width, height)
+    })
+  }
   canvasToImage (callback) {
     const a = document.createElement('a')
     a.style.display = 'none'
