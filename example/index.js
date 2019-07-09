@@ -8,13 +8,17 @@ function init () {
   canvas.width = 800
   canvas.height = 200
 
-  var ctx = canvas.getContext('2d')
-  ctx.moveTo(0, 0);
-  ctx.lineTo(200, 100);
-  ctx.stroke();
-//  document.body.appendChild(canvas)
+  canvas.style.width = '100%'
+  canvas.style.height = '100%'
+
+  // var ctx = canvas.getContext('2d')
+  // ctx.moveTo(0, 0);
+  // ctx.lineTo(200, 100);
+  // ctx.stroke();
+ document.body.appendChild(canvas)
   var hydra = new Hydra({
   //  autoLoad: false
+    canvas: canvas,
     enableStreamCapture: true,
     detectAudio: false
   })
@@ -49,16 +53,16 @@ function init () {
 //   render()*/
 
 
-  a.show()
+  
 
   var x = 0
   loop((dt) => {
     x++
-    ctx.moveTo(x, 0);
-    ctx.lineTo(200, 100);
-    ctx.stroke();
-    ctx.fillStyle = 'green';
-    ctx.fillRect(10, 10, 100, 100);
+    // ctx.moveTo(x, 0);
+    // ctx.lineTo(200, 100);
+    // ctx.stroke();
+    // ctx.fillStyle = 'green';
+    // ctx.fillRect(10, 10, 100, 100);
     hydra.tick(dt)
   }).start()
 
