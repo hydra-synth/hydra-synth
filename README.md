@@ -4,10 +4,20 @@ Video synth engine for [hydra](https://github.com/ojack/hydra).
 
 Currently experimental / in-progress.
 
-To install:
+This is the main logic of hydra packaged as a javascript module, intended for use within javascript projects. If you are looking to get started with hydra quickly, visit the [web editor](https://hydra-editor.glitch.me) or the [main repo](https://github.com/ojack/hydra). To use hydra within atom, follow the instructions at https://github.com/ojack/hydra-examples.
+
+### To install:
+
+
 ```
 npm install hydra-synth
 ```
+
+### To develop:
+```
+npm run example
+```
+Sets up an example using hydra-synth that is automatically updated when source files are updated.
 
 #### To use:
 ```
@@ -177,9 +187,3 @@ render screen tab:
 s0.initScreen()
 o0.src(s0)
 ```
-
-#### Not yet implemented:
-- dynamically resize output canvas
-- documentation of logic for function composition, how to create your own functions
-- add custom glsl functions on init
-- directly render vertex and fragment shader code to buffers
