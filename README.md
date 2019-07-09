@@ -17,7 +17,7 @@ npm install hydra-synth
 ```
 npm run example
 ```
-Sets up an example using hydra-synth that is automatically updated when source files are updated.
+Sets up an example using hydra-synth that is automatically updated when source files are updated. It is possible to write test code by editing /example/index.js or by writing hydra code into the developer console.
 
 #### To use:
 ```
