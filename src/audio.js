@@ -1,5 +1,4 @@
 const Meyda = require('meyda')
-const getUserMedia = require('getusermedia')
 
 class Audio {
   constructor ({
@@ -46,31 +45,27 @@ class Audio {
     this.ctx.strokeStyle="#0ff"
     this.ctx.lineWidth=0.5
 
-    getUserMedia(
-      {video: false, audio: true},
-      (err, stream) => {
-        if(err) {
-          console.log('ERROR', err)
-        } else {
-          console.log('got mic stream', stream)
-          this.stream = stream
-          this.context = new AudioContext()
+    window.navigator.mediaDevices.getUserMedia({video: false, audio: true})
+      .then((stream) => {
+        console.log('got mic stream', stream)
+        this.stream = stream
+        this.context = new AudioContext()
         //  this.context = new AudioContext()
-          let audio_stream = this.context.createMediaStreamSource(stream)
+        let audio_stream = this.context.createMediaStreamSource(stream)
 
-          console.log(this.context)
-          this.meyda = Meyda.createMeydaAnalyzer({
-            audioContext: this.context,
-            source: audio_stream,
-            featureExtractors: [
-              'loudness',
+        console.log(this.context)
+        this.meyda = Meyda.createMeydaAnalyzer({
+          audioContext: this.context,
+          source: audio_stream,
+          featureExtractors: [
+            'loudness',
             //  'perceptualSpread',
             //  'perceptualSharpness',
             //  'spectralCentroid'
-            ]
-          })
-        }
+          ]
+        })
       })
+      .catch((err) => console.log('ERROR', err))
   }
 
   detectBeat (level) {
