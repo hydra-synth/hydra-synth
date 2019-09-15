@@ -39,7 +39,7 @@ function generateGlsl (inputs) {
 // timing function that accepts a sequence of values as an array
 const seq = (arr = []) => ({time, bpm}) =>
 {
-   let speed = arr.speed ? arr.speed : 1
+   let speed = arr.speed ? arr.speed({time, bpm}) : 1
    return arr[Math.floor(time * speed * (bpm / 60) % (arr.length))]
 }
 // when possible, reformats arguments to be the correct type
@@ -109,6 +109,10 @@ var GeneratorFactory = function (defaultOutput) {
 
   // extend Array prototype
   Array.prototype.fast = function(speed) {
+    // always make speed a function to not have to check later
+    if(typeof speed !== 'function'){
+      speed = () => speed;
+    }
     this.speed = speed
     return this
   }
