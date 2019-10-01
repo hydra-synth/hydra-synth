@@ -103,7 +103,8 @@ var GeneratorFactory = function (defaultOutput) {
 
   let self = this
   self.functions = {}
-
+  self.instance_counter = counter.new()
+  self.instances = {}
 
   window.frag = shaderManager(defaultOutput)
 
@@ -113,15 +114,43 @@ var GeneratorFactory = function (defaultOutput) {
     return this
   }
 
+  const make_instance = (method, transform, inputs) => {
+    let method_call_name = `${method}`
+
+    let instance = {
+      definition: (inputs, input_gen) => transform.glsl,
+      invocation: (inputs, input_gen) => {
+        return (x) => `${method_call_name}(${x}${input_gen(inputs)})`
+      }
+    }
+
+    if (transform.glsl_instance) {
+      method_call_name = `${method_call_name}_${self.instance_counter.increment()}`
+      instance = transform.glsl_instance(method_call_name)
+    }
+
+    const old_invocation = instance.invocation
+    instance.invocation = (new_inputs) => old_invocation(new_inputs ? new_inputs : inputs, generateGlsl)
+    
+    const old_definition = instance.definition
+    instance.definition = (new_inputs) => old_definition(new_inputs ? new_inputs : inputs, generateGlsl)
+
+    self.instances[method_call_name] = instance
+    return instance
+  }
+
   Object.keys(glslTransforms).forEach((method) => {
     const transform = glslTransforms[method]
 
     // if type is a source, create a new global generator function that inherits from Generator object
     if (transform.type === 'src') {
       self.functions[method] = (...args) => {
+        const inputs = formatArguments(args, transform.inputs)
+        const instance = make_instance(method, transform, inputs)
+
         var obj = Object.create(Generator.prototype)
         obj.name = method
-        const inputs = formatArguments(args, transform.inputs)
+        
         obj.transform = (x) => ""
         obj.update_transform = (update_fn) => {
           obj.transform = update_fn(obj.transform)
@@ -129,12 +158,7 @@ var GeneratorFactory = function (defaultOutput) {
         }
 
         let src_transform = obj.update_transform(() =>
-          (x) => {
-            var glslString = `${method}(${x}`
-            glslString += generateGlsl(inputs)
-            glslString += ')'
-            return glslString
-          }
+          (x) => instance.invocation(inputs)(x)
         )
 
         obj.defaultOutput = defaultOutput
@@ -180,22 +204,20 @@ var GeneratorFactory = function (defaultOutput) {
             })
           }
         })
+
+        obj.instances = self.instances
         return obj
       }
     } else {
       Generator.prototype[method] = function (...args) {
         const inputs = formatArguments(args, transform.inputs)
+        const instance = make_instance(method, transform, inputs)
 
         if (transform.type === 'combine' || transform.type === 'combineCoord') {
         // composition function to be executed when all transforms have been added
         // c0 and c1 are two inputs.. (explain more)
-          var f = (c0) => (c1) => {
-            var glslString = `${method}(${c0}, ${c1}`
-            glslString += generateGlsl(inputs.slice(1))
-            glslString += ')'
-            return glslString
-          }
-
+          var f = (c0) => (c1) => instance.invocation(inputs.slice(1))(`${c0}, ${c1}`)
+          
           let new_transform = this.update_transform((current_transform) => 
             compositionFunctions[glslTransforms[method].type](current_transform)(inputs[0].value.transform)(f)
           )
@@ -206,12 +228,7 @@ var GeneratorFactory = function (defaultOutput) {
             pass.transform = new_transform
           })
         } else {
-          var f1 = (x) => {
-            var glslString = `${method}(${x}`
-            glslString += generateGlsl(inputs)
-            glslString += ')'
-            return glslString
-          }
+          var f1 = (x) => instance.invocation(inputs)(x)
 
           let new_transform = this.update_transform((current_transform) => 
             compositionFunctions[glslTransforms[method].type](current_transform)(f1)
@@ -234,7 +251,7 @@ var GeneratorFactory = function (defaultOutput) {
           pass.uniforms.concat(new_uniforms)
         })
         return this
-      }
+      }      
     }
   })
 }
@@ -263,10 +280,10 @@ Generator.prototype.compile = function (pass) {
   uniform vec2 resolution;
   varying vec2 uv;
 
-  ${Object.values(glslTransforms).map((transform) => {
+  ${Object.entries(this.instances).map(([_, instance]) => {
   //  console.log(transform.glsl)
     return `
-            ${transform.glsl}
+            ${instance.definition()}
           `
   }).join('')}
 
