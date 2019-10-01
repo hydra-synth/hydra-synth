@@ -104,7 +104,6 @@ var GeneratorFactory = function (defaultOutput) {
   let self = this
   self.functions = {}
   self.instance_counter = counter.new()
-  self.instances = {}
 
   window.frag = shaderManager(defaultOutput)
 
@@ -135,7 +134,11 @@ var GeneratorFactory = function (defaultOutput) {
     const old_definition = instance.definition
     instance.definition = (new_inputs) => old_definition(new_inputs ? new_inputs : inputs, generateGlsl)
 
-    self.instances[method_call_name] = instance
+    instance.register = (obj) => {
+      // console.log(`register ${method_call_name}: `, obj)
+      obj.instances[method_call_name] = instance
+    }
+
     return instance
   }
 
@@ -193,9 +196,11 @@ var GeneratorFactory = function (defaultOutput) {
 
         let pass = {
           transform: src_transform,
-          uniforms: []
+          uniforms: [],
+          instances: {}
         }
         obj.append_pass(pass)
+        instance.register(pass)
 
         inputs.forEach((input, index) => {
           if (input.isUniform) {
@@ -205,36 +210,33 @@ var GeneratorFactory = function (defaultOutput) {
           }
         })
 
-        obj.instances = self.instances
         return obj
       }
     } else {
-      Generator.prototype[method] = function (...args) {
-        const inputs = formatArguments(args, transform.inputs)
-        const instance = make_instance(method, transform, inputs)
+      const setup_method = (that, inputs, instance) => {
 
         if (transform.type === 'combine' || transform.type === 'combineCoord') {
         // composition function to be executed when all transforms have been added
         // c0 and c1 are two inputs.. (explain more)
           var f = (c0) => (c1) => instance.invocation(inputs.slice(1))(`${c0}, ${c1}`)
           
-          let new_transform = this.update_transform((current_transform) => 
+          let new_transform = that.update_transform((current_transform) => 
             compositionFunctions[glslTransforms[method].type](current_transform)(inputs[0].value.transform)(f)
           )
 
-          this.append_uniforms(inputs[0].value.uniforms)
+          that.append_uniforms(inputs[0].value.uniforms)
 
-          this.update_pass(-1, (pass) => {
+          that.update_pass(-1, (pass) => {
             pass.transform = new_transform
           })
         } else {
           var f1 = (x) => instance.invocation(inputs)(x)
 
-          let new_transform = this.update_transform((current_transform) => 
+          let new_transform = that.update_transform((current_transform) => 
             compositionFunctions[glslTransforms[method].type](current_transform)(f1)
           )
 
-          this.update_pass(-1, (pass) => {
+          that.update_pass(-1, (pass) => {
             pass.transform = new_transform
           })
         }
@@ -245,13 +247,22 @@ var GeneratorFactory = function (defaultOutput) {
             new_uniforms.push(input)
           }
         })
-        this.append_uniforms(new_uniforms)
+        that.append_uniforms(new_uniforms)
 
-        this.update_pass(-1, (pass) => {
+        that.update_pass(-1, (pass) => {
           pass.uniforms.concat(new_uniforms)
+          instance.register(pass)
         })
-        return this
-      }      
+        return that
+      }
+
+      Generator.prototype[method] = function (...args) {
+        const inputs = formatArguments(args, transform.inputs)
+        const instance = make_instance(method, transform, inputs)
+
+        return setup_method(this, inputs, instance)
+      }
+      
     }
   })
 }
@@ -260,7 +271,7 @@ var GeneratorFactory = function (defaultOutput) {
 //   iterate through transform types and create a function for each
 //
 Generator.prototype.compile = function (pass) {
-//  console.log("compiling", pass)
+  //  console.log("compiling", pass)
   var frag = `
   precision highp float;
   ${pass.uniforms.map((uniform) => {
@@ -280,7 +291,7 @@ Generator.prototype.compile = function (pass) {
   uniform vec2 resolution;
   varying vec2 uv;
 
-  ${Object.entries(this.instances).map(([_, instance]) => {
+  ${Object.entries(pass.instances).map(([_, instance]) => {
   //  console.log(transform.glsl)
     return `
             ${instance.definition()}
