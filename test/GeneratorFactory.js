@@ -23,9 +23,9 @@ describe("GeneratorFactory", function () {
             const out = new DummyOut()
             let factory = new Factory(out)
 
-            let result = factory.functions.shape(3).scale(2).out(out)
+            let result = factory.functions.shape(3).scale(2).modulate(factory.functions.shape(4).rotate(10)).out(out)
 
-            let expected = "gl_FragColor = shape(scale(st, amount4, xMult5, yMult6, offsetX7, offsetY8), sides1, radius2, smoothing3)";
+            let expected = "gl_FragColor = shape(scale(modulate(st, shape(rotate(st, angle12, speed13), sides9, radius10, smoothing11), amount15), amount4, xMult5, yMult6, offsetX7, offsetY8), sides1, radius2, smoothing3)"
             assert.include(
                 out.rendered[0][0].frag
                 , expected
