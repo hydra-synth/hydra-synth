@@ -122,36 +122,64 @@ var GeneratorFactory = function (defaultOutput) {
         var obj = Object.create(Generator.prototype)
         obj.name = method
         const inputs = formatArguments(args, transform.inputs)
-        obj.transform = (x) => {
-          var glslString = `${method}(${x}`
-          glslString += generateGlsl(inputs)
-          glslString += ')'
-          return glslString
+        obj.transform = (x) => ""
+        obj.update_transform = (update_fn) => {
+          obj.transform = update_fn(obj.transform)
+          return obj.transform
         }
-        obj.defaultOutput = defaultOutput
-        obj.uniforms = []
-        inputs.forEach((input, index) => {
-          if (input.isUniform) {
-            obj.uniforms.push(input)
-          }
-        })
 
-        obj.passes = []
-        let pass = {
-          transform: (x) => {
+        let src_transform = obj.update_transform(() =>
+          (x) => {
             var glslString = `${method}(${x}`
             glslString += generateGlsl(inputs)
             glslString += ')'
             return glslString
-          },
-          uniforms: []
+          }
+        )
+
+        obj.defaultOutput = defaultOutput
+        obj.uniforms = []
+        obj.append_uniforms = (uniforms) => {
+          if (!Array.isArray(uniforms)) {
+            uniforms = [uniforms]
+          }
+          obj.uniforms.concat(uniforms)
+          return obj.uniforms
         }
+
         inputs.forEach((input, index) => {
           if (input.isUniform) {
-            pass.uniforms.push(input)
+            obj.append_uniforms(input)
           }
         })
-        obj.passes.push(pass)
+
+        obj.passes = []
+        obj.update_pass = (index, update_fn) => {
+          while (index < 0) {
+            index = index + obj.passes.length
+          }
+          index = index % obj.passes.length
+          update_fn(obj.passes[index])
+          return obj.passes
+        }
+        obj.append_pass = (new_pass) => {
+          obj.passes.push(new_pass)
+          return obj.passes
+        }
+
+        let pass = {
+          transform: src_transform,
+          uniforms: []
+        }
+        obj.append_pass(pass)
+
+        inputs.forEach((input, index) => {
+          if (input.isUniform) {
+            obj.update_pass(-1, (pass) => {
+              pass.uniforms.push(input)
+            })
+          }
+        })
         return obj
       }
     } else {
@@ -167,13 +195,16 @@ var GeneratorFactory = function (defaultOutput) {
             glslString += ')'
             return glslString
           }
-          this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(inputs[0].value.transform)(f)
 
-          this.uniforms = this.uniforms.concat(inputs[0].value.uniforms)
+          let new_transform = this.update_transform((current_transform) => 
+            compositionFunctions[glslTransforms[method].type](current_transform)(inputs[0].value.transform)(f)
+          )
 
-          var pass = this.passes[this.passes.length - 1]
-          pass.transform = this.transform
-          pass.uniform + this.uniform
+          this.append_uniforms(inputs[0].value.uniforms)
+
+          this.update_pass(-1, (pass) => {
+            pass.transform = new_transform
+          })
         } else {
           var f1 = (x) => {
             var glslString = `${method}(${x}`
@@ -181,16 +212,27 @@ var GeneratorFactory = function (defaultOutput) {
             glslString += ')'
             return glslString
           }
-          this.transform = compositionFunctions[glslTransforms[method].type](this.transform)(f1)
-          this.passes[this.passes.length - 1].transform = this.transform
+
+          let new_transform = this.update_transform((current_transform) => 
+            compositionFunctions[glslTransforms[method].type](current_transform)(f1)
+          )
+
+          this.update_pass(-1, (pass) => {
+            pass.transform = new_transform
+          })
         }
 
+        let new_uniforms = []
         inputs.forEach((input, index) => {
           if (input.isUniform) {
-            this.uniforms.push(input)
+            new_uniforms.push(input)
           }
         })
-        this.passes[this.passes.length - 1].uniforms = this.uniforms
+        this.append_uniforms(new_uniforms)
+
+        this.update_pass(-1, (pass) => {
+          pass.uniforms.concat(new_uniforms)
+        })
         return this
       }
     }
