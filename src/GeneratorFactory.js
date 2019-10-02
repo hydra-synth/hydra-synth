@@ -24,7 +24,7 @@ ParametrizedGenerator.prototype.compileInvocations = function (st, il, adj, rmul
 `
     }
     return `${code}
-  ${adj} = ix_adjust_${type}(${input.name}, ${factor}, ${rmul}, ${il});
+  ${adj} = ix_adjust_${type}(${factor}, ${input.name}, ${rmul}, ${il});
   ${st} = ${instance.invocation()(st).replace(new RegExp(`(\\W)${input.name}(\\W)`), `$1${adj}$2`)};
 `
   }
@@ -235,8 +235,6 @@ var GeneratorFactory = function (defaultOutput) {
     return instance
   }
 
-
-
   Object.keys(glslTransforms).forEach((method) => {
     const transform = glslTransforms[method]
 
@@ -445,6 +443,7 @@ ${pass.implementation()}
     gl_FragColor = ${pass.transform('st')};
   }
   `
+  console.log(frag)
 
   return frag
 }
