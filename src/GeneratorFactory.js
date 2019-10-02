@@ -16,6 +16,21 @@ var ParametrizedGenerator = function (param) {
   return Object.create(ParametrizedGenerator.prototype)
 }
 
+ParametrizedGenerator.prototype.compileInvocations = function (st, il, adj, rmul) {
+  return this.chain.reduce((code, {instance, factor, type, input, tgt, indexMod}) => {
+    if (indexMod) {
+      return `${code}
+  ${adj} = ${instance.invocation()(il)};
+`
+    }
+    return `${code}
+  ${adj} = ix_adjust_${type}(${input.name}, ${factor}, ${rmul}, ${il});
+  ${st} = ${instance.invocation()(st).replace(new RegExp(`(\\W)${input.name}(\\W)`), `$1${adj}$2`)};
+`
+  }
+    , '')
+}
+
 // Functions that return a new transformation function based on the existing function chain as well
 // as the new function passed in.
 const compositionFunctions = {
@@ -104,12 +119,58 @@ function formatArguments (userArgs, defaultArgs) {
   })
 }
 
+const setup_method = (that, transform, inputs, instance) => {
+
+  let new_transform
+  let new_uniforms = []
+
+  if (transform.type === 'combine' || transform.type === 'combineCoord') {
+  // composition function to be executed when all transforms have been added
+  // c0 and c1 are two inputs.. (explain more)
+    var f = (c0) => (c1) => instance.invocation(inputs.slice(1))(`${c0}, ${c1}`)
+    
+    new_transform = compositionFunctions[transform.type](that.transform)(inputs[0].value.transform)(f)
+
+  } else {
+    var f1 = (x) => instance.invocation(inputs)(x)
+
+    if (typeof compositionFunctions[transform.type] === 'function') {
+      new_transform = compositionFunctions[transform.type](that.transform)(f1)
+    }
+  }
+  
+  let new_instances = []
+  new_instances.push(instance)
+
+  inputs.forEach((input) => {
+    if (input.isUniform) {
+      new_uniforms.push(input)
+    } else if (input.value && input.value.uniforms) {
+      new_uniforms = new_uniforms.concat(input.value.uniforms)
+    }
+
+    if (input.value && input.value.instances) {
+      new_instances = new_instances.concat(Object.entries(input.value.instances).map(([_, inst]) => inst))
+    }
+  })
+
+  // make sure we don't have any duplicate uniforms
+  new_uniforms = Object.entries(new_uniforms.reduce((p, c) => {
+    p[c.name] = c
+    return p
+  }, {})).map(([_, value]) => value)
+
+  that.append_pass(new_transform, new_uniforms, new_instances)
+  
+  return that
+}
 
 var GeneratorFactory = function (defaultOutput) {
 
   let self = this
   self.functions = {}
   self.instance_counter = counter.new()
+  self.instances = {}
 
   window.frag = shaderManager(defaultOutput)
 
@@ -122,34 +183,90 @@ var GeneratorFactory = function (defaultOutput) {
   const make_instance = (method, transform, inputs) => {
     let method_call_name = `${method}`
 
-    let instance = {
-      definition: (inputs, input_gen) => transform.glsl,
-      invocation: (inputs, input_gen) => {
-        return (x) => `${method_call_name}(${x}${input_gen(inputs)})`
-      }
+    const Instance = function () {
+      return Object.create(Instance.prototype)
     }
+    const instance = new Instance()
 
+    Object.defineProperties(instance, {
+      def_rex: {
+        get: function () {
+          return new RegExp(`^([^]*?)(\\S+\\s+)(?:${this.name}|${method})(\\s*\\([^)]+\\))([^]*)$`, 'ugmi')
+        }
+      }
+    })
+
+    // return the function body
+    instance.implementation = (inputs, input_gen) => 
+      transform.glsl ? transform.glsl.replace(instance.def_rex, `$1$2${method_call_name}$3$4`) : ""
+
+    // return the function forward decalaration
+    instance.definition = (inputs, input_gen) => {
+      const impl = instance.implementation(inputs, input_gen)
+      return impl ? impl.replace(instance.def_rex, `$2${method_call_name}$3;`) : ""
+    } 
+    
+    // return the function invocation with the supplied parameter
+    instance.invocation = (inputs, input_gen) => 
+      (x) => `${method_call_name}(${x}${input_gen(inputs)})`
+
+    // override the defaults, if the function defines specifics instance level implementations
     if (transform.glsl_instance) {
       method_call_name = `${method_call_name}_${self.instance_counter.increment()}`
-      instance = transform.glsl_instance(method_call_name)
+      const instance_def = transform.glsl_instance(method_call_name)
+      Object.keys(instance_def).forEach((name) => {
+        instance[name] = instance_def[name]
+      })
     }
 
-    const old_invocation = instance.invocation
-    instance.invocation = (new_inputs) => old_invocation(new_inputs ? new_inputs : inputs, generateGlsl)
-    
-    const old_definition = instance.definition
-    instance.definition = (new_inputs) => old_definition(new_inputs ? new_inputs : inputs, generateGlsl)
+    Object.getOwnPropertyNames(instance).forEach((instance_property) => {
+      const old_property = instance[instance_property]
+      instance[instance_property] = function (new_inputs) {
+        return old_property(new_inputs ? new_inputs : inputs, generateGlsl)
+      }
+    })
+
+    instance.name = method_call_name
 
     instance.register = (obj) => {
-      // console.log(`register ${method_call_name}: `, obj)
       obj.instances[method_call_name] = instance
     }
 
     return instance
   }
 
+
+
   Object.keys(glslTransforms).forEach((method) => {
     const transform = glslTransforms[method]
+
+    const Pass = function () {
+      const that = Object.create(Pass.prototype)
+
+      that.transform = () => 'invalid'
+      that.uniforms = []
+      that.instances = {}
+      that.factory = self
+
+      return that
+    }
+
+    Pass.prototype.definition = function () {
+      return `// definitions
+// factory
+${Object.entries(this.factory.instances).reduce((s, [_, inst]) => `${s}${inst.definition()}\n`, '')}
+// pass
+${Object.entries(this.instances).reduce((s, [_, inst]) => `${s}${inst.definition()}\n`, '')}
+      `
+    }
+    Pass.prototype.implementation = function () {
+      return `// implementations
+// factory
+${Object.entries(this.factory.instances).reduce((s, [_, inst]) => `${s}${inst.implementation()}\n`, '')}
+// pass
+${Object.entries(this.instances).reduce((s, [_, inst]) => `${s}${inst.implementation()}\n`, '')}
+      `
+    }
 
     // if type is a source, create a new global generator function that inherits from Generator object
     if (transform.type === 'src' || transform.type === 'parametrized') {
@@ -162,159 +279,135 @@ var GeneratorFactory = function (defaultOutput) {
         }
         
         obj.name = method
+        obj.factory = self
         
-        const inputs = formatArguments(args, transform.inputs)
-        const instance = make_instance(method, transform, inputs)
-
-        obj.transform = (x) => ""
-        obj.update_transform = (update_fn) => {
-          obj.transform = update_fn(obj.transform)
-          return obj.transform
-        }
+        obj.update_transform = (update_fn) => update_fn(obj.transform)
 
         obj.defaultOutput = defaultOutput
         obj.uniforms = []
-        obj.append_uniforms = (uniforms) => {
-          if (!Array.isArray(uniforms)) {
-            uniforms = [uniforms]
-          }
-          obj.uniforms = obj.uniforms.concat(uniforms)
-          return obj.uniforms
-        }
-
         obj.passes = []
-        obj.update_pass = (index, update_fn) => {
-          while (index < 0) {
-            index = index + obj.passes.length
+        
+        Object.defineProperties(obj, {
+          transform: {
+            get: function () {
+              if (obj.passes.length < 1) {
+                return () => 'invalid'
+              }
+              return obj.passes[0].transform
+            }
+          },
+          instances: {
+            get: function () {
+              if (obj.passes.length < 1) {
+                return {}
+              }
+              return obj.passes[0].instances
+            }
           }
-          index = index % obj.passes.length
-          update_fn(obj.passes[index])
-          return obj.passes
-        }
-        obj.append_pass = (new_pass) => {
-          obj.passes.push(new_pass)
-          return obj.passes
+        })
+
+        obj.append_pass = (transform, uniforms, instances) => {
+          obj.uniforms = obj.uniforms.concat(uniforms)
+
+          if(!Array.isArray(instances)) instances = [instances]
+
+          let pass
+          if (obj.passes.length === 0) {
+            pass = new Pass()
+            pass.instances = obj.instances
+            obj.passes.push(pass)
+          } else {
+            pass = obj.passes[0]
+          }
+
+          if (typeof transform !== 'undefined') {
+            pass.transform = transform
+          }
+          pass.uniforms = pass.uniforms.concat(uniforms)
+          instances.forEach((instance) => instance.register(obj))
         }
 
-        let src_transform = obj.update_transform(() =>
+        if (transform.type === 'parametrized') {
+          obj.append_pass = (transform, uniforms, instances) => {
+            obj.uniforms = obj.uniforms.concat(uniforms)
+
+            if(!Array.isArray(instances)) instances = [instances]
+
+            let pass = new Pass()
+            obj.passes.push(pass)
+
+            pass.transform = transform
+            pass.uniforms = pass.uniforms.concat(uniforms)
+          
+            if (obj.passes.length === 1) {
+              pass.instances = obj.instances // the first pass and this obj share the same instance list
+            }
+            instances.forEach((instance) => instance.register(obj))
+
+            return pass
+          }
+        }
+
+        const inputs = formatArguments(args, transform.inputs)
+        const instance = make_instance(method, transform, inputs)
+
+        const new_transform = obj.update_transform(() =>
           (x) => instance.invocation(inputs)(x)
         )
 
-        let pass = {
-          transform: src_transform,
-          uniforms: [],
-          instances: {}
-        }
-        obj.append_pass(pass)
-        instance.register(pass)
-
-        let new_uniforms = []
-
-        inputs.forEach((input, index) => {
+        const new_uniforms = []
+        inputs.forEach((input) => {
           if (input.isUniform) {
             new_uniforms.push(input)
           }
         })
 
-        obj.append_uniforms(new_uniforms)
-        obj.update_pass(-1, (pass) => {
-          pass.transform = src_transform
-          pass.uniforms = pass.uniforms.concat(new_uniforms)
-        })
+        obj.append_pass(new_transform, new_uniforms, instance)
 
         return obj
       }
-    } else {
-      const setup_method = (that, inputs, instance) => {
+    } else if (transform.type === 'util' ) {
+      const instance = make_instance(method, transform, [])
+      instance.register(self)
+    } else if (transform.type === 'indexMod' ) {
+      ParametrizedGenerator.prototype[method] = function (tgt, factor, ...args) {
+        const inputs = formatArguments(args, transform.inputs)
+        const instance = make_instance(method, transform, inputs)
 
-        let new_transform
-        let new_uniforms = []
-
-        if (transform.type === 'combine' || transform.type === 'combineCoord') {
-        // composition function to be executed when all transforms have been added
-        // c0 and c1 are two inputs.. (explain more)
-          var f = (c0) => (c1) => instance.invocation(inputs.slice(1))(`${c0}, ${c1}`)
-          
-          new_transform = that.update_transform((current_transform) => 
-            compositionFunctions[glslTransforms[method].type](current_transform)(inputs[0].value.transform)(f)
-          )
-
-          // new_uniforms = new_uniforms.concat(inputs[0].value.uniforms)
-        } else {
-          var f1 = (x) => instance.invocation(inputs)(x)
-
-          new_transform = that.update_transform((current_transform) => 
-            compositionFunctions[glslTransforms[method].type](current_transform)(f1)
-          )
-        }
-        
-        inputs.forEach((input, index) => {
-          if (input.isUniform) {
-            new_uniforms.push(input)
-          } else if (input.value && input.value.uniforms) {
-            new_uniforms = new_uniforms.concat(input.value.uniforms)
-          }
+        this.chain.push({
+          instance,
+          indexMod: true
         })
 
-        // make sure we don't have any duplicate uniforms
-        new_uniforms = Object.entries(new_uniforms.reduce((p, c) => {p[c.name] = c; return p;}, {})).map(([_, value]) => value);
-
-        that.append_uniforms(new_uniforms)
-
-        that.update_pass(-1, (pass) => {
-          pass.transform = new_transform
-          pass.uniforms = pass.uniforms.concat(new_uniforms)
-          instance.register(pass)
-        })
-        return that
+        return setup_method(this, transform, inputs, instance)
       }
+    } else {
 
       Generator.prototype[method] = function (...args) {
         const inputs = formatArguments(args, transform.inputs)
         const instance = make_instance(method, transform, inputs)
 
-        return setup_method(this, inputs, instance)
+        return setup_method(this, transform, inputs, instance)
       }
       
       if (transform.type === 'coord') {
-        ParametrizedGenerator.prototype[method] = function (tgt, ...args) {
+        ParametrizedGenerator.prototype[method] = function (tgt, factor, ...args) {
           const inputs = formatArguments(args, transform.inputs)
           const instance = make_instance(method, transform, inputs)
 
-          inputs[tgt].isUniform = false
-          //inputs[tgt].value = 'adj'
-          inputs[tgt].name = 'adj'
-          inputs[tgt].apply_param = 'x'
-
           this.chain.push({
-            invocation: instance.invocation()
+            instance,
+            tgt,
+            factor,
+            input: inputs[tgt],
+            type: "lin"
           })
 
-          return setup_method(this, inputs, instance)
+          return setup_method(this, transform, inputs, instance)
         }
       }
     }
   })
-}
-
-ParametrizedGenerator.prototype.compileDefinitions = function () {
-  const pass = this.passes[this.passes.length - 1]
-  return Object.entries(pass.instances).map(([_, instance]) => {
-  //  console.log(transform.glsl)
-    return `
-            ${instance.definition()}
-          `
-  }).join('')
-}
-
-ParametrizedGenerator.prototype.compileInvocations = function (st, il, adj, rmul) {
-  return this.chain.reduce((code, {invocation}) => {
-    code = `${code}
-  ${adj} = ix_adjust_exp(1.1, ${rmul}, ${il});
-  ${st} = ${invocation(st)};
-`
-    return code
-  }, '')
 }
 
 //
@@ -341,12 +434,9 @@ Generator.prototype.compile = function (pass) {
   uniform vec2 resolution;
   varying vec2 uv;
 
-  ${Object.entries(pass.instances).map(([_, instance]) => {
-  //  console.log(transform.glsl)
-    return `
-            ${instance.definition()}
-          `
-  }).join('')}
+${pass.definition()}
+
+${pass.implementation()}
 
   void main () {
     vec4 c = vec4(1, 0, 0, 1);
@@ -355,6 +445,7 @@ Generator.prototype.compile = function (pass) {
     gl_FragColor = ${pass.transform('st')};
   }
   `
+
   return frag
 }
 

@@ -269,6 +269,77 @@ float _noise(vec3 v){
       return vec4(_r, _g, _b, _a);
     }`
   },
+  chain: {
+    type: 'parametrized',
+    inputs: [
+      {
+        name: 'scale',
+        type: 'float',
+        default: 1
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0
+      }
+    ],
+    glsl: ``
+  },
+  floor: {
+    type: 'indexMod',
+    inputs: [
+      {
+        name: 'digits',
+        type: 'float',
+        default: 0
+      }
+    ],
+    glsl: `vec2 floor(vec2 il, float digits){
+      return floor(il);
+}`
+  },
+  apply: {
+    type: 'coord',
+    inputs: [
+      {
+        name: 'repeatX',
+        type: 'float',
+        default: 3
+      },
+      {
+        name: 'repeatY',
+        type: 'float',
+        default: 3
+      },
+      {
+        name: 'operations',
+        type: 'parametrized',
+        default: undefined
+      },
+      {
+        name: 'indexMultiplier',
+        type: 'float',
+        default: 1
+      }
+    ],
+    glsl_instance: (name) => ({
+      implementation: (inputs, input_gen) => {
+        const param_gen = inputs.filter(x => x.type === 'parametrized').reduce((p, c) => p ? p : c.value, undefined)
+
+        return `vec2 ${name}(vec2 _st, float rx, float ry, float rmul) {
+  vec2 st = _st;
+  vec2 il = _st * vec2(rx, ry);
+  float adj = 0.0;
+
+  ${param_gen.compileInvocations('st','il','adj','rmul')}
+  return st;
+}`},
+      invocation: (inputs, input_gen) => (x) => {
+        const plain_inputs = inputs.filter(x => x.type !== 'parametrized')
+        return `${name}(${x}${input_gen(plain_inputs)})`
+      }
+    })
+  },
   rotate: {
     type: 'coord',
     inputs: [
@@ -1026,6 +1097,18 @@ float _noise(vec3 v){
         vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
         vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }`
+  },
+  ix_adjust_lin: {
+    type: 'util',
+    glsl: `float ix_adjust_lin(float factor, float base, float rmul, vec2 il) {
+      return base + factor * sqrt(il.x * il.x + il.y * il.y);
+    }`
+  },
+  ix_adjust_exp: {
+    type: 'util',
+    glsl: `float ix_adjust_exp(float v, float rmul, vec2 il) {
+      return pow(v, sqrt(il.x*il.x + il.y*il.y) + 1.0);
     }`
   },
   saturate: {
