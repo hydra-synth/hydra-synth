@@ -1101,14 +1101,16 @@ float _noise(vec3 v){
   },
   ix_adjust_lin: {
     type: 'util',
-    glsl: `float ix_adjust_lin(float factor, float base, float rmul, vec2 il) {
+    glsl: `float ix_adjust_lin(float factor, float base, float rmul, vec2 _il) {
+      vec2 il = rmul * _il;
       return base + factor * sqrt(il.x * il.x + il.y * il.y);
     }`
   },
   ix_adjust_exp: {
     type: 'util',
-    glsl: `float ix_adjust_exp(float v, float rmul, vec2 il) {
-      return pow(v, sqrt(il.x*il.x + il.y*il.y) + 1.0);
+    glsl: `float ix_adjust_exp(float factor, float base, float rmul, vec2 _il) {
+      vec2 il = rmul * _il;
+      return base + pow(factor, sqrt(il.x*il.x + il.y*il.y) + 1.0);
     }`
   },
   saturate: {
