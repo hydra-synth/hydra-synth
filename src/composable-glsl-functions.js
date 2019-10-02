@@ -330,8 +330,9 @@ float _noise(vec3 v){
   vec2 st = _st;
   vec2 il = _st * vec2(rx, ry);
   float adj = 0.0;
+  float adj_mod = 1.0;
 
-  ${param_gen.compileInvocations('st','il','adj','rmul')}
+  ${param_gen.compileInvocations('st','il','adj','rmul','adj_mod')}
   return st;
 }`},
       invocation: (inputs, input_gen) => (x) => {
@@ -472,6 +473,51 @@ float _noise(vec3 v){
       return vec4(c2.rgba);
     }
     `
+  },
+  copy: {
+    type: 'stMod',
+    inputs: [],
+    glsl: `vec2 copy(vec2 _st, vec2 _il){
+  return fract(_il);
+}`
+  },
+  every: {
+    type: 'adjMod',
+    inputs: [
+      {
+        name: 'div',
+        type: 'float',
+        default: 3
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0
+      }
+    ],
+    glsl: `float every(vec2 st, vec2 il, float adj, float d, float o){
+  return step(
+    -1.0
+    , - step(1.0, mod(il.x + o, d))
+      - step(1.0, mod(il.y + o, d))
+    );
+}`
+  },
+  mirrorY: {
+    type: 'coord',
+    inputs: [],
+    glsl: `vec2 mirrorY(vec2 _st){
+  vec2 st = fract(_st);
+  return vec2(1.0 - st.x, st.y);
+}`
+  },
+  mirrorX: {
+    type: 'coord',
+    inputs: [],
+    glsl: `vec2 mirrorX(vec2 _st){
+  vec2 st = fract(_st);
+  return vec2(st.x, 1.0 - st.y);
+}`
   },
   repeat: {
     type: 'coord',

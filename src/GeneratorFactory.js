@@ -16,19 +16,37 @@ var ParametrizedGenerator = function (param) {
   return Object.create(ParametrizedGenerator.prototype)
 }
 
-ParametrizedGenerator.prototype.compileInvocations = function (st, il, adj, rmul) {
-  return this.chain.reduce((code, {instance, factor, type, input, tgt, indexMod}) => {
-    if (indexMod) {
-      return `${code}
-  ${adj} = ${instance.invocation()(il)};
-`
+ParametrizedGenerator.prototype.compileInvocations = function (st, il, adj, rmul, adjMod) {
+  return this.chain.reduce((code, {function_type, instance, input, factor, type}) => {
+    let new_code = `${code}`
+
+    if (function_type === 'indexMod') {
+      return `${new_code}
+  ${il} = ${instance.invocation()(il)};`
     }
-    return `${code}
-  ${adj} = ix_adjust_${type}(${factor}, ${input.name}, ${rmul}, ${il});
-  ${st} = ${instance.invocation()(st).replace(new RegExp(`(\\W)${input.name}(\\W)`), `$1${adj}$2`)};
-`
-  }
-    , '')
+    if (function_type === 'stMod') {
+      return `${new_code}
+  ${st} = ${instance.invocation()(`${st}, ${il}`)};`
+    }
+    if (function_type === 'adjMod') {
+      return `${new_code}
+  ${adjMod} = ${instance.invocation()(`${st}, ${il}, ${adj}`)};`
+    }
+
+    if (factor && input && type) {
+      new_code = `${new_code}
+  ${adj} = ix_adjust_${type}(${factor}*${adjMod}, ${input.name}, ${rmul}, ${il});`
+    }
+
+    if (input) {
+      new_code = `${new_code}
+  ${st} = ${instance.invocation()(st).replace(new RegExp(`(\\W)${input.name}(\\W)`), `$1${adj}$2`)};`
+    } else {
+      new_code = `${new_code}
+  ${st} = ${instance.invocation()(st)};`
+    }
+    return new_code
+  }, '')
 }
 
 // Functions that return a new transformation function based on the existing function chain as well
@@ -367,14 +385,14 @@ ${Object.entries(this.instances).reduce((s, [_, inst]) => `${s}${inst.implementa
     } else if (transform.type === 'util' ) {
       const instance = make_instance(method, transform, [])
       instance.register(self)
-    } else if (transform.type === 'indexMod' ) {
-      ParametrizedGenerator.prototype[method] = function (tgt, factor, ...args) {
+    } else if (transform.type === 'indexMod' || transform.type === 'stMod'|| transform.type === 'adjMod'  ) {
+      ParametrizedGenerator.prototype[method] = function (...args) {
         const inputs = formatArguments(args, transform.inputs)
         const instance = make_instance(method, transform, inputs)
 
         this.chain.push({
           instance,
-          indexMod: true
+          function_type: transform.type
         })
 
         return setup_method(this, transform, inputs, instance)
@@ -389,10 +407,18 @@ ${Object.entries(this.instances).reduce((s, [_, inst]) => `${s}${inst.implementa
       }
       
       if (transform.type === 'coord') {
-        ParametrizedGenerator.prototype[method] = function (tgt, factor, ...args) {
-          const inputs = formatArguments(args, transform.inputs)
-          const instance = make_instance(method, transform, inputs)
+        ParametrizedGenerator.prototype[method] = function (...args) {
+          const mod_inputs = [
+            {name:'tgt',type:'float',default:0},
+            {name:'factor',type:'float',default:0},
+          ].concat(transform.inputs)
 
+          const inputs = formatArguments(args, mod_inputs)
+          const instance = make_instance(method, transform, inputs.slice(2))
+
+          const tgt = Math.floor(inputs[0].value)+2
+          const factor = inputs[1].name
+          
           this.chain.push({
             instance,
             tgt,
@@ -401,7 +427,7 @@ ${Object.entries(this.instances).reduce((s, [_, inst]) => `${s}${inst.implementa
             type: "lin"
           })
 
-          return setup_method(this, transform, inputs, instance)
+          return setup_method(this, transform, inputs.slice(1), instance)
         }
       }
     }
