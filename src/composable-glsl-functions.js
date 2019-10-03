@@ -269,22 +269,32 @@ float _noise(vec3 v){
       return vec4(_r, _g, _b, _a);
     }`
   },
-  chain: {
+  apply: {
     type: 'chain',
     inputs: [
       {
-        name: 'scale',
+        name: 'scaleX',
         type: 'float',
         default: 1
       },
       {
-        name: 'offset',
+        name: 'scaleY',
+        type: 'float',
+        default: 1
+      },
+      {
+        name: 'offsetX',
+        type: 'float',
+        default: 0
+      },
+      {
+        name: 'offsetY',
         type: 'float',
         default: 0
       }
     ],
-    glsl: `vec2 chain(vec2 il, float scale, float offset){
-    return il * scale + vec2(offset, offset);
+    glsl: `vec2 apply(vec2 il, float scaleX, float scaleY, float offsetX, float offsetY){
+    return il * vec2(scaleX, scaleY) + vec2(offsetX, offsetY);
 }`
   },
   floor: {
@@ -296,23 +306,14 @@ float _noise(vec3 v){
         default: 0
       }
     ],
-    glsl: `vec2 floor(vec2 il, float digits){
+    glsl_name: 'ifloor',
+    glsl: `vec2 ifloor(vec2 il, float digits){
       return floor(il);
 }`
   },
-  apply: {
+  cseq: {
     type: 'coordSeq',
     inputs: [
-      {
-        name: 'repeatX',
-        type: 'float',
-        default: 3
-      },
-      {
-        name: 'repeatY',
-        type: 'float',
-        default: 3
-      },
       {
         name: 'operations',
         type: 'parametrized',

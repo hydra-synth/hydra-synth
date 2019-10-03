@@ -25,8 +25,8 @@ var Generator = function (param) {
   return Object.create(Generator.prototype)
 }
 
-var ParametrizedGenerator = function (param) {
-  return Object.create(ParametrizedGenerator.prototype)
+var SequentialGenerator = function (param) {
+  return Object.create(SequentialGenerator.prototype)
 }
 
 // Functions that return a new transformation function based on the existing function chain as well
@@ -51,12 +51,8 @@ const compositionFunctions = {
 // gl_FragColor = osc(rotate(repeat())) + tex(repeat())
 
 // Parses javascript args to use in glsl
-function generateGlsl (inputs) {
-  var str = ''
-  inputs.forEach((input) => {
-    str += ', ' + input.name
-  })
-  return str
+function generateGlsl (inputs, forDefinition=false) {
+  return inputs.reduce((s, input) => `${s}, ${forDefinition ? `${input.type} ` : ''}${forDefinition ? input.param_name : input.name}`, '')
 }
 // timing function that accepts a sequence of values as an array
 const seq = (arr = []) => ({time, bpm}) =>
@@ -76,6 +72,7 @@ function formatArguments (userArgs, defaultArgs) {
     // to do (possibly): check whether this is a function in order to only use uniforms when needed
 
     counter.increment()
+    typedArg.param_name = input.name
     typedArg.name = input.name + counter.get()
     typedArg.isUniform = true
 
@@ -139,9 +136,8 @@ const setup_method = (that, transform, inputs, instance) => {
     if (transform.type === 'seqModCoord') {
       const plain_inputs = inputs.map((input, i) => [input, i]).filter(([input]) => input.type !== INPUT_TYPE_PARAMETRIZED)
       if (plain_inputs.length > 0) {
-        console.log(inputs)
         const tgt = inputs[0].value + 2
-        console.log(`${transform.name} tgt: ${tgt}`)
+        // console.log(`${transform.name} tgt: ${tgt}`)
         const tgt_name = inputs[tgt].name
 
         const fo = f1
@@ -153,8 +149,7 @@ const setup_method = (that, transform, inputs, instance) => {
 
     if (typeof compositionFunctions[transform.type] === 'function') {
       transform_fn = compositionFunctions[transform.type](that.transform)(f1)
-    }
-    else {
+    } else {
       console.log(`ERROR: could not compose ${transform.type} transform ${transform.name}`)
     }
   }
@@ -210,55 +205,56 @@ var GeneratorFactory = function (defaultOutput) {
     }
     const instance = new Instance()
 
+    instance.glsl_name = transform.glsl_name ? transform.glsl_name : method
+
     Object.defineProperties(instance, {
       def_rex: {
         get: function () {
-          return new RegExp(`^([^]*?)(\\S+\\s+)(?:${this.name}|${method})(\\s*\\([^)]+\\))([^]*)$`, 'ugmi')
+          return new RegExp(`^([^]*?)(\\S+\\s+)(?:${this.glsl_name}|${this.name})(\\s*\\([^)]+\\))([^]*)$`, 'ugmi')
         }
       }
     })
 
-    // return the function body
-    instance.implementation = (inputs, input_gen) => 
-      transform.glsl ? transform.glsl.replace(instance.def_rex, `$1$2${method_call_name}$3$4`) : ""
-
-    // return the function forward decalaration
-    instance.definition = (inputs, input_gen) => {
-      const impl = instance.implementation(inputs, input_gen)
-      return impl ? impl.replace(instance.def_rex, `$2${method_call_name}$3;`) : ""
-    } 
+    const function_parts = {
+      // the function body
+      implementation: (inputs, input_gen) => 
+        transform.glsl ? transform.glsl.replace(instance.def_rex, `$1$2${instance.glsl_name}$3$4`) : '',
+      // the function forward decalaration
+      definition: (inputs, input_gen) => {
+        const impl = instance.implementation(inputs, input_gen)
+        return impl ? impl.replace(instance.def_rex, `$2${instance.glsl_name}$3;`) : ''
+      },
+      // the function invocation with the supplied parameters
+      invocation: (inputs, input_gen) => 
+        (x) => `${instance.glsl_name}(${x}${input_gen(inputs)})`
+    }
     
-    // return the function invocation with the supplied parameter
-    instance.invocation = (inputs, input_gen) => 
-      (x) => `${method_call_name}(${x}${input_gen(inputs)})`
+    instance.name = method
 
     // override the defaults, if the function defines specific instance level implementations
     if (transform.glsl_instance) {
       method_call_name = `${method_call_name}_${self.glsl_function_instance_counter.increment()}`
+      instance.name = method_call_name
+      instance.glsl_name = method_call_name
       const instance_def = transform.glsl_instance(method, method_call_name)
       if (instance_def) {
-        if (typeof instance_def.name === 'function') {
-          method_call_name = instance_def.name()
-        }
-        else if (typeof instance_def.name === 'string') {
-          method_call_name = instance_def.name
-        }
-        
         Object.getOwnPropertyNames(instance_def).forEach((name) => {
           const idef = instance_def[name]
-          instance[name] = typeof idef === 'function' ? idef : () => idef
+          if (name in function_parts) {
+            function_parts[name] = idef
+          } else {
+            instance[name] = idef
+          }
         })
       }
     }
 
-    Object.getOwnPropertyNames(instance).forEach((instance_property) => {
-      const old_property = instance[instance_property]
+    Object.getOwnPropertyNames(function_parts).forEach((instance_property) => {
+      const old_property = function_parts[instance_property]
       instance[instance_property] = function (new_inputs) {
         return old_property(new_inputs ? new_inputs : inputs, generateGlsl)
       }
     })
-
-    instance.name = method_call_name
 
     instance.register = (obj) => {
       obj.glsl_function_instances[method_call_name] = instance
@@ -303,24 +299,26 @@ var GeneratorFactory = function (defaultOutput) {
 
   // Set up code for sequential processing
   all_transforms.filter((t) => t.type === 'coordSeq').forEach((transform) => {
-    transform.glsl_instance = (method, name) => ({
-      name: () => name,
+    transform.glsl_instance = (method, method_call_name) => ({
+      name: method_call_name,
+      glsl_name: method_call_name,
       implementation: (inputs, input_gen) => {
         const param_gen = inputs.filter(x => x.type === INPUT_TYPE_PARAMETRIZED).reduce((p, c) => p ? p : c.value, undefined)
         const plain_inputs = inputs.filter(x => x.type !== INPUT_TYPE_PARAMETRIZED)
 
-        return `vec2 ${name}(vec2 _st, ${input_gen(plain_inputs)}) {
+        return `vec2 ${method_call_name}(vec2 _st${input_gen(plain_inputs, true)}) {
   vec2 ${SEQ_MOD_VAR_NAME_ST} = _st;
-  vec2 ${SEQ_MOD_VAR_NAME_IL} = _st * vec2(rx, ry);
+  vec2 ${SEQ_MOD_VAR_NAME_IL} = _st;
   float ${SEQ_MOD_VAR_NAME_ADJ} = 0.0;
   float ${SEQ_MOD_VAR_NAME_ADJ_MOD} = 1.0;
 
   ${param_gen.transform()}
+
   return st;
 }`},
       invocation: (inputs, input_gen) => (x) => {
         const plain_inputs = inputs.filter(x => x.type !== INPUT_TYPE_PARAMETRIZED)
-        return `${name}(${x}${input_gen(plain_inputs)})`
+        return `${method_call_name}(${x}${input_gen(plain_inputs)})`
       }
     })
   })
@@ -331,17 +329,13 @@ var GeneratorFactory = function (defaultOutput) {
 
     if (transform.type === 'seqModIndex' || transform.type === 'chain') {
       invocation = newF => () => `${SEQ_MOD_VAR_NAME_IL} = ${newF(`${SEQ_MOD_VAR_NAME_IL}`)};`
-    }
-    else if (transform.type === 'seqModSt') {
+    } else if (transform.type === 'seqModSt') {
       invocation = newF => () => `${SEQ_MOD_VAR_NAME_ST} = ${newF(`${SEQ_MOD_VAR_NAME_ST}, ${SEQ_MOD_VAR_NAME_IL}`)};`
-    }
-    else if (transform.type === 'seqModAdj') {
+    } else if (transform.type === 'seqModAdj') {
       invocation = newF => () => `${SEQ_MOD_VAR_NAME_ADJ_MOD} = ${newF(`${SEQ_MOD_VAR_NAME_ST}, ${SEQ_MOD_VAR_NAME_IL}`)};`
-    }
-    else if (transform.type === 'seqModCoord') {
+    } else if (transform.type === 'seqModCoord') {
       invocation = newF => () => `${SEQ_MOD_VAR_NAME_ST} = mix(${SEQ_MOD_VAR_NAME_ST}, ${newF(`${SEQ_MOD_VAR_NAME_ST}`)}, ${SEQ_MOD_VAR_NAME_ADJ_MOD});`
-    }
-    else {
+    } else {
       // unknown type??
       invocation = newF => () => `ERROR: Unkown transform type ${transform.type} for transform ${transform.name}`
     }
@@ -349,20 +343,25 @@ var GeneratorFactory = function (defaultOutput) {
     const old_glsl_instance = transform.glsl_instance
     const transform_glsl_instance = (name, method_call_name) => {
       let instance = {
-        name: () => name
+        name: name,
+        glsl_name: name
       }
+      
       let old_invocation = (inputs, input_gen) => (x) => `${name}(${x}${input_gen(inputs)})`
 
+      /*
       if (typeof old_glsl_instance === 'function') {
         const old_instance = old_glsl_instance()
         if (old_instance) {
-          console.log('old instance:', name, method_call_name, old_instance.name)
+          console.log('old instance:', name, method_call_name, old_instance, old_instance.name)
           instance = old_instance
           if (instance.invocation) {
             old_invocation = instance.invocation
           }
         }
       }
+      */
+
       instance.invocation = (inputs, input_gen) => invocation(old_invocation(inputs, input_gen))
       return instance
     }
@@ -407,8 +406,7 @@ ${Object.entries(this.glsl_function_instances).reduce((s, [_, inst]) => `${s}${i
         
         var obj = Object.create(Generator.prototype)
         if (transform.type === 'chain') {
-          obj = Object.create(ParametrizedGenerator.prototype)
-          obj.chain = []
+          obj = Object.create(SequentialGenerator.prototype)
         }
         
         obj.name = method
@@ -483,14 +481,13 @@ ${Object.entries(this.glsl_function_instances).reduce((s, [_, inst]) => `${s}${i
       instance.register(self)
     } else if (transform.type.startsWith('seqMod')) {
       console.log(`${transform.type}:`, method)
-      ParametrizedGenerator.prototype[method] = function (...args) {
+      SequentialGenerator.prototype[method] = function (...args) {
         const inputs = formatArguments(args, transform.inputs)
 
         let instance
         if (transform.type === 'seqModCoord') {
           instance = make_glsl_function_instance(method, transform, inputs.slice(2))
-        }
-        else {
+        } else {
           instance = make_glsl_function_instance(method, transform, inputs)
         }
         return setup_method(this, transform, inputs, instance)
