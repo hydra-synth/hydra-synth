@@ -270,7 +270,7 @@ float _noise(vec3 v){
     }`
   },
   chain: {
-    type: 'parametrized',
+    type: 'chain',
     inputs: [
       {
         name: 'scale',
@@ -283,10 +283,12 @@ float _noise(vec3 v){
         default: 0
       }
     ],
-    glsl: ``
+    glsl: `vec2 chain(vec2 il, float scale, float offset){
+    return il * scale + vec2(offset, offset);
+}`
   },
   floor: {
-    type: 'indexMod',
+    type: 'seqModIndex',
     inputs: [
       {
         name: 'digits',
@@ -299,7 +301,7 @@ float _noise(vec3 v){
 }`
   },
   apply: {
-    type: 'coord',
+    type: 'coordSeq',
     inputs: [
       {
         name: 'repeatX',
@@ -315,31 +317,8 @@ float _noise(vec3 v){
         name: 'operations',
         type: 'parametrized',
         default: undefined
-      },
-      {
-        name: 'indexMultiplier',
-        type: 'float',
-        default: 1
       }
-    ],
-    glsl_instance: (name) => ({
-      implementation: (inputs, input_gen) => {
-        const param_gen = inputs.filter(x => x.type === 'parametrized').reduce((p, c) => p ? p : c.value, undefined)
-
-        return `vec2 ${name}(vec2 _st, float rx, float ry, float rmul) {
-  vec2 st = _st;
-  vec2 il = _st * vec2(rx, ry);
-  float adj = 0.0;
-  float adj_mod = 1.0;
-
-  ${param_gen.compileInvocations('st','il','adj','rmul','adj_mod')}
-  return st;
-}`},
-      invocation: (inputs, input_gen) => (x) => {
-        const plain_inputs = inputs.filter(x => x.type !== 'parametrized')
-        return `${name}(${x}${input_gen(plain_inputs)})`
-      }
-    })
+    ]
   },
   rotate: {
     type: 'coord',
@@ -475,14 +454,14 @@ float _noise(vec3 v){
     `
   },
   copy: {
-    type: 'stMod',
+    type: 'seqModSt',
     inputs: [],
     glsl: `vec2 copy(vec2 _st, vec2 _il){
   return fract(_il);
 }`
   },
   every: {
-    type: 'adjMod',
+    type: 'seqModAdj',
     inputs: [
       {
         name: 'div',
@@ -495,7 +474,7 @@ float _noise(vec3 v){
         default: 0
       }
     ],
-    glsl: `float every(vec2 st, vec2 il, float adj, float d, float o){
+    glsl: `float every(vec2 st, vec2 il, float d, float o){
   return step(
     -1.0
     , - step(1.0, mod(il.x + o, d))
@@ -1147,15 +1126,13 @@ float _noise(vec3 v){
   },
   ix_adjust_lin: {
     type: 'util',
-    glsl: `float ix_adjust_lin(float factor, float base, float rmul, vec2 _il) {
-      vec2 il = rmul * _il;
+    glsl: `float ix_adjust_lin(float factor, float base, vec2 il) {
       return base + factor * sqrt(il.x * il.x + il.y * il.y);
     }`
   },
   ix_adjust_exp: {
     type: 'util',
-    glsl: `float ix_adjust_exp(float factor, float base, float rmul, vec2 _il) {
-      vec2 il = rmul * _il;
+    glsl: `float ix_adjust_exp(float factor, float base, vec2 il) {
       return base + pow(factor, sqrt(il.x*il.x + il.y*il.y) + 1.0);
     }`
   },
