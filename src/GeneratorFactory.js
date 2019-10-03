@@ -15,11 +15,20 @@ const SEQ_MOD_VAR_NAME_IL = 'il'
 const SEQ_MOD_VAR_NAME_ADJ = 'adj'
 const SEQ_MOD_VAR_NAME_ADJ_MOD = 'adj_mod'
 
-const clone_l1 = (o) => Object.entries(o).reduce((h, [k, v]) => {
-  h[k] = v
-  return h
-  }, {}
-)
+const clone_l1 = (o) => {
+  if (typeof o === 'object') {
+    if (Array.isArray(o)) {
+      return o.map(x => clone_l1(x))
+    } else {
+      return Object.entries(o).reduce((h, [k, v]) => {
+        h[k] = v
+        return h
+        }, {}
+      )
+    }
+  }
+  return o
+}
 
 var Generator = function (param) {
   return Object.create(Generator.prototype)
@@ -134,15 +143,24 @@ const setup_method = (that, transform, inputs, instance) => {
     let f1 = (x) => instance.invocation(inputs)(x)
 
     if (transform.type === 'seqModCoord') {
-      const plain_inputs = inputs.map((input, i) => [input, i]).filter(([input]) => input.type !== INPUT_TYPE_PARAMETRIZED)
+      const plain_inputs = inputs.slice(2).filter((input) => input.type !== INPUT_TYPE_PARAMETRIZED)
       if (plain_inputs.length > 0) {
-        const tgt = inputs[0].value + 2
-        // console.log(`${transform.name} tgt: ${tgt}`)
-        const tgt_name = inputs[tgt].name
+        const tgt = inputs[0].value % plain_inputs.length
+        const tgt_name = plain_inputs[tgt].name
+        console.log(`${transform.name} tgt: ${tgt} ${tgt_name}`, plain_inputs)
 
-        const fo = f1
-        // TODO: Don't do this with a regexp
-        const f2 = (x) => fo(x).replace(new RegExp(`(\\W)${tgt_name}(\\W)`), `$1adj$2`)
+        const i2 = clone_l1(plain_inputs)
+        i2.forEach(x => {
+          if (x.name === tgt_name) {
+            x.name = SEQ_MOD_VAR_NAME_ADJ
+          }
+        })
+
+        const fo = (x) => instance.invocation(i2)(x)
+        
+        const f2 = (x) => `
+  ${SEQ_MOD_VAR_NAME_ADJ} = ix_adjust_lin(${inputs[1].name}, ${tgt_name}, ${SEQ_MOD_VAR_NAME_IL});
+  ${fo(x)}`
         f1 = f2
       }
     }
