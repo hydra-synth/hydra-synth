@@ -8,13 +8,19 @@ const renderPassFunctions = require('./renderpass-functions.js')
 const counter = require('./counter.js')
 const shaderManager = require('./shaderManager.js')
 
+const SIMPLIFY_PLAIN_NUMBERS = true
+
 const INPUT_TYPE_PARAMETRIZED = 'parametrized'
+const INPUT_TYPE_IGNORE = 'ignore'
 
 const SEQ_MOD_VAR_NAME_ST = 'st'
 const SEQ_MOD_VAR_NAME_IL = 'il'
-const SEQ_MOD_VAR_NAME_ADJ = 'adj'
 const SEQ_MOD_VAR_NAME_ADJ_MOD = 'adj_mod'
 
+// Filter non-glsl inputs
+const clean_inputs = (inputs) => inputs.filter(input => !(input.type === INPUT_TYPE_IGNORE || input.type === INPUT_TYPE_PARAMETRIZED))
+
+// Clone an object (up to one level down) or array (multiple levels if array of array)
 const clone_l1 = (o) => {
   if (typeof o === 'object') {
     if (Array.isArray(o)) {
@@ -60,7 +66,7 @@ const compositionFunctions = {
 // gl_FragColor = osc(rotate(repeat())) + tex(repeat())
 
 // Parses javascript args to use in glsl
-function generateGlsl (inputs, forDefinition=false) {
+function generateGlsl (inputs, forDefinition = false) {
   return inputs.reduce((s, input) => `${s}, ${forDefinition ? `${input.type} ` : ''}${forDefinition ? input.param_name : input.name}`, '')
 }
 // timing function that accepts a sequence of values as an array
@@ -89,12 +95,16 @@ function formatArguments (userArgs, defaultArgs) {
     //  console.log("arg", userArgs[index])
       typedArg.value = userArgs[index]
       // if argument passed in contains transform property, i.e. is of type generator, do not add uniform
-      if (userArgs[index].transform) typedArg.isUniform = false
-
-      if (typeof userArgs[index] === 'function') {
+      if (userArgs[index].transform) {
+        typedArg.isUniform = false
+      } else if (typeof userArgs[index] === 'function') {
         typedArg.value = (context, props, batchId) => {
           try {
-            return userArgs[index](props)
+            const v = userArgs[index](props)
+            if (typeof v === 'undefined') {
+              return input.default
+            }
+            return v
           } catch (e) {
             console.log('ERROR', e)
             return input.default
@@ -108,12 +118,22 @@ function formatArguments (userArgs, defaultArgs) {
       // use default value for argument
       typedArg.value = input.default
     }
-    // if input is a texture, set unique name for uniform
-    if (input.type === 'texture') {
+    if (typeof typedArg.value === 'undefined') {
+      typedArg.value = input.default
+    }
+    if (typeof typedArg.value === 'undefined') {
+      typedArg.value = 0
+    }
+
+    if (typeof typedArg.value === 'number' && SIMPLIFY_PLAIN_NUMBERS) {
+      typedArg.isUniform = false
+      typedArg.name = `${Number.parseFloat(typedArg.value).toString().replace(/^([^.]+)$/,'$1.0')}`
+    } else if (input.type === 'texture') {
+      // if input is a texture, set unique name for uniform
       // typedArg.tex = typedArg.value
       var x = typedArg.value
       typedArg.value = () => (x.getTexture())
-    } else if (input.type === INPUT_TYPE_PARAMETRIZED) {
+    } else if (input.type === INPUT_TYPE_PARAMETRIZED || input.type === INPUT_TYPE_IGNORE) {
         typedArg.isUniform = false
     } else {
       // if passing in a texture reference, when function asks for vec4, convert to vec4
@@ -128,6 +148,102 @@ function formatArguments (userArgs, defaultArgs) {
   })
 }
 
+// Process sequential modification options. These options define which parameters
+// are modified and how they are modified. Various formats are possible to allow
+// for more or less verbose usage.
+//  1. One numeric value: Interpreted as factor to modify the first input by
+//  2. An array of
+//    a. Numeric values: The index in the array is taken as the input index,
+//       the value is taken as the factor
+//    b. An array of 2 values in the form of [input_index, factor_value]
+//  3. An object with the keys being either the input_index or the name of the
+//     input and the value being
+//    a. One numeric value: Interpreted as the factor
+//    b. An object with conforming to
+//       {f|factor: value, m|mode: "exp"|"lin"}
+function process_seqModCoord_options (options, inputs) {
+  if (typeof options !== 'object') {
+    options = [options]
+  }
+
+  if (Array.isArray(options)) {
+    options = options.map((v, idx) => {
+        if (Array.isArray(v)) {
+          if (v.length > 1) {
+            idx = v[0]
+            v = v[1]
+          } else if (v.length > 1) {
+            v = v[0]
+          } else {
+            idx = -1
+          }
+        }
+        return [idx, v]
+      })
+      .filter(([idx]) => idx >= 0)
+      .reduce((h, [idx, v]) => {
+        h[idx] = v
+        return h
+      }, {})
+  }
+
+  const defs = Object.getOwnPropertyNames(options)
+
+  if (defs.length === 0) {
+    options[0] = 2
+    defs.push(0)
+  }
+  
+  const mod_inputs = clone_l1(inputs)
+
+  const new_uniforms = []
+  defs.map(def_idx => {
+      if (typeof def_idx === 'number') {
+        return [def_idx, def_idx]
+      }
+      def_idx = `${def_idx}`.toLowerCase()
+      const idx = mod_inputs.reduce((i, input, x) => {
+        if (input.param_name.toLowerCase() === def_idx) {
+          return x
+        }
+        return i
+      }, 0)
+      return [def_idx, idx]
+    })
+    .map(([def_idx, iidx]) => [options[def_idx], mod_inputs[iidx]])
+    .forEach(([opt, input]) => {
+      if (typeof opt === 'object') {
+        if (!Array.isArray(opt)) {
+          let {f, m, factor, mode} = opt
+
+          f = typeof f === 'undefined' ? (typeof factor === 'undefined' ? 1 : factor) : f
+          m = typeof m === 'undefined' ? (typeof mode === 'undefined' ? 'lin' : mode) : m
+
+          if (['lin','exp'].filter(x => x === m).length === 0) {
+            m = 'lin'
+          }
+          opt = [f, m]
+        }
+      } else {
+        opt = [opt]
+      }
+
+      const [factor, mode] = formatArguments(opt, [
+        {name: 'factor', type: 'float', default: 1},
+        {name: 'mode', type: 'string', default: 'lin'}
+      ])
+
+      new_uniforms.push(factor)
+
+      input.isUniform = false
+      input.name = `ix_adjust_${mode.value}(${factor.name}, ${input.name}, ${SEQ_MOD_VAR_NAME_IL})`
+    })
+
+    return [mod_inputs, new_uniforms.filter(x => x.isUniform)]
+}
+
+
+// Sets up a method on a generator class
 const setup_method = (that, transform, inputs, instance) => {
 
   let transform_fn
@@ -143,25 +259,16 @@ const setup_method = (that, transform, inputs, instance) => {
     let f1 = (x) => instance.invocation(inputs)(x)
 
     if (transform.type === 'seqModCoord') {
-      const plain_inputs = inputs.slice(2).filter((input) => input.type !== INPUT_TYPE_PARAMETRIZED)
+      const plain_inputs = clean_inputs(inputs)
       if (plain_inputs.length > 0) {
-        const tgt = inputs[0].value % plain_inputs.length
-        const tgt_name = plain_inputs[tgt].name
-        console.log(`${transform.name} tgt: ${tgt} ${tgt_name}`, plain_inputs)
-
-        const i2 = clone_l1(plain_inputs)
-        i2.forEach(x => {
-          if (x.name === tgt_name) {
-            x.name = SEQ_MOD_VAR_NAME_ADJ
-          }
-        })
-
-        const fo = (x) => instance.invocation(i2)(x)
         
-        const f2 = (x) => `
-  ${SEQ_MOD_VAR_NAME_ADJ} = ix_adjust_lin(${inputs[1].name}, ${tgt_name}, ${SEQ_MOD_VAR_NAME_IL});
-  ${fo(x)}`
-        f1 = f2
+        let [mod_inputs, opt_uniforms] = process_seqModCoord_options(inputs[0].value, plain_inputs)
+
+        new_uniforms = new_uniforms.concat(opt_uniforms.filter(x => x.isUniform))
+
+        f1 = (x) => instance.invocation(mod_inputs)(x)
+        
+        inputs = mod_inputs
       }
     }
 
@@ -206,11 +313,12 @@ var GeneratorFactory = function (defaultOutput) {
   self.functions = {}
   self.glsl_function_instance_counter = counter.new()
   self.glsl_function_instances = {}
+  self.simplify_plain_numbers = SIMPLIFY_PLAIN_NUMBERS
 
   window.frag = shaderManager(defaultOutput)
 
   // extend Array prototype
-  Array.prototype.fast = function(speed) {
+  Array.prototype.fast = function (speed) {
     this.speed = speed
     return this
   }
@@ -251,10 +359,13 @@ var GeneratorFactory = function (defaultOutput) {
 
     // override the defaults, if the function defines specific instance level implementations
     if (transform.glsl_instance) {
+      const current_glsl_name = instance.glsl_name
+
       method_call_name = `${method_call_name}_${self.glsl_function_instance_counter.increment()}`
       instance.name = method_call_name
       instance.glsl_name = method_call_name
-      const instance_def = transform.glsl_instance(method, method_call_name)
+
+      const instance_def = transform.glsl_instance(current_glsl_name, method_call_name)
       if (instance_def) {
         Object.getOwnPropertyNames(instance_def).forEach((name) => {
           const idef = instance_def[name]
@@ -292,12 +403,9 @@ var GeneratorFactory = function (defaultOutput) {
   all_transforms.filter((t) => t.type === 'coord').forEach((transform) => {
     // If thre are any targetable inputs in the original method, set up
     // additional inputs to define the modfication parameters
-    // TODO: Make this an options object to allow targeting multiple parameters
-    //       like so: {0: 1.25, 1: {x: 1.5, y: 0}, 2: {x: {mode: lin}}, mode: 'exp'}
-    const plain_inputs = transform.inputs.filter(i => i.type !== INPUT_TYPE_PARAMETRIZED)
+    const plain_inputs = clean_inputs(transform.inputs)
     const mod_inputs = [].concat(plain_inputs.length === 0 ? [] : [
-        {name:'tgt',type:'float',default:0},
-        {name:'factor',type:'float',default:0},
+        {name: 'tgt', type: INPUT_TYPE_IGNORE, default: {0: 2}},
       ].concat(transform.inputs))
 
     const mod_transform = clone_l1(transform)
@@ -322,12 +430,11 @@ var GeneratorFactory = function (defaultOutput) {
       glsl_name: method_call_name,
       implementation: (inputs, input_gen) => {
         const param_gen = inputs.filter(x => x.type === INPUT_TYPE_PARAMETRIZED).reduce((p, c) => p ? p : c.value, undefined)
-        const plain_inputs = inputs.filter(x => x.type !== INPUT_TYPE_PARAMETRIZED)
+        const plain_inputs = clean_inputs(inputs)
 
         return `vec2 ${method_call_name}(vec2 _st${input_gen(plain_inputs, true)}) {
   vec2 ${SEQ_MOD_VAR_NAME_ST} = _st;
   vec2 ${SEQ_MOD_VAR_NAME_IL} = _st;
-  float ${SEQ_MOD_VAR_NAME_ADJ} = 0.0;
   float ${SEQ_MOD_VAR_NAME_ADJ_MOD} = 1.0;
 
   ${param_gen.transform()}
@@ -335,7 +442,7 @@ var GeneratorFactory = function (defaultOutput) {
   return st;
 }`},
       invocation: (inputs, input_gen) => (x) => {
-        const plain_inputs = inputs.filter(x => x.type !== INPUT_TYPE_PARAMETRIZED)
+        const plain_inputs = clean_inputs(inputs)
         return `${method_call_name}(${x}${input_gen(plain_inputs)})`
       }
     })
@@ -355,30 +462,16 @@ var GeneratorFactory = function (defaultOutput) {
       invocation = newF => () => `${SEQ_MOD_VAR_NAME_ST} = mix(${SEQ_MOD_VAR_NAME_ST}, ${newF(`${SEQ_MOD_VAR_NAME_ST}`)}, ${SEQ_MOD_VAR_NAME_ADJ_MOD});`
     } else {
       // unknown type??
-      invocation = newF => () => `ERROR: Unkown transform type ${transform.type} for transform ${transform.name}`
+      invocation = () => () => `ERROR: Unkown transform type ${transform.type} for transform ${transform.name}`
     }
 
-    const old_glsl_instance = transform.glsl_instance
+    // TODO: handle pre-existing glsl_instance definitions
     const transform_glsl_instance = (name, method_call_name) => {
       let instance = {
         name: name,
         glsl_name: name
       }
-      
-      let old_invocation = (inputs, input_gen) => (x) => `${name}(${x}${input_gen(inputs)})`
-
-      /*
-      if (typeof old_glsl_instance === 'function') {
-        const old_instance = old_glsl_instance()
-        if (old_instance) {
-          console.log('old instance:', name, method_call_name, old_instance, old_instance.name)
-          instance = old_instance
-          if (instance.invocation) {
-            old_invocation = instance.invocation
-          }
-        }
-      }
-      */
+      let old_invocation = (inputs, input_gen) => (x) => `${instance.glsl_name}(${x}${input_gen(inputs)})`
 
       instance.invocation = (inputs, input_gen) => invocation(old_invocation(inputs, input_gen))
       return instance
@@ -494,20 +587,15 @@ ${Object.entries(this.glsl_function_instances).reduce((s, [_, inst]) => `${s}${i
 
         return obj
       }
-    } else if (transform.type === 'util' ) {
+    } else if (transform.type === 'util') {
       const instance = make_glsl_function_instance(method, transform, [])
       instance.register(self)
     } else if (transform.type.startsWith('seqMod')) {
       console.log(`${transform.type}:`, method)
       SequentialGenerator.prototype[method] = function (...args) {
         const inputs = formatArguments(args, transform.inputs)
+        const instance = make_glsl_function_instance(method, transform, clean_inputs(inputs))
 
-        let instance
-        if (transform.type === 'seqModCoord') {
-          instance = make_glsl_function_instance(method, transform, inputs.slice(2))
-        } else {
-          instance = make_glsl_function_instance(method, transform, inputs)
-        }
         return setup_method(this, transform, inputs, instance)
       }
     } else {
