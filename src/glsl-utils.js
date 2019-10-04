@@ -1,5 +1,7 @@
 // converts a tree of javascript functions to a shader
 
+const arrayUtils = require('./array-utils.js')
+
 module.exports = {
   generateGlsl: function (transforms) {
     var shaderParams = {
@@ -79,12 +81,12 @@ function contains(object, arr) {
   }
   return false
 }
-// convert arrays to this function
-const seq = (arr = []) => ({time, bpm}) =>
-{
-   let speed = arr.speed ? arr.speed : 1
-   return arr[Math.floor(time * speed * (bpm / 60) % (arr.length))]
-}
+// // convert arrays to this function
+// const seq = (arr = []) => ({time, bpm}) =>
+// {
+//    let speed = arr.speed ? arr.speed : 1
+//    return arr[Math.floor(time * speed * (bpm / 60) % (arr.length))]
+// }
 
 
 function formatArguments (transform, startIndex) {
@@ -111,7 +113,7 @@ function formatArguments (transform, startIndex) {
         typedArg.isUniform = true
       } else if (userArgs[index].constructor === Array) {
       //  console.log("is Array")
-        typedArg.value = (context, props, batchId) => seq(userArgs[index])(props)
+        typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
         typedArg.isUniform = true
       }
     }

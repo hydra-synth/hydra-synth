@@ -1,5 +1,6 @@
 const glslTransforms = require('./composable-glsl-functions.js')
 const glslSource = require('./glsl-source.js')
+const arrayUtils = require('./array-utils.js')
 
 window.glslSource = glslSource
 
@@ -8,10 +9,11 @@ const renderpassFunctions = require('./renderpass-functions.js')
 var synth = {
   init: (defaultOutput) => {
       synth.defaultOutput = defaultOutput
-      Array.prototype.fast = function(speed) {
-        this.speed = speed
-        return this
-      }
+      arrayUtils.init()
+      // Array.prototype.fast = function(speed) {
+      //   this.speed = speed
+      //   return this
+      // }
       var functions = []
       Object.keys(glslTransforms).forEach((method) => {
         const transform = glslTransforms[method]
