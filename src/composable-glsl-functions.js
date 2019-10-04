@@ -789,7 +789,7 @@ module.exports = {
     ],
     glsl: `vec2 modulateHue(vec2 st, vec4 c1, float amount){
 
-            return st + (vec2(c1.g - c1.r, c1.b - c1.g) * amount * 1.0/resolution.xy);
+            return st + (vec2(c1.g - c1.r, c1.b - c1.g) * amount * 1.0/resolution);
           }`
   },
   invert: {

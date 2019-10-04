@@ -1,8 +1,8 @@
 const generateGlsl = require('./glsl-utils.js').generateGlsl
 const formatArguments = require('./glsl-utils.js').formatArguments
 
-const glslTransforms = require('./glsl/composable-glsl-functions.js')
-const utilityGlsl = require('./glsl/utility-functions.js')
+const glslTransforms = require('./composable-glsl-functions.js')
+const utilityGlsl = require('./utility-functions.js')
 
 var GlslSource = function (obj) {
   console.log('creating', obj)
@@ -98,7 +98,7 @@ GlslSource.prototype.compile = function (transforms, output) {
 
   void main () {
     vec4 c = vec4(1, 0, 0, 1);
-    vec2 st = gl_FragCoord.xy/resolution.xy;
+    vec2 st = gl_FragCoord.xy/resolution;
     gl_FragColor = ${shaderInfo.fragColor};
   }
   `

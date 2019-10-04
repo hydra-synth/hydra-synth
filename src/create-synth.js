@@ -1,10 +1,10 @@
-const glslTransforms = require('./glsl/composable-glsl-functions.js')
+const glslTransforms = require('./composable-glsl-functions.js')
 const glslSource = require('./glsl-source.js')
 const arrayUtils = require('./array-utils.js')
 
 window.glslSource = glslSource
 
-const renderpassFunctions = require('./glsl/renderpass-functions.js')
+const renderpassFunctions = require('./renderpass-functions.js')
 
 var synth = {
   init: (defaultOutput) => {

@@ -8,7 +8,7 @@ module.exports = function (defaultOutput) {
     var obj =  Object.create(Frag.prototype)
     obj.shaderString =   `
     void main () {
-      vec2 st = gl_FragCoord.xy/resolution.xy;
+      vec2 st = gl_FragCoord.xy/resolution;
       gl_FragColor = vec4(st, 1.0, 1.0);
     }
     `
@@ -18,7 +18,7 @@ module.exports = function (defaultOutput) {
 
   Frag.prototype.compile = function () {
     var frag = `
-    precision highp float;
+    precision mediump float;
     uniform float time;
     uniform vec2 resolution;
     varying vec2 uv;

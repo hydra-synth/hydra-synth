@@ -5,8 +5,8 @@ const Source = require('./src/hydra-source.js')
 
 //const RenderPasses = require('./RenderPasses.js')
 const mouse = require('mouse-change')()
-const Audio = require('./src/lib/audio.js')
-const VidRecorder = require('./src/lib/video-recorder.js')
+const Audio = require('./src/audio.js')
+const VidRecorder = require('./src/video-recorder.js')
 
 const synth = require('./src/create-synth.js')
 
@@ -144,7 +144,7 @@ class HydraSynth {
 
     this.renderAll = this.regl({
       frag: `
-      precision highp float;
+      precision mediump float;
       varying vec2 uv;
       uniform sampler2D tex0;
       uniform sampler2D tex1;
@@ -172,7 +172,7 @@ class HydraSynth {
       }
       `,
       vert: `
-      precision highp float;
+      precision mediump float;
       attribute vec2 position;
       varying vec2 uv;
 
@@ -199,7 +199,7 @@ class HydraSynth {
 
     this.renderFbo = this.regl({
       frag: `
-      precision highp float;
+      precision mediump float;
       varying vec2 uv;
       uniform vec2 resolution;
       uniform sampler2D tex0;
@@ -209,7 +209,7 @@ class HydraSynth {
       }
       `,
       vert: `
-      precision highp float;
+      precision mediump float;
       attribute vec2 position;
       varying vec2 uv;
 
