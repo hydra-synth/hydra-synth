@@ -14,8 +14,6 @@ module.exports = {
   },
   formatArguments: formatArguments
 }
-
-
 // recursive function for generating shader string from object containing functions and user arguments. Order of functions in string depends on type of function
 // to do: improve variable names
 function generateGlsl (transforms, shaderParams) {
@@ -43,11 +41,15 @@ function generateGlsl (transforms, shaderParams) {
       fragColor = (uv) =>  `${shaderString(`${f0(uv)}`, transform.name, inputs)}`
     } else if (transform.transform.type === 'combine') {
       // combining two generated shader strings (i.e. for blend, mult, add funtions)
-      var f1 = (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}`
+      var f1 = inputs[0].isUniform ?
+        () => inputs[0].name :
+        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}`
       fragColor = (uv) => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1))}`
     } else if (transform.transform.type === 'combineCoord') {
       // combining two generated shader strings (i.e. for modulate functions)
-      var f1 = (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}`
+      var f1 = inputs[0].isUniform ?
+        () => inputs[0].name :
+        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}`
       fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1))}`)}`
     }
   })
@@ -86,20 +88,39 @@ const seq = (arr = []) => ({time, bpm}) =>
    return arr[Math.floor(time * speed * (bpm / 60) % (arr.length))]
 }
 
+function fillArrayWithDefaults (arr, len) {
+  // fill the array with default values if it's too short
+  while (arr.length < len) {
+    if (arr.length === 3) { // push a 1 as the default for .a in vec4
+      arr.push(1.0)
+    } else {
+      arr.push(0.0)
+    }
+  }
+  return arr
+}
 
 function formatArguments (transform, startIndex) {
   console.log('processing args', transform, startIndex)
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
   return defaultArgs.map( (input, index) => {
-    var typedArg = {
+    const typedArg = {
       value: input.default,
       type: input.type, //
       isUniform: false,
       name: input.name,
+      vecLen: 0
     //  generateGlsl: null // function for creating glsl
     }
 
+    if (input.type.startsWith('vec')) {
+      try {
+        typedArg.vecLen = Number.parseInt(input.type.substr(3))
+      } catch (e) {
+        console.log(`Error determining length of vector input type ${input.type} (${input.name})`)
+      }
+    }
 
     // if user has input something for this argument
     if(userArgs.length > index) {
@@ -107,12 +128,22 @@ function formatArguments (transform, startIndex) {
       // do something if a composite or transform
 
       if (typeof userArgs[index] === 'function') {
-       typedArg.value = (context, props, batchId) => (userArgs[index](props))
+        if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
+          typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
+        } else {
+          typedArg.value = (context, props, batchId) => (userArgs[index](props))
+        }
+        
         typedArg.isUniform = true
       } else if (userArgs[index].constructor === Array) {
+        if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
+          typedArg.isUniform = true
+          typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)
+        } else {
       //  console.log("is Array")
-        typedArg.value = (context, props, batchId) => seq(userArgs[index])(props)
-        typedArg.isUniform = true
+          typedArg.value = (context, props, batchId) => seq(userArgs[index])(props)
+          typedArg.isUniform = true
+        }
       }
     }
 
