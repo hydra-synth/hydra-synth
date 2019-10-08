@@ -41,15 +41,15 @@ function generateGlsl (transforms, shaderParams) {
       fragColor = (uv) =>  `${shaderString(`${f0(uv)}`, transform.name, inputs)}`
     } else if (transform.transform.type === 'combine') {
       // combining two generated shader strings (i.e. for blend, mult, add funtions)
-      var f1 = inputs[0].isUniform ?
-        () => inputs[0].name :
-        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}`
+      var f1 = inputs[0].value && inputs[0].value.transforms ?
+        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+        (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
       fragColor = (uv) => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1))}`
     } else if (transform.transform.type === 'combineCoord') {
       // combining two generated shader strings (i.e. for modulate functions)
-      var f1 = inputs[0].isUniform ?
-        () => inputs[0].name :
-        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}`
+      var f1 = inputs[0].value && inputs[0].value.transforms ?
+        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+        (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
       fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1))}`)}`
     }
   })
@@ -97,7 +97,15 @@ function fillArrayWithDefaults (arr, len) {
       arr.push(0.0)
     }
   }
-  return arr
+  return arr.slice(0, len)
+}
+
+const ensure_decimal_dot = (val) => {
+  val = val.toString()
+  if (val.indexOf('.') < 0) {
+    val += '.'
+  }
+  return val
 }
 
 function formatArguments (transform, startIndex) {
@@ -149,11 +157,11 @@ function formatArguments (transform, startIndex) {
 
     if(startIndex< 0){
     } else {
-    if(typedArg.type === 'float' && typeof typedArg.value == 'number') {
-    //  var newValue = typedArg.value +
-      var val = '' + typedArg.value // convert to string
-      if(val.indexOf('.') < 0) val += '.'
-      typedArg.value = val
+    if(typedArg.type === 'float' && typeof typedArg.value === 'number') {
+      typedArg.value = ensure_decimal_dot(typedArg.value)
+    } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
+      typedArg.isUniform = false
+      typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
     } else if (input.type === 'texture') {
       // typedArg.tex = typedArg.value
       var x = typedArg.value
