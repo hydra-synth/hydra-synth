@@ -62,7 +62,7 @@ var cosN = v => (Math.cos(v)+1)/2
 // 	.modulate(noise(3, .21))
 //   	.out(o0)
 
-  synth.setFunction('ooo', {
+  hydra.synth.setFunction('ooo', {
         type: 'src',
         inputs: [
           {
