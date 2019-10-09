@@ -31,7 +31,6 @@ var synth = {
       }
 
       Object.entries(functions).forEach(([method, transform]) => {
-        console.log(method, transform)
         functions[method] = synth.setFunction(method, transform)
       })
 
