@@ -5,8 +5,8 @@ const Source = require('./src/hydra-source.js')
 
 //const RenderPasses = require('./RenderPasses.js')
 const mouse = require('mouse-change')()
-const Audio = require('./src/audio.js')
-const VidRecorder = require('./src/video-recorder.js')
+const Audio = require('./src/lib/audio.js')
+const VidRecorder = require('./src/lib/video-recorder.js')
 
 const synth = require('./src/create-synth.js')
 
