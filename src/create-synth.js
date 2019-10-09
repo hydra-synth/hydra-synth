@@ -6,21 +6,35 @@ window.glslSource = glslSource
 const renderpassFunctions = require('./renderpass-functions.js')
 
 var synth = {
-  init: (defaultOutput) => {
+  init: (defaultOutput, extendTransforms = (x => x)) => {
       synth.defaultOutput = defaultOutput
       Array.prototype.fast = function(speed) {
         this.speed = speed
         return this
       }
-      var functions = []
-      Object.keys(glslTransforms).forEach((method) => {
-        const transform = glslTransforms[method]
+      var functions = {}
+
+      const addTransforms = (transforms) => 
+        Object.entries(transforms).forEach(([method, transform]) => {
+          functions[method] = transform
+        })
+      
+      addTransforms(glslTransforms)
+      addTransforms(renderpassFunctions)
+
+      if (typeof extendTransforms === 'function') {
+        functions = extendTransforms(functions)
+      } else if (Array.isArray(extendTransforms)) {
+        extendTransforms.forEach(transform => functions[transform.name] = transform)
+      } else if (typeof extendTransforms === 'object') {
+        addTransforms(extendTransforms)
+      }
+
+      Object.entries(functions).forEach(([method, transform]) => {
+        console.log(method, transform)
         functions[method] = synth.setFunction(method, transform)
       })
-      Object.keys(renderpassFunctions).forEach((method) => {
-        const transform = renderpassFunctions[method]
-        functions[method] = synth.setFunction(method, transform)
-      })
+
       return functions
  },
 

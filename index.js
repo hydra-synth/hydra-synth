@@ -24,6 +24,7 @@ class HydraSynth {
     autoLoop = true,
     detectAudio = true,
     enableStreamCapture = true,
+    extendTransforms = {},
     canvas
   } = {}) {
 
@@ -35,6 +36,8 @@ class HydraSynth {
     this.makeGlobal = makeGlobal
     this.renderAll = false
     this.detectAudio = detectAudio
+
+    this.extendTransforms = extendTransforms
 
     // boolean to store when to save screenshot
     this.saveFrame = false
@@ -278,7 +281,7 @@ class HydraSynth {
     //   }
     // })
 
-    var functions = synth.init(this.o[0])
+    var functions = synth.init(this.o[0], this.extendTransforms)
    //console.log('functions', functions)
     // Object.keys(functions).forEach((key)=>{
     //   self[key] = functions[key]
