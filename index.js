@@ -23,6 +23,7 @@ class HydraSynth {
     autoLoop = true,
     detectAudio = true,
     enableStreamCapture = true,
+    extendTransforms = {},
     canvas
   } = {}) {
 
@@ -34,6 +35,8 @@ class HydraSynth {
     this.makeGlobal = makeGlobal
     this.renderAll = false
     this.detectAudio = detectAudio
+
+    this.extendTransforms = extendTransforms
 
     // boolean to store when to save screenshot
     this.saveFrame = false
@@ -295,7 +298,7 @@ class HydraSynth {
     //   }
     // })
 
-    this.synth = new Synth(this.o[0], ({type, method, synth}) => {
+    this.synth = new Synth(this.o[0], this.extendTransforms, ({type, method, synth}) => {
       if (this.makeGlobal) {
         if (type === 'add') {
           window[method] = synth.generators[method]
