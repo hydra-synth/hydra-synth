@@ -66,11 +66,8 @@ GlslSource.prototype.compile = function (transforms, output) {
   var frag = `
   precision mediump float;
   ${Object.values(shaderInfo.uniforms).map((uniform) => {
-    let type = ''
+    let type = uniform.type
     switch (uniform.type) {
-      case 'float':
-        type = 'float'
-        break
       case 'texture':
         type = 'sampler2D'
         break
