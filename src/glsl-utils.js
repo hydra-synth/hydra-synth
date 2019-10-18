@@ -1,5 +1,12 @@
 // converts a tree of javascript functions to a shader
 
+const DEFAULT_CONVERSIONS = {
+  float: {
+    'vec4': {name: 'sum', args: [[1, 1, 1, 1]]},
+    'vec2': {name: 'sum', args: [[1, 1]]}
+  }
+}
+
 module.exports = {
   generateGlsl: function (transforms) {
     var shaderParams = {
@@ -164,6 +171,21 @@ function formatArguments (transform, startIndex) {
     if(startIndex< 0){
     } else {
     if (typedArg.value && typedArg.value.transforms) {
+      const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
+
+
+
+      if (final_transform.transform.glsl_return_type !== input.type) {
+        const defaults = DEFAULT_CONVERSIONS[input.type]
+        if (typeof defaults !== 'undefined') {
+          const default_def = defaults[final_transform.transform.glsl_return_type]
+          if (typeof default_def !== undefined) {
+            const {name, args} = default_def
+            typedArg.value = typedArg.value[name](...args)
+          }
+        }
+      }
+
       typedArg.isUniform = false
     } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
       typedArg.value = ensure_decimal_dot(typedArg.value)
