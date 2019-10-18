@@ -9,9 +9,10 @@ Array.prototype.fast = function (speed) {
 }
 
 class Synth {
-  constructor (defaultOutput, changeListener = (() => {})) {
+  constructor (defaultOutput, extendTransforms = (x => x), changeListener = (() => {})) {
     this.defaultOutput = defaultOutput
     this.changeListener = changeListener
+    this.extendTransforms = extendTransforms
     this.generators = {}
     this.init()
   }
@@ -27,15 +28,30 @@ class Synth {
       }
     })()
 
-    var functions = []
-    Object.keys(glslTransforms).forEach((method) => {
-      const transform = glslTransforms[method]
+    let functions = {}
+    const addTransforms = (transforms) =>
+      Object.entries(transforms).forEach(([method, transform]) => {
+        functions[method] = transform
+      })
+
+    addTransforms(glslTransforms)
+    addTransforms(renderpassFunctions)
+
+    if (typeof this.extendTransforms === 'function') {
+      functions = this.extendTransforms(functions)
+    } else if (Array.isArray(this.extendTransforms)) {
+      addTransforms(this.extendTransforms.reduce((h, transform) => {
+        [transform.name] = transform
+        return h
+      }, {}))
+    } else if (typeof this.extendTransforms === 'object') {
+      addTransforms(this.extendTransforms)
+    }
+
+    Object.entries(functions).forEach(([method, transform]) => {
       functions[method] = this.setFunction(method, transform)
     })
-    Object.keys(renderpassFunctions).forEach((method) => {
-      const transform = renderpassFunctions[method]
-      functions[method] = this.setFunction(method, transform)
-    })
+
     return functions
  }
 
