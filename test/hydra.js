@@ -1,69 +1,17 @@
 const {should, expect, assert} = require('chai')
 const rewire = require('rewire')
-const sinon = require('sinon')
-const {JSDOM} = require('jsdom')
+const {prepareForHydra} = require('./lib/util')
 
 describe ('HydraSynth', () => {
   let HydraSynth
   let dom
   let canvas
 
-  afterEach(() => {
-    sinon.restore()
-  })
-
   beforeEach(() => {
-    dom = new JSDOM(`<!DOCTYPE html>
-<html>
-    <head>
-        <title></title>
-    </head>
-    <body>
-        <canvas id="hydra-canvas" width="800" height="600"></canvas>
-    </body>
-</html>`)
-
-    global.window = dom.window
-    global.document = dom.window.document
-    global.navigator = dom.window.navigator
-
-    canvas = dom.window.document.querySelector('#hydra-canvas')
-    canvas.captureStream = sinon.stub().returns(undefined)
-    canvas.getContext = sinon.stub().returns({})
-
-    global.navigator.mediaDevices = {
-      getUserMedia: () => Promise.reject({name: 'not implemented / ignore'})
-    }
-    global.navigator.getUserMedia = sinon.mock().returns({})
-
-    global.AudioContext = class {
-      constructor () {
-      }
-      createMediaStreamSource () {
-        return undefined
-      }
-    }
-
-    global.MediaSource = class {
-      constructor () {
-      }
-      addEventListener () {
-        return undefined
-      }
-    }
-
-    const cestub = sinon.stub(dom.window.document, 'createElement')
-
-    cestub.withArgs('canvas').callsFake(
-      function (...args) {
-        const ret = cestub.wrappedMethod.apply(this, args)
-
-        ret.getContext = sinon.stub().returns({})
-
-        return ret
-      }
-    )
-    cestub.callThrough()
+    const {dom: new_dom, canvas: new_canvas} = prepareForHydra()
+    
+    dom = new_dom
+    canvas = new_canvas
 
     HydraSynth = require('../index')
 
