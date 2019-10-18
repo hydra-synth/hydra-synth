@@ -179,7 +179,7 @@ function formatArguments (transform, startIndex) {
         const defaults = DEFAULT_CONVERSIONS[input.type]
         if (typeof defaults !== 'undefined') {
           const default_def = defaults[final_transform.transform.glsl_return_type]
-          if (typeof default_def !== undefined) {
+          if (typeof default_def !== 'undefined') {
             const {name, args} = default_def
             typedArg.value = typedArg.value[name](...args)
           }
