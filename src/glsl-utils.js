@@ -1,6 +1,6 @@
 // converts a tree of javascript functions to a shader
 
-const arrayUtils = require('./array-utils.js')
+const arrayUtils = require('./lib/array-utils.js')
 
 module.exports = {
   generateGlsl: function (transforms) {

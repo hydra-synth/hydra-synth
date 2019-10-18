@@ -1,6 +1,6 @@
 // to do: transform time rather than values, similar to hydra
 
-var easing = require('./lib/easing-functions.js')
+var easing = require('./easing-functions.js')
 
 var map = (num, in_min, in_max, out_min, out_max) => {
   return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
