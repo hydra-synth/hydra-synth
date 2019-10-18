@@ -41,7 +41,7 @@ class Synth {
       functions = this.extendTransforms(functions)
     } else if (Array.isArray(this.extendTransforms)) {
       addTransforms(this.extendTransforms.reduce((h, transform) => {
-        [transform.name] = transform
+        h[transform.name] = transform
         return h
       }, {}))
     } else if (typeof this.extendTransforms === 'object') {

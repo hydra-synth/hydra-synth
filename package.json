@@ -4,9 +4,10 @@
   "description": "base synth for hydra-editor",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha",
     "example": "budo ./example/index.js --ssl --open --live --port 8000 --",
-    "example-editor": "budo ./example/editor-example.js --ssl --open --live "
+    "example-editor": "budo ./example/editor-example.js --ssl --open --live ",
+    "coverage": "nyc npm run test"
   },
   "repository": {
     "type": "git",
@@ -26,7 +27,7 @@
   },
   "homepage": "https://github.com/ojack/hydra-synth#readme",
   "dependencies": {
-    "budo": "^11.3.2",
+    "budo": "^11.6.3",
     "enumerate-devices": "^1.1.1",
     "getusermedia": "^2.0.1",
     "glsl-canny-edge-detection": "^1.0.6",
@@ -50,8 +51,25 @@
     "babel-core": "^6.26.0",
     "babel-preset-env": "^1.6.1",
     "babelify": "^8.0.0",
+    "chai": "^4.2.0",
     "codemirror": "^5.36.0",
     "glslify": "^6.3.1",
-    "rtc-patch-bay": "^1.0.0"
+    "jsdom": "^15.2.0",
+    "mocha": "^6.2.1",
+    "nyc": "^14.1.1",
+    "rewire": "^4.0.1",
+    "rtc-patch-bay": "^1.0.0",
+    "sinon": "^7.5.0"
+  },
+  "nyc": {
+    "include": [
+      "src/**/*.js",
+      "index.js"
+    ],
+    "reporter": [
+      "text",
+      "html"
+    ],
+    "cache": false
   }
 }
