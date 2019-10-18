@@ -974,4 +974,59 @@ module.exports = {
     }
     `
   },
+  sum: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'scale',
+        type: 'vec4',
+        default: [1, 1, 1, 1]
+      }
+    ],
+    glsl: `float sum(vec4 c0, vec4 s) {
+      vec4 v = c0 * s;
+      return v.r + v.g + v.b + v.a;
+    }
+`
+  },
+  r: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `float r(vec4 c0, float scale, float offset) {
+      return c0.r * scale + offset;
+    }`
+  },
+  g: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `float g(vec4 c0, float scale, float offset) {
+      return c0.g * scale + offset;
+    }`
+  },
+  b: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `float b(vec4 c0, float scale, float offset) {
+      return c0.b * scale + offset;
+    }`
+  },
+  a: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `float a(vec4 c0, float scale, float offset) {
+      return c0.a * scale + offset;
+    }`
+  }
 }
