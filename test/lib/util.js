@@ -1,4 +1,6 @@
 const {JSDOM} = require('jsdom')
+const gl = require('gl')
+const mock = require('mock-require')
 
 class DummyOutput {
   constructor () {
@@ -64,7 +66,25 @@ function prepareForHydra () {
   return {dom, canvas}
 }
 
+function mockRegl (dimensions = {width: 100, height: 100}) {
+  // make sure wr'e not mocking regl
+  mock.stop('regl')
+
+  const orig_regl = require('regl')
+
+  mock('regl', function (...args) {
+    const [config] = args
+    const ctx = gl(dimensions.width, dimensions.height, {preserveDrawingBuffer: true})
+    config.extensions = config.extensions.filter(x => ['oes_texture_half_float', 'oes_texture_half_float_linear'].indexOf(x) === -1)
+    config.gl = ctx
+    return orig_regl(...args)
+  })
+
+  return {reset: () => mock.stop('regl')}
+}
+
 module.exports = {
   DummyOutput,
-  prepareForHydra
+  prepareForHydra,
+  mockRegl
 }

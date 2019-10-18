@@ -1,31 +1,25 @@
 const {should, expect, assert} = require('chai')
 const rewire = require('rewire')
-const {prepareForHydra} = require('./lib/util')
+const {prepareForHydra, mockRegl} = require('./lib/util')
 
 describe ('HydraSynth', () => {
   let HydraSynth
-  let dom
   let canvas
+  let mocked
+
+  before(() => {
+    mocked = mockRegl()
+  })
+  after(() => {
+    mocked.reset()
+  })
 
   beforeEach(() => {
-    const {dom: new_dom, canvas: new_canvas} = prepareForHydra()
-    
-    dom = new_dom
+    const {canvas: new_canvas} = prepareForHydra()
+
     canvas = new_canvas
 
     HydraSynth = require('../index')
-
-    HydraSynth.prototype._initRegl = function () {
-      this.regl = {
-        buffer: () => {},
-        prop: () => {},
-        texture: () => {},
-        framebuffer: () => {}
-      },
-      this.renderFbo = () => {},
-      this.renderAll = () => {}
-    }
-
   })
 
   it ('Sets up basic infrastructure', () => {
