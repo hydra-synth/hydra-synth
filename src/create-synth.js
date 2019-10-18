@@ -49,6 +49,10 @@ class Synth {
     }
 
     Object.entries(functions).forEach(([method, transform]) => {
+      if (typeof transform.glsl_return_type === 'undefined' && transform.glsl) {
+        transform.glsl_return_type = transform.glsl.replace(new RegExp(`^(?:[\\s\\S]*\\W)?(\\S+)\\s+${method}\\s*[(][\\s\\S]*`, 'ugm'), '$1')
+      }
+
       functions[method] = this.setFunction(method, transform)
     })
 
