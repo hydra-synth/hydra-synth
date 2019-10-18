@@ -518,6 +518,36 @@ module.exports = {
       return (c1.r+r)*vec2(cos(a), sin(a));
     }`
   },
+  scroll: {
+    type: 'coord',
+    inputs: [
+      {
+        name: 'scrollX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'scrollY',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speedX',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'speedY',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec2 scroll(vec2 st, float scrollX, float scrollY, float speedX, float speedY){
+      st.x += scrollX + time*speedX;
+      st.y += scrollY + time*speedY;
+      return st;
+    }`
+  },
   scrollX: {
     type: 'coord',
     inputs: [
@@ -612,11 +642,28 @@ module.exports = {
       {
         name: 'amount',
         type: 'float',
-        default: 0.5
+        default: 1.0
       }
     ],
     glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
             return (c0+c1)*amount + c0*(1.0-amount);
+          }`
+  },
+  sub: {
+    type: 'combine',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
+    glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
+            return (c0-c1)*amount + c0*(1.0-amount);
           }`
   },
   layer: {
