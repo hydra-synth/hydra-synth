@@ -7,6 +7,7 @@ const Source = require('./src/hydra-source.js')
 const Mouse = require('mouse-change')()
 const Audio = require('./src/lib/audio.js')
 const VidRecorder = require('./src/lib/video-recorder.js')
+const ArrayUtils = require('./src/lib/array-utils.js')
 
 const Synth = require('./src/create-synth.js')
 
@@ -74,6 +75,7 @@ class HydraSynth {
     if (makeGlobal) window.time = this.time
     if (makeGlobal) window.render = this.render.bind(this)
     if (makeGlobal) window.bpm = this._setBpm.bind(this)
+    if (makeGlobal) ArrayUtils.init() // add extra functions to Array.prototype
 
     if(autoLoop) loop(this.tick.bind(this)).start()
   }
