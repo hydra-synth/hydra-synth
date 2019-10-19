@@ -612,11 +612,28 @@ module.exports = {
       {
         name: 'amount',
         type: 'float',
-        default: 0.5
+        default: 1.0
       }
     ],
     glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
             return (c0+c1)*amount + c0*(1.0-amount);
+          }`
+  },
+  sub: {
+    type: 'combine',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
+    glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
+            return (c0-c1)*amount + c0*(1.0-amount);
           }`
   },
   layer: {
