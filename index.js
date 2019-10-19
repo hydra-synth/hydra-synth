@@ -151,7 +151,11 @@ class HydraSynth {
       this.mouse.x = e.clientX
       this.mouse.y = e.clientY
     }
-    if(this.makeGlobal) window.mouse = this.mouse
+    if(this.makeGlobal) {
+      window.mouse = this.mouse
+      window.width = this.width
+      window.height = this.height
+    }
   }
 
   _initRegl () {

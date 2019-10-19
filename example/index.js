@@ -65,6 +65,8 @@ function init () {
     hydra.tick(dt)
   }).start()
 
+  // mouse control
+  shape(3, () => mouse.y/height).out()
 }
 
 window.onload = init
