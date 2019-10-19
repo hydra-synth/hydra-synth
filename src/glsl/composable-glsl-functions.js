@@ -1016,8 +1016,8 @@ float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is no
       {name: 'scale', type: 'float', default: 1},
       {name: 'offset', type: 'float', default: 0}
     ],
-    glsl: `float r(vec4 c0, float scale, float offset) {
-      return c0.r * scale + offset;
+    glsl: `vec4 r(vec4 c0, float scale, float offset) {
+      return vec4(c0.r * scale + offset);
     }`
   },
   g: {
@@ -1026,8 +1026,8 @@ float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is no
       {name: 'scale', type: 'float', default: 1},
       {name: 'offset', type: 'float', default: 0}
     ],
-    glsl: `float g(vec4 c0, float scale, float offset) {
-      return c0.g * scale + offset;
+    glsl: `vec4 g(vec4 c0, float scale, float offset) {
+      return vec4(c0.g * scale + offset);
     }`
   },
   b: {
@@ -1036,8 +1036,8 @@ float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is no
       {name: 'scale', type: 'float', default: 1},
       {name: 'offset', type: 'float', default: 0}
     ],
-    glsl: `float b(vec4 c0, float scale, float offset) {
-      return c0.b * scale + offset;
+    glsl: `vec4 b(vec4 c0, float scale, float offset) {
+      return vec4(c0.b * scale + offset);
     }`
   },
   a: {
@@ -1046,8 +1046,8 @@ float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is no
       {name: 'scale', type: 'float', default: 1},
       {name: 'offset', type: 'float', default: 0}
     ],
-    glsl: `float a(vec4 c0, float scale, float offset) {
-      return c0.a * scale + offset;
+    glsl: `vec4 a(vec4 c0, float scale, float offset) {
+      return vec4(c0.a * scale + offset);
     }`
   }
 }
