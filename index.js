@@ -147,10 +147,10 @@ class HydraSynth {
 
     // @todo: make mouse relative to canvas position
     this.mouse = { x: 0, y: 0}
-    window.onmousemove = (e) => {
+    window.addEventListener('mousemove', (e) => {
       this.mouse.x = e.clientX
       this.mouse.y = e.clientY
-    }
+    })
     if(this.makeGlobal) {
       window.mouse = this.mouse
       window.width = this.width
