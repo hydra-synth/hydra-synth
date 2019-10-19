@@ -3,11 +3,6 @@ const GlslSource = require('./glsl-source.js')
 
 const renderpassFunctions = require('./glsl/renderpass-functions.js')
 
-Array.prototype.fast = function (speed) {
-  this.speed = speed
-  return this
-}
-
 class Synth {
   constructor (defaultOutput, extendTransforms = (x => x), changeListener = (() => {})) {
     this.defaultOutput = defaultOutput
