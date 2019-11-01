@@ -87,16 +87,8 @@ module.exports = {
   noise: {
     type: 'src',
     inputs: [
-      {
-        type: 'float',
-        name: 'scale',
-        default: 10
-      },
-      {
-        type: 'float',
-        name: 'offset',
-        default : 0.1
-      }
+      { type: 'float', name: 'scale', default: 10 },
+      { type: 'float', name: 'offset', default : 0.1 }
     ],
     glsl: `vec4 noise(vec2 st, float scale, float offset){
       return vec4(vec3(_noise(vec3(st*scale, offset*time))), 1.0);
@@ -105,21 +97,9 @@ module.exports = {
   voronoi: {
     type: 'src',
     inputs: [
-      {
-        type: 'float',
-        name: 'scale',
-        default: 5
-      },
-      {
-        type: 'float',
-        name: 'speed',
-        default : 0.3
-      },
-      {
-        type: 'float',
-        name: 'blending',
-        default : 0.3
-      }
+      { type: 'float', name: 'scale', default: 5 },
+      { type: 'float', name: 'speed', default : 0.3 },
+      { type: 'float', name: 'blending', default : 0.3 }
     ],
     notes: 'from https://thebookofshaders.com/edit.php#12/vorono-01.frag, https://www.shadertoy.com/view/ldB3zc',
     glsl: `vec4 voronoi(vec2 st, float scale, float speed, float blending) {
@@ -160,21 +140,9 @@ module.exports = {
   osc: {
     type: 'src',
     inputs: [
-      {
-        name: 'frequency',
-        type: 'float',
-        default: 60.0
-      },
-      {
-        name: 'sync',
-        type: 'float',
-        default: 0.1
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'frequency', type: 'float', default: 60.0 },
+      { name: 'sync', type: 'float', default: 0.1 },
+      { name: 'offset', type: 'float', default: 0.0 }
     ],
     glsl: `vec4 osc(vec2 _st, float freq, float sync, float offset){
             vec2 st = _st;
@@ -187,21 +155,9 @@ module.exports = {
   shape: {
     type: 'src',
     inputs: [
-      {
-        name: 'sides',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'radius',
-        type: 'float',
-        default: 0.3
-      },
-      {
-        name: 'smoothing',
-        type: 'float',
-        default: 0.01
-      }
+      { name: 'sides', type: 'float', default: 3.0 },
+      { name: 'radius', type: 'float', default: 0.3 },
+      { name: 'smoothing', type: 'float', default: 0.01 }
     ],
     glsl: `vec4 shape(vec2 _st, float sides, float radius, float smoothing){
       vec2 st = _st * 2. - 1.;
@@ -215,11 +171,7 @@ module.exports = {
   gradient: {
     type: 'src',
     inputs: [
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'speed', type: 'float', default: 0.0 }
     ],
     glsl: `vec4 gradient(vec2 _st, float speed) {
       return vec4(_st, sin(time*speed), 1.0);
@@ -228,10 +180,7 @@ module.exports = {
   src: {
     type: 'src',
     inputs: [
-      {
-        name: 'tex',
-        type: 'texture'
-      }
+      { name: 'tex', type: 'texture' }
     ],
     glsl: `vec4 src(vec2 _st, sampler2D _tex){
       //  vec2 uv = gl_FragCoord.xy/vec2(1280., 720.);
@@ -241,26 +190,10 @@ module.exports = {
   solid: {
     type: 'src',
     inputs: [
-      {
-        name: 'r',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'g',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'b',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'a',
-        type: 'float',
-        default: 1.0
-      }
+      { name: 'r', type: 'float', default: 0.0 },
+      { name: 'g', type: 'float', default: 0.0 },
+      { name: 'b', type: 'float', default: 0.0 },
+      { name: 'a', type: 'float', default: 1.0 }
     ],
     notes: '',
     glsl: `vec4 solid(vec2 uv, float _r, float _g, float _b, float _a){
@@ -270,15 +203,8 @@ module.exports = {
   rotate: {
     type: 'coord',
     inputs: [
-      {
-        name: 'angle',
-        type: 'float',
-        default: 10.0
-      }, {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'angle', type: 'float', default: 10.0 },
+      { name: 'speed', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 rotate(vec2 st, float _angle, float speed){
               vec2 xy = st - vec2(0.5);
@@ -291,31 +217,11 @@ module.exports = {
   scale: {
     type: 'coord',
     inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.5
-      },
-      {
-        name: 'xMult',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'yMult',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'offsetX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'offsetY',
-        type: 'float',
-        default: 0.5
-      }
+      { name: 'amount', type: 'float', default: 1.5 },
+      { name: 'xMult', type: 'float', default: 1.0 },
+      { name: 'yMult', type: 'float', default: 1.0 },
+      { name: 'offsetX', type: 'float', default: 0.5 },
+      { name: 'offsetY', type: 'float', default: 0.5 }
     ],
     glsl: `vec2 scale(vec2 st, float amount, float xMult, float yMult, float offsetX, float offsetY){
       vec2 xy = st - vec2(offsetX, offsetY);
@@ -327,15 +233,8 @@ module.exports = {
   pixelate: {
     type: 'coord',
     inputs: [
-      {
-        name: 'pixelX',
-        type: 'float',
-        default: 20
-      }, {
-        name: 'pixelY',
-        type: 'float',
-        default: 20
-      }
+      { name: 'pixelX', type: 'float', default: 20 },
+      { name: 'pixelY', type: 'float', default: 20 }
     ],
     glsl: `vec2 pixelate(vec2 st, float pixelX, float pixelY){
       vec2 xy = vec2(pixelX, pixelY);
@@ -345,16 +244,8 @@ module.exports = {
   posterize: {
     type: 'color',
     inputs: [
-      {
-        name: 'bins',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'gamma',
-        type: 'float',
-        default: 0.6
-      }
+      { name: 'bins', type: 'float', default: 3.0 },
+      { name: 'gamma', type: 'float', default: 0.6 }
     ],
     glsl: `vec4 posterize(vec4 c, float bins, float gamma){
       vec4 c2 = pow(c, vec4(gamma));
@@ -368,26 +259,10 @@ module.exports = {
   shift: {
     type: 'color',
     inputs: [
-      {
-        name: 'r',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'g',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'b',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'a',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'r', type: 'float', default: 0.5 },
+      { name: 'g', type: 'float', default: 0.0 },
+      { name: 'b', type: 'float', default: 0.0 },
+      { name: 'a', type: 'float', default: 0.0 }
     ],
     glsl: `vec4 shift(vec4 c, float r, float g, float b, float a){
       vec4 c2 = vec4(c);
@@ -401,26 +276,10 @@ module.exports = {
   repeat: {
     type: 'coord',
     inputs: [
-      {
-        name: 'repeatX',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'repeatY',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'offsetX',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'offsetY',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'repeatX', type: 'float', default: 3.0 },
+      { name: 'repeatY', type: 'float', default: 3.0 },
+      { name: 'offsetX', type: 'float', default: 0.0 },
+      { name: 'offsetY', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 repeat(vec2 _st, float repeatX, float repeatY, float offsetX, float offsetY){
         vec2 st = _st * vec2(repeatX, repeatY);
@@ -432,30 +291,11 @@ module.exports = {
   modulateRepeat: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'repeatX',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'repeatY',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'offsetX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'offsetY',
-        type: 'float',
-        default: 0.5
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'repeatX', type: 'float', default: 3.0 },
+      { name: 'repeatY', type: 'float', default: 3.0 },
+      { name: 'offsetX', type: 'float', default: 0.5 },
+      { name: 'offsetY', type: 'float', default: 0.5 }
     ],
     glsl: `vec2 modulateRepeat(vec2 _st, vec4 c1, float repeatX, float repeatY, float offsetX, float offsetY){
         vec2 st = _st * vec2(repeatX, repeatY);
@@ -467,15 +307,8 @@ module.exports = {
   repeatX: {
     type: 'coord',
     inputs: [
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      }, {
-          name: 'offset',
-          type: 'float',
-          default: 0.0
-        }
+      { name: 'reps', type: 'float', default: 3.0 },
+      { name: 'offset', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 repeatX(vec2 _st, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
@@ -488,20 +321,9 @@ module.exports = {
   modulateRepeatX: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      },
-      {
-          name: 'offset',
-          type: 'float',
-          default: 0.5
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'reps', type: 'float', default: 3.0 },
+      { name: 'offset', type: 'float', default: 0.5 }
     ],
     glsl: `vec2 modulateRepeatX(vec2 _st, vec4 c1, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
@@ -514,15 +336,8 @@ module.exports = {
   repeatY: {
     type: 'coord',
     inputs: [
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      }, {
-        name: 'offset',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'reps', type: 'float', default: 3.0 },
+      { name: 'offset', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 repeatY(vec2 _st, float reps, float offset){
       vec2 st = _st * vec2(1.0, reps);
@@ -534,20 +349,9 @@ module.exports = {
   modulateRepeatY: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 0.5
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'reps', type: 'float', default: 3.0 },
+      { name: 'offset', type: 'float', default: 0.5 }
     ],
     glsl: `vec2 modulateRepeatY(vec2 _st, vec4 c1, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
@@ -559,11 +363,7 @@ module.exports = {
   kaleid: {
     type: 'coord',
     inputs: [
-      {
-        name: 'nSides',
-        type: 'float',
-        default: 4.0
-      }
+      { name: 'nSides', type: 'float', default: 4.0 }
     ],
     glsl: `vec2 kaleid(vec2 st, float nSides){
       st -= 0.5;
@@ -578,15 +378,8 @@ module.exports = {
   modulateKaleid: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'nSides',
-        type: 'float',
-        default: 4.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'nSides', type: 'float', default: 4.0 }
     ],
     glsl: `vec2 modulateKaleid(vec2 st, vec4 c1, float nSides){
       st -= 0.5;
@@ -601,16 +394,8 @@ module.exports = {
   scrollX: {
     type: 'coord',
     inputs: [
-      {
-        name: 'scrollX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'scrollX', type: 'float', default: 0.5 },
+      { name: 'speed', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 scrollX(vec2 st, float amount, float speed){
       st.x += amount + time*speed;
@@ -620,20 +405,9 @@ module.exports = {
   modulateScrollX: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'scrollX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'scrollX', type: 'float', default: 0.5 },
+      { name: 'speed', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 modulateScrollX(vec2 st, vec4 c1, float amount, float speed){
       st.x += c1.r*amount + time*speed;
@@ -643,16 +417,8 @@ module.exports = {
   scrollY: {
     type: 'coord',
     inputs: [
-      {
-        name: 'scrollY',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'scrollY', type: 'float', default: 0.5 },
+      { name: 'speed', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 scrollY(vec2 st, float amount, float speed){
       st.y += amount + time*speed;
@@ -662,20 +428,9 @@ module.exports = {
   modulateScrollY: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'scrollY',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'scrollY', type: 'float', default: 0.5 },
+      { name: 'speed', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 modulateScrollY(vec2 st, vec4 c1, float amount, float speed){
       st.y += c1.r*amount + time*speed;
@@ -685,15 +440,8 @@ module.exports = {
   add: {
     type: 'combine',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.5
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'amount', type: 'float', default: 0.5 }
     ],
     glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
             return (c0+c1)*amount + c0*(1.0-amount);
@@ -702,10 +450,7 @@ module.exports = {
   layer: {
     type: 'combine',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      }
+      { name: 'color', type: 'vec4' }
     ],
     glsl: `vec4 layer(vec4 c0, vec4 c1){
         return vec4(mix(c0.rgb, c1.rgb, c1.a), c0.a+c1.a);
@@ -715,15 +460,8 @@ module.exports = {
   blend: {
     type: 'combine',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.5
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'amount', type: 'float', default: 0.5 }
     ],
     glsl: `vec4 blend(vec4 c0, vec4 c1, float amount){
       return c0*(1.0-amount)+c1*amount;
@@ -732,15 +470,8 @@ module.exports = {
   mult: {
     type: 'combine',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'amount', type: 'float', default: 1.0 }
     ],
     glsl: `vec4 mult(vec4 c0, vec4 c1, float amount){
       return c0*(1.0-amount)+(c0*c1)*amount;
@@ -750,10 +481,7 @@ module.exports = {
   diff: {
     type: 'combine',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      }
+      { name: 'color', type: 'vec4' }
     ],
     glsl: `vec4 diff(vec4 c0, vec4 c1){
       return vec4(abs(c0.rgb-c1.rgb), max(c0.a, c1.a));
@@ -764,15 +492,8 @@ module.exports = {
   modulate: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.1
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'amount', type: 'float', default: 0.1 }
     ],
     glsl: `vec2 modulate(vec2 st, vec4 c1, float amount){
           //  return fract(st+(c1.xy-0.5)*amount);
@@ -782,20 +503,9 @@ module.exports = {
   modulateScale: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'multiple',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 1.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'multiple', type: 'float', default: 1.0 },
+      { name: 'offset', type: 'float', default: 1.0 }
     ],
     glsl: `vec2 modulateScale(vec2 st, vec4 c1, float multiple, float offset){
       vec2 xy = st - vec2(0.5);
@@ -807,20 +517,9 @@ module.exports = {
   modulatePixelate: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'multiple',
-        type: 'float',
-        default: 10.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 3.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'multiple', type: 'float', default: 10.0 },
+      { name: 'offset', type: 'float', default: 3.0 }
     ],
     glsl: `vec2 modulatePixelate(vec2 st, vec4 c1, float multiple, float offset){
       vec2 xy = vec2(offset + c1.x*multiple, offset + c1.y*multiple);
@@ -830,20 +529,9 @@ module.exports = {
   modulateRotate: {
     type: 'combineCoord',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'multiple',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 0.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'multiple', type: 'float', default: 1.0 },
+      { name: 'offset', type: 'float', default: 0.0 }
     ],
     glsl: `vec2 modulateRotate(vec2 st, vec4 c1, float multiple, float offset){
         vec2 xy = st - vec2(0.5);
@@ -857,15 +545,8 @@ module.exports = {
     type: 'combineCoord',
     notes: 'changes coordinates based on hue of second input. Based on: https://www.shadertoy.com/view/XtcSWM',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
+      { name: 'color', type: 'vec4' },
+      { name: 'amount', type: 'float', default: 1.0 }
     ],
     glsl: `vec2 modulateHue(vec2 st, vec4 c1, float amount){
 
@@ -875,11 +556,7 @@ module.exports = {
   invert: {
     type: 'color',
     inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
+      { name: 'amount', type: 'float', default: 1.0 }
     ],
     glsl: `vec4 invert(vec4 c0, float amount){
       return vec4((1.0-c0.rgb)*amount + c0.rgb*(1.0-amount), c0.a);
@@ -888,11 +565,7 @@ module.exports = {
   contrast: {
     type: 'color',
     inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.6
-      }
+      { name: 'amount', type: 'float', default: 1.6 }
     ],
     glsl: `vec4 contrast(vec4 c0, float amount) {
       vec4 c = (c0-vec4(0.5))*vec4(amount) + vec4(0.5);
@@ -903,11 +576,7 @@ module.exports = {
   brightness: {
     type: 'color',
     inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.4
-      }
+      { name: 'amount', type: 'float', default: 0.4 }
     ],
     glsl: `vec4 brightness(vec4 c0, float amount){
       return vec4(c0.rgb + vec3(amount), c0.a);
@@ -924,10 +593,7 @@ module.exports = {
   mask: {
     type: 'combine',
     inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      }
+      { name: 'color', type: 'vec4' }
     ],
     glsl: `vec4 mask(vec4 c0, vec4 c1){
       float a = luminance(c1.rgb);
@@ -937,16 +603,8 @@ module.exports = {
   luma: {
     type: 'color',
     inputs: [
-      {
-        name: 'threshold',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'tolerance',
-        type: 'float',
-        default: 0.1
-      }
+      { name: 'threshold', type: 'float', default: 0.5 },
+      { name: 'tolerance', type: 'float', default: 0.1 }
     ],
     glsl: `vec4 luma(vec4 c0, float threshold, float tolerance){
       float a = smoothstep(threshold-tolerance, threshold+tolerance, luminance(c0.rgb));
@@ -956,15 +614,8 @@ module.exports = {
   thresh: {
     type: 'color',
     inputs: [
-      {
-        name: 'threshold',
-        type: 'float',
-        default: 0.5
-      }, {
-        name: 'tolerance',
-        type: 'float',
-        default: 0.04
-      }
+      { name: 'threshold', type: 'float', default: 0.5 },
+      { name: 'tolerance', type: 'float', default: 0.04 }
     ],
     glsl: `vec4 thresh(vec4 c0, float threshold, float tolerance){
       return vec4(vec3(smoothstep(threshold-tolerance, threshold+tolerance, luminance(c0.rgb))), c0.a);
@@ -973,26 +624,10 @@ module.exports = {
   color: {
     type: 'color',
     inputs: [
-      {
-        name: 'r',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'g',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'b',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'a',
-        type: 'float',
-        default: 1.0
-      }
+      { name: 'r', type: 'float', default: 1.0 },
+      { name: 'g', type: 'float', default: 1.0 },
+      { name: 'b', type: 'float', default: 1.0 },
+      { name: 'a', type: 'float', default: 1.0 }
     ],
     notes: 'https://www.youtube.com/watch?v=FpOEtm9aX0M',
     glsl: `vec4 color(vec4 c0, float _r, float _g, float _b, float _a){
@@ -1027,11 +662,7 @@ module.exports = {
   saturate: {
     type: 'color',
     inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 2.0
-      }
+      { name: 'amount', type: 'float', default: 2.0 }
     ],
     glsl: `vec4 saturate(vec4 c0, float amount){
       const vec3 W = vec3(0.2125, 0.7154, 0.0721);
@@ -1042,11 +673,7 @@ module.exports = {
   hue: {
     type: 'color',
     inputs: [
-      {
-        name: 'hue',
-        type: 'float',
-        default: 0.4
-      }
+      { name: 'hue', type: 'float', default: 0.4 }
     ],
     glsl: `vec4 hue(vec4 c0, float hue){
       vec3 c = _rgbToHsv(c0.rgb);
@@ -1058,11 +685,7 @@ module.exports = {
   colorama: {
     type: 'color',
     inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.005
-      }
+      { name: 'amount', type: 'float', default: 0.005 }
     ],
     glsl: `vec4 colorama(vec4 c0, float amount){
       vec3 c = _rgbToHsv(c0.rgb);
