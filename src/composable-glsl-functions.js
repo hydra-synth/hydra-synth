@@ -97,8 +97,8 @@ module.exports = {
     }`,
     example: `
       // noise interpolating between different scales and offsets
-       noise( ({time}) => Math.sin(time/10)*50 , ({time}) => Math.sin(time/2)/500 )
-       .out(o0)`,
+      noise( ({time}) => Math.sin(time/10)*50 , ({time}) => Math.sin(time/2)/500 )
+      .out(o0)`,
   },
   voronoi: {
     type: 'src',
@@ -199,13 +199,13 @@ module.exports = {
 
       // a... rainbow ball?
       shape(5,0.5,0.1).repeat(19,19)
-      .mult(osc(10,1,2))
-      .rotate( ({time}) => time%360 )
-      .scrollX(1,-0.25)
-      .mult(shape(15,0.3,0.01)
-            .rotate( ({time}) => time%360 )
-            .scrollX(1,-0.25))
-      .out(o0)`,
+        .mult(osc(10,1,2))
+        .rotate( ({time}) => time%360 )
+        .scrollX(1,-0.25)
+        .mult(shape(15,0.3,0.01)
+              .rotate( ({time}) => time%360 )
+              .scrollX(1,-0.25))
+        .out(o0)`,
   },
   gradient: {
     type: 'src',
@@ -222,10 +222,10 @@ module.exports = {
   src: {
     type: 'src',
     inputs: [
-      { name: 'tex', type: 'texture' }
+      { name: 'input', type: 'input (examples: `o0`, `s1`)' }
     ],
     description:
-      'See hydra-examples repository',
+      'See `hydra-examples` repository',
     glsl: `vec4 src(vec2 _st, sampler2D _tex){
       //  vec2 uv = gl_FragCoord.xy/vec2(1280., 720.);
       return texture2D(_tex, fract(_st));
@@ -266,8 +266,8 @@ module.exports = {
       osc(50).rotate( ({time}) => time%360 ).out(o0)
 
       osc(10,1,1)
-      .rotate( ({time}) => time%360, ({time}) => Math.sin(time*0.1)*0.05 )
-      .out(o0)`,
+        .rotate( ({time}) => time%360, ({time}) => Math.sin(time*0.1)*0.05 )
+        .out(o0)`,
   },
   scale: {
     type: 'coord',
@@ -291,12 +291,12 @@ module.exports = {
       shape().scale(1.5,1,1).out()
 
       shape().scale(1.5,[0.25,0.5,0.75,1].fast(0.25),[3,2,1])
-      .invert([0,1].fast(0.25))
-      .kaleid(5)
-      .kaleid(12)
-      .scale( ({time})=>Math.sin(time/5)*0.5 )
-      .rotate(1,1)
-      .out(o0)`,
+        .invert([0,1].fast(0.25))
+        .kaleid(5)
+        .kaleid(12)
+        .scale( ({time})=>Math.sin(time/5)*0.5 )
+        .rotate(1,1)
+        .out(o0)`,
   },
   pixelate: {
     type: 'coord',
@@ -305,7 +305,7 @@ module.exports = {
       { name: 'pixelY', type: 'float', default: 20 }
     ],
     description:
-      'Pixelate texture with pixelX segments and pixelY segments.',
+      'Pixelate texture with `pixelX` segments and `pixelY` segments.',
     glsl: `vec2 pixelate(vec2 st, float pixelX, float pixelY){
       vec2 xy = vec2(pixelX, pixelY);
       return (floor(st * xy) + 0.5)/xy;
@@ -315,12 +315,12 @@ module.exports = {
       noise().pixelate(20,20).out(o0)
 
       noise()
-      .mult(osc(10,0.25,1))
-      .scrollY(1,0.25)
-      .pixelate([100,40,20,70].fast(0.25))
-      .modulateRotate(src(o0).scale(0.5),0.125)
-      .diff(src(o0).rotate([-0.05,0.05].fast(0.125)))
-      .out(o0)`,
+        .mult(osc(10,0.25,1))
+        .scrollY(1,0.25)
+        .pixelate([100,40,20,70].fast(0.25))
+        .modulateRotate(src(o0).scale(0.5),0.125)
+        .diff(src(o0).rotate([-0.05,0.05].fast(0.125)))
+        .out(o0)`,
   },
   posterize: {
     type: 'color',
@@ -380,20 +380,23 @@ module.exports = {
 
       // dogtooth factory
       shape(1.25,0.5,0.25)
-      .repeat(3, 3)
-      .scale(2)
-      .repeat(5, 5, ({time}) => Math.sin(time), ({time}) => Math.sin(time/2))
-      .out(o0)`,
+        .repeat(3, 3)
+        .scale(2)
+        .repeat(5, 5, ({time}) => Math.sin(time), ({time}) => Math.sin(time/2))
+        .out(o0)`,
   },
   modulateRepeat: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'repeatX', type: 'float', default: 3.0 },
       { name: 'repeatY', type: 'float', default: 3.0 },
       { name: 'offsetX', type: 'float', default: 0.5 },
       { name: 'offsetY', type: 'float', default: 0.5 }
     ],
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec2 modulateRepeat(vec2 _st, vec4 c1, float repeatX, float repeatY, float offsetX, float offsetY){
         vec2 st = _st * vec2(repeatX, repeatY);
         st.x += step(1., mod(st.y,2.0)) + c1.r * offsetX;
@@ -403,9 +406,9 @@ module.exports = {
     example: `
       // default
       shape(4,0.9)
-      .mult(osc(3,0.5,1))
-      .modulateRepeat(osc(10), 3.0, 3.0, 0.5, 0.5)
-      .out(o0)`,
+        .mult(osc(3,0.5,1))
+        .modulateRepeat(osc(10), 3.0, 3.0, 0.5, 0.5)
+        .out(o0)`,
   },
   repeatX: {
     type: 'coord',
@@ -425,17 +428,20 @@ module.exports = {
       shape().repeatX(3.0, 0.0).out()
 
       osc(5,0,1)
-      .rotate(1.57)
-      .repeatX([1,2,5,10], ({time}) => Math.sin(time))
-      .out()`,
+        .rotate(1.57)
+        .repeatX([1,2,5,10], ({time}) => Math.sin(time))
+        .out()`,
   },
   modulateRepeatX: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'reps', type: 'float', default: 3.0 },
       { name: 'offset', type: 'float', default: 0.5 }
     ],
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec2 modulateRepeatX(vec2 _st, vec4 c1, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
       //  float f =  mod(_st.y,2.0);
@@ -446,10 +452,10 @@ module.exports = {
     example: `
       // straight lines illusion
       shape(4,0.9)
-      .mult(osc(4,0.25,1))
-      .modulateRepeatX(osc(10), 5.0, ({time}) => Math.sin(time) * 5)
-      .scale(1,0.5,0.05)
-      .out(o0)`,
+        .mult(osc(4,0.25,1))
+        .modulateRepeatX(osc(10), 5.0, ({time}) => Math.sin(time) * 5)
+        .scale(1,0.5,0.05)
+        .out(o0)`,
   },
   repeatY: {
     type: 'coord',
@@ -468,16 +474,19 @@ module.exports = {
       shape().repeatY(3.0, 0.0).out()
 
       osc(5,0,1)
-      .repeatY([1,2,5,10], ({time}) => Math.sin(time))
-      .out()`,
+        .repeatY([1,2,5,10], ({time}) => Math.sin(time))
+        .out()`,
   },
   modulateRepeatY: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'reps', type: 'float', default: 3.0 },
       { name: 'offset', type: 'float', default: 0.5 }
     ],
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec2 modulateRepeatY(vec2 _st, vec4 c1, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
       //  float f =  mod(_st.y,2.0);
@@ -487,10 +496,10 @@ module.exports = {
     example: `
       // morphing grid
       shape(4,0.9)
-      .mult(osc(4,0.25,1))
-      .modulateRepeatY(osc(10), 5.0, ({time}) => Math.sin(time) * 5)
-      .scale(1,0.5,0.05)
-      .out(o0)`,
+        .mult(osc(4,0.25,1))
+        .modulateRepeatY(osc(10), 5.0, ({time}) => Math.sin(time) * 5)
+        .scale(1,0.5,0.05)
+        .out(o0)`,
   },
   kaleid: {
     type: 'coord',
@@ -498,7 +507,7 @@ module.exports = {
       { name: 'nSides', type: 'float', default: 4.0 }
     ],
     description:
-      'Kaleidoscope effect with nSides repetition.',
+      'Kaleidoscope effect with `nSides` repetition.',
     glsl: `vec2 kaleid(vec2 st, float nSides){
       st -= 0.5;
       float r = length(st);
@@ -513,11 +522,14 @@ module.exports = {
   modulateKaleid: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'nSides', type: 'float', default: 4.0 }
     ],
-    description:
-      'See also: kaleid.',
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).
+
+      See also: [\`kaleid\`](#kaleid).`,
     glsl: `vec2 modulateKaleid(vec2 st, vec4 c1, float nSides){
       st -= 0.5;
       float r = length(st);
@@ -529,11 +541,11 @@ module.exports = {
     }`,
     example: `
       osc(9,-0.1,0.1)
-      .modulateKaleid(osc(11,0.5,0),50)
-      .scale(0.1,0.3)
-      .modulate(noise(5,0.1))
-      .mult(solid(1,1,0.3))
-      .out(o0)`,
+        .modulateKaleid(osc(11,0.5,0),50)
+        .scale(0.1,0.3)
+        .modulate(noise(5,0.1))
+        .mult(solid(1,1,0.3))
+        .out(o0)`,
   },
   scrollX: {
     type: 'coord',
@@ -556,22 +568,25 @@ module.exports = {
       gradient(1).scrollX(0, ({time}) => Math.sin(time*0.05)*0.05 ).out()
 
       gradient(0.125)
-      .scrollX(0, ({time}) => Math.sin(time*0.05)*0.05 )
-      .scrollY(0, ({time}) => Math.sin(time*0.01)*-0.07 )
-      .pixelate([5,2,10],[15,8])
-      .scale(0.15)
-      .modulate(noise(1,0.25))
-      .out()`,
+        .scrollX(0, ({time}) => Math.sin(time*0.05)*0.05 )
+        .scrollY(0, ({time}) => Math.sin(time*0.01)*-0.07 )
+        .pixelate([5,2,10],[15,8])
+        .scale(0.15)
+        .modulate(noise(1,0.25))
+        .out()`,
   },
   modulateScrollX: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'scrollX', type: 'float', default: 0.5 },
       { name: 'speed', type: 'float', default: 0.0 }
     ],
-    description:
-      'See also: scrollX',
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).
+
+      See also: [\`scrollX\`](#scrollX)`,
     glsl: `vec2 modulateScrollX(vec2 st, vec4 c1, float amount, float speed){
       st.x += c1.r*amount + time*speed;
       return fract(st);
@@ -579,13 +594,13 @@ module.exports = {
     example: `
       // default
       voronoi(25,0,0)
-      .modulateScrollX(osc(10),0.5,0)
-      .out(o0)
+        .modulateScrollX(osc(10),0.5,0)
+        .out(o0)
 
       // different scroll and speed
       voronoi(25,0,0)
-      .modulateScrollX(osc(10),0.5,0.25)
-      .out(o0)`,
+        .modulateScrollX(osc(10),0.5,0.25)
+        .out(o0)`,
   },
   scrollY: {
     type: 'coord',
@@ -608,22 +623,25 @@ module.exports = {
       gradient(1).scrollY(0, ({time}) => Math.sin(time*0.05)*0.05 ).out()
 
       gradient(0.125)
-      .scrollX(0, ({time}) => Math.sin(time*0.05)*0.05 )
-      .scrollY(0, ({time}) => Math.sin(time*0.01)*-0.07 )
-      .pixelate([5,2,10],[15,8])
-      .scale(0.15)
-      .modulate(noise(1,0.25))
-      .out()`,
+        .scrollX(0, ({time}) => Math.sin(time*0.05)*0.05 )
+        .scrollY(0, ({time}) => Math.sin(time*0.01)*-0.07 )
+        .pixelate([5,2,10],[15,8])
+        .scale(0.15)
+        .modulate(noise(1,0.25))
+        .out()`,
   },
   modulateScrollY: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'scrollY', type: 'float', default: 0.5 },
       { name: 'speed', type: 'float', default: 0.0 }
     ],
-    description:
-      'See also: scrollY',
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).
+
+      See also: [\`scrollY\`](#scrollY)`,
     glsl: `vec2 modulateScrollY(vec2 st, vec4 c1, float amount, float speed){
       st.y += c1.r*amount + time*speed;
       return fract(st);
@@ -631,22 +649,25 @@ module.exports = {
     example: `
       // default
       voronoi(25,0,0)
-      .modulateScrollY(osc(10),0.5,0)
-      .out(o0)
+        .modulateScrollY(osc(10),0.5,0)
+        .out(o0)
 
       // different scroll and speed
       voronoi(25,0,0)
-      .modulateScrollY(osc(10),0.5,0.25)
-      .out(o0)`,
+        .modulateScrollY(osc(10),0.5,0.25)
+        .out(o0)`,
   },
   add: {
     type: 'combine',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'amount', type: 'float', default: 0.5 }
     ],
-    description:
-      'Add textures.',
+    description: `
+      Add textures.
+
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
             return (c0+c1)*amount + c0*(1.0-amount);
           }`,
@@ -658,10 +679,14 @@ module.exports = {
   layer: {
     type: 'combine',
     inputs: [
-      { name: 'color', type: 'vec4' }
+      { name: 'texture', type: 'vec4' }
+
     ],
     description:
-      'Overlay texture based on alpha value.',
+      `Overlay texture based on alpha value.
+
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec4 layer(vec4 c0, vec4 c1){
         return vec4(mix(c0.rgb, c1.rgb, c1.a), c0.a+c1.a);
     }`,
@@ -670,11 +695,14 @@ module.exports = {
   blend: {
     type: 'combine',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'amount', type: 'float', default: 0.5 }
     ],
-    description:
-      'Blend textures.',
+    description: `
+      Blend textures.
+
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec4 blend(vec4 c0, vec4 c1, float amount){
       return c0*(1.0-amount)+c1*amount;
     }`,
@@ -686,11 +714,14 @@ module.exports = {
   mult: {
     type: 'combine',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'amount', type: 'float', default: 1.0 }
     ],
-    description:
-      'Multiply images and blend with the texture by amount.',
+    description: `
+      Multiply images and blend with the texture by \`amount\`.
+
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec4 mult(vec4 c0, vec4 c1, float amount){
       return c0*(1.0-amount)+(c0*c1)*amount;
     }`,
@@ -700,10 +731,13 @@ module.exports = {
   diff: {
     type: 'combine',
     inputs: [
-      { name: 'color', type: 'vec4' }
+      { name: 'texture', type: 'vec4' }
     ],
-    description:
-      'Return difference of textures.',
+    description: `
+      Return difference of textures.
+
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec4 diff(vec4 c0, vec4 c1){
       return vec4(abs(c0.rgb-c1.rgb), max(c0.a, c1.a));
     }`,
@@ -711,21 +745,26 @@ module.exports = {
       osc(9,0.1,1).diff(osc(13,0.5,5)).out()
 
       osc(1,1,2)
-      .diff(shape(6,1.1,0.01)
-            .scale(({time})=>Math.sin(time)*0.05 + 0.9)
-            .kaleid(15)
-            .rotate(({time})=>time%360))
-      .out()`,
+        .diff(shape(6,1.1,0.01)
+              .scale(({time})=>Math.sin(time)*0.05 + 0.9)
+              .kaleid(15)
+              .rotate(({time})=>time%360))
+        .out()`,
   },
 
   modulate: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'amount', type: 'float', default: 0.1 }
     ],
-    description:
-      'Modulate texture. More about modulation at: https://lumen-app.com/guide/modulation/',
+    description: `
+      Modulate texture.
+
+      More about modulation at: <https://lumen-app.com/guide/modulation/>
+
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec2 modulate(vec2 st, vec4 c1, float amount){
           //  return fract(st+(c1.xy-0.5)*amount);
               return st + c1.xy*amount;
@@ -733,24 +772,27 @@ module.exports = {
     example: `
       // chocolate whirlpool
       voronoi()
-      .color(0.9,0.25,0.15)
-      .rotate(({time})=>(time%360)/2)
-      .modulate(osc(25,0.1,0.5)
-                  .kaleid(50)
-                  .scale(({time})=>Math.sin(time*1)*0.5+1)
-                  .modulate(noise(0.6,0.5)),
-                  0.5)
-      .out(o0)`,
+        .color(0.9,0.25,0.15)
+        .rotate(({time})=>(time%360)/2)
+        .modulate(osc(25,0.1,0.5)
+                    .kaleid(50)
+                    .scale(({time})=>Math.sin(time*1)*0.5+1)
+                    .modulate(noise(0.6,0.5)),
+                    0.5)
+        .out(o0)`,
   },
   modulateScale: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'multiple', type: 'float', default: 1.0 },
       { name: 'offset', type: 'float', default: 1.0 }
     ],
-    description:
-      'See also: scale',
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).
+
+      See also: [\`scale\`](#scale).`,
     glsl: `vec2 modulateScale(vec2 st, vec4 c1, float multiple, float offset){
       vec2 xy = st - vec2(0.5);
       xy*=(1.0/vec2(offset + multiple*c1.r, offset + multiple*c1.g));
@@ -760,18 +802,21 @@ module.exports = {
     example: `
       // cosmic radiation
       gradient(5).repeat(50,50).kaleid([3,5,7,9].fast(0.5))
-      .modulateScale(osc(4,-0.5,0).kaleid(50).scale(0.5),15,0)
-      .out(o0)`,
+        .modulateScale(osc(4,-0.5,0).kaleid(50).scale(0.5),15,0)
+        .out(o0)`,
   },
   modulatePixelate: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'multiple', type: 'float', default: 10.0 },
       { name: 'offset', type: 'float', default: 3.0 }
     ],
-    description:
-      'See also: pixelate',
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).
+
+      See also: [\`pixelate\`](#pixelate)`,
     glsl: `vec2 modulatePixelate(vec2 st, vec4 c1, float multiple, float offset){
       vec2 xy = vec2(offset + c1.x*multiple, offset + c1.y*multiple);
       return (floor(st * xy) + 0.5)/xy;
@@ -779,18 +824,21 @@ module.exports = {
     example: `
       // what lies beneath
       voronoi(10,1,5).brightness(()=>Math.random()*0.15)
-      .modulatePixelate(noise(25,0.5),100)
-      .out(o0)`,
+        .modulatePixelate(noise(25,0.5),100)
+        .out(o0)`,
   },
   modulateRotate: {
     type: 'combineCoord',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'multiple', type: 'float', default: 1.0 },
       { name: 'offset', type: 'float', default: 0.0 }
     ],
-    description:
-      'See also: rotate',
+    description: `
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).
+
+      See also: [\`rotate\`](#rotate)`,
     glsl: `vec2 modulateRotate(vec2 st, vec4 c1, float multiple, float offset){
         vec2 xy = st - vec2(0.5);
         float angle = offset + c1.x * multiple;
@@ -801,19 +849,21 @@ module.exports = {
     example: `
       // wormhole
       voronoi(100,3,5)
-      .modulateRotate(osc(1,0.5,0).kaleid(50).scale(0.5),15,0)
-      .mult(osc(50,-0.1,8).kaleid(9))
-      .out(o0)`,
+        .modulateRotate(osc(1,0.5,0).kaleid(50).scale(0.5),15,0)
+        .mult(osc(50,-0.1,8).kaleid(9))
+        .out(o0)`,
   },
   modulateHue: {
     type: 'combineCoord',
-    notes: 'changes coordinates based on hue of second input. Based on: https://www.shadertoy.com/view/XtcSWM',
     inputs: [
-      { name: 'color', type: 'vec4' },
+      { name: 'texture', type: 'vec4' },
       { name: 'amount', type: 'float', default: 1.0 }
     ],
-    description:
-      'Changes coordinates based on hue of second input. Based on:https://www.shadertoy.com/view/XtcSWM',
+    description: `
+      Changes coordinates based on hue of second input. Based on: https://www.shadertoy.com/view/XtcSWM
+
+      The \`texture\` parameter can be any kind of [source](#sources), for
+      example a [\`color\`](#color), [\`src\`](#src), or [\`shape\`](#shape).`,
     glsl: `vec2 modulateHue(vec2 st, vec4 c1, float amount){
 
             return st + (vec2(c1.g - c1.r, c1.b - c1.g) * amount * 1.0/resolution.xy);
@@ -854,9 +904,10 @@ module.exports = {
     glsl: `vec4 brightness(vec4 c0, float amount){
       return vec4(c0.rgb + vec3(amount), c0.a);
     }`,
-    example: `osc(20,0,2)
-      .brightness( ({time}) => Math.sin(time) )
-      .out(o0)`,
+    example: `
+      osc(20,0,2)
+        .brightness( ({time}) => Math.sin(time) )
+        .out(o0)`,
   },
   luminance: {
     type: 'util',
@@ -868,7 +919,9 @@ module.exports = {
   mask: {
     type: 'combine',
     inputs: [
-      { name: 'color', type: 'vec4' }
+      { name: 'texture', type: 'vec4' },
+      { name: 'reps', type: 'float', default: 3.0 },
+      { name: 'offset', type: 'float', default: 0.5 },
     ],
     glsl: `vec4 mask(vec4 c0, vec4 c1){
       float a = luminance(c1.rgb);
@@ -880,11 +933,11 @@ module.exports = {
 
       // algae pulse
       osc(10,-0.25,1).color(0,0,1).saturate(2).kaleid(50)
-      .mask(noise(25,2).modulateScale(noise(0.25,0.05)))
-      .modulateScale(osc(6,-0.5,2).kaleid(50))
-      .mult(osc(3,-0.25,2).kaleid(50))
-      .scale(0.5,0.5,0.75)
-      .out()`,
+        .mask(noise(25,2).modulateScale(noise(0.25,0.05)))
+        .modulateScale(osc(6,-0.5,2).kaleid(50))
+        .mult(osc(3,-0.25,2).kaleid(50))
+        .scale(0.5,0.5,0.75)
+        .out()`,
   },
   luma: {
     type: 'color',
@@ -916,8 +969,8 @@ module.exports = {
       noise(3,0.1).thresh(0.5,0.04).out(o0)
 
       noise(3,0.1)
-      .thresh( ({time})=>Math.sin(time/2) , [0.04,0.25,0.75,1].fast(0.25) )
-      .out(o0)`,
+        .thresh( ({time})=>Math.sin(time/2) , [0.04,0.25,0.75,1].fast(0.25) )
+        .out(o0)`,
   },
   color: {
     type: 'color',
@@ -1001,8 +1054,8 @@ module.exports = {
       // colorama sequence of 0.005, 0.5, 1.0 at 1/8 speed
       // output to buffer o0
       osc(20)
-      .color([1,0,0,1,0],[0,1,0,1,0],[0,0,1,1,0])
-      .colorama([0.005,0.33,0.66,1.0].fast(0.125))
-      .out(o0)`,
+        .color([1,0,0,1,0],[0,1,0,1,0],[0,0,1,1,0])
+        .colorama([0.005,0.33,0.66,1.0].fast(0.125))
+        .out(o0)`,
   }
 }
