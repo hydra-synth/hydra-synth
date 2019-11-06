@@ -222,7 +222,7 @@ module.exports = {
   src: {
     type: 'src',
     inputs: [
-      { name: 'input', type: 'input (examples: `o0`, `s1`)' }
+      { name: 'tex', type: 'texture' }
     ],
     description:
       'See `hydra-examples` repository',
