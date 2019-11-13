@@ -919,9 +919,7 @@ module.exports = {
   mask: {
     type: 'combine',
     inputs: [
-      { name: 'texture', type: 'vec4' },
-      { name: 'reps', type: 'float', default: 3.0 },
-      { name: 'offset', type: 'float', default: 0.5 },
+      { name: 'texture', type: 'vec4' }
     ],
     glsl: `vec4 mask(vec4 c0, vec4 c1){
       float a = luminance(c1.rgb);
