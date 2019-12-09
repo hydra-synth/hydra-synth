@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "example": "budo ./example/index.js:bundle.js --css ./example/style.css --ssl --open --live --port 8000-- -t [ babelify --presets [env] ]"
+    "example": "budo ./example/index.js:bundle.js --css ./example/style.css --ssl --open --live --port 8000-- -t [ babelify --presets [env] ]",
+    "build": "browserify index.js -o dist/hydra-synth.js -t [ babelify --presets [env] ]"
   },
   "repository": {
     "type": "git",
