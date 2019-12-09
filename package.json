@@ -39,7 +39,7 @@
     "babel-core": "^6.26.0",
     "babel-preset-env": "^1.6.1",
     "babelify": "^8.0.0",
-    "budo": "^11.3.2",
+    "budo": "^11.6.3",
     "codemirror": "^5.36.0",
     "rtc-patch-bay": "^1.0.0"
   }
