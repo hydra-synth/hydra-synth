@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "example": "budo ./example/index.js:bundle.js --css ./example/style.css --ssl --open --live --port 8000-- -t [ babelify --presets [env] ]",
-    "example-editor": "budo ./example/editor-example.js --ssl --open --live "
+    "build-dev": "browserify index.js -o dist/hydra-synth.js --standalone Hydra --debug -t [ babelify --presets [env] ]",
+    "build-min": "browserify index.js -o dist/hydra-synth.min.js --standalone Hydra -t [ babelify --presets [env] ] --plugin tinyify",
+    "build": "npm run build-dev && npm run build-min"
   },
   "repository": {
     "type": "git",
@@ -26,7 +28,6 @@
   },
   "homepage": "https://github.com/ojack/hydra-synth#readme",
   "dependencies": {
-    "budo": "^11.3.2",
     "enumerate-devices": "^1.1.1",
     "meyda": "^4.1.3",
     "mouse-change": "^1.4.0",
@@ -39,7 +40,10 @@
     "babel-core": "^6.26.0",
     "babel-preset-env": "^1.6.1",
     "babelify": "^8.0.0",
+    "browserify": "^16.5.0",
+    "budo": "^11.6.3",
     "codemirror": "^5.36.0",
-    "rtc-patch-bay": "^1.0.0"
+    "rtc-patch-bay": "^1.0.0",
+    "tinyify": "^2.5.2"
   }
 }
