@@ -269,6 +269,67 @@ module.exports = {
         .rotate( ({time}) => time%360, ({time}) => Math.sin(time*0.1)*0.05 )
         .out(o0)`,
   },
+  hexaghost: { // https://youtu.be/VmrIDyYiJBA?t=867
+    type: 'src',
+    inputs: [
+      { name: 'tiling', type: 'float', default: 5.0 },
+      { name: 'velocity', type: 'float', default: 0.0 },
+      { name: 'offsetX', type: 'float', default: 0.5 },
+      { name: 'offsetY', type: 'float', default: 0.5 },
+      { name: 'saturate', type: 'float', default: 1.0 }
+    ],
+    glsl: `float HexDist(vec2 p) {
+      p = abs(p);
+      float c = dot(p, normalize(vec2(1., 1.73)));
+      c = max(c, p.x);
+      return c;
+    }
+
+    vec4 hexaghost(vec2 _st, float tiling, float velocity, float offsetX, float offsetY, float saturate){
+      vec2 st = _st;
+
+      vec3 col = vec3(0);
+
+      vec2 uv = (st * 2.0 - 1.0) * 0.1;
+
+      uv *= tiling;
+
+      vec2 a = fract(uv) - fract(offsetX);
+      vec2 b = fract(uv-.5) - fract(offsetY);
+
+      vec2 gv;
+      if (length(a) < length(b)) {
+        gv = a;
+      } else {
+        gv = b;
+      }
+
+      float hex = HexDist(gv);
+      float fTime = (((sin(fract(time * velocity)*3.14) * 0.5)) * 2.);
+      col.rgb = abs(vec3(hex-fTime)) * saturate;
+      // col = vec3(fTime);
+      return vec4(col, 1.0);
+    }`,
+    example: `
+      // tiling
+      hexaghost([1,10,50,100,250].fast(2)).out(o0)
+
+      // frequency
+      hexaghost(5, [0.1, 0.5, 1].fast(2)).out(o0)
+
+      // offset
+      hexaghost(10, 0, ()=>time, ()=>time, 1.2).out(o0)
+
+      // sync
+      gradient(0.8)
+      .modulateRotate(hexaghost(100, 0.3, 0, 0.5, 2).thresh())
+      .out(o0)
+
+      // modulate
+      osc().
+      modulate(hexaghost(5, 0.1, ()=>time, ()=>time*0.9, 5))
+      .out(o0)`,
+  },
   scale: {
     type: 'coord',
     inputs: [
