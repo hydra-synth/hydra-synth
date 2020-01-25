@@ -320,12 +320,12 @@ module.exports = {
       // offset
       hexaghost(10, 0, ()=>time, ()=>time, 1.2).out(o0)
 
-      // sync
+      // modulate!
       gradient(0.8)
       .modulateRotate(hexaghost(100, 0.3, 0, 0.5, 2).thresh())
       .out(o0)
 
-      // modulate
+      // modulate! 2
       osc().
       modulate(hexaghost(5, 0.1, ()=>time, ()=>time*0.9, 5))
       .out(o0)`,
