@@ -307,7 +307,7 @@ module.exports = {
       float hex = HexDist(gv);
       float fTime = (((sin(fract(time * velocity)*3.14) * 0.5)) * 2.);
       col.rgb = abs(vec3(hex-fTime)) * saturate;
-      // col = vec3(fTime);
+
       return vec4(col, 1.0);
     }`,
     example: `
