@@ -2,11 +2,12 @@
 // 1. how to handle multi-pass renders
 // 2. how to handle vertex shaders
 
-module.exports = function (defaultOutput) {
+module.exports = function (defaultOutput, precision) {
 
   var Frag = function (shaderString) {
     var obj =  Object.create(Frag.prototype)
     obj.shaderString =   `
+    precision ${precision} float;
     void main () {
       vec2 st = gl_FragCoord.xy/resolution.xy;
       gl_FragColor = vec4(st, 1.0, 1.0);
@@ -18,7 +19,7 @@ module.exports = function (defaultOutput) {
 
   Frag.prototype.compile = function () {
     var frag = `
-    precision highp float;
+    precision ${precision} float;
     uniform float time;
     uniform vec2 resolution;
     varying vec2 uv;
@@ -34,7 +35,8 @@ module.exports = function (defaultOutput) {
     output.frag = frag
     var pass = {
       frag: frag,
-      uniforms: output.uniforms
+      uniforms: output.uniforms,
+      precision: precisionValue
     }
     console.log('rendering', pass)
     var passes = []

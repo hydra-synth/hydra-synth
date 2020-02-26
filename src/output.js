@@ -2,6 +2,7 @@ const transforms = require('./glsl-transforms.js')
 
 var Output = function (opts) {
   this.regl = opts.regl
+  this.precision = opts.precision
   this.positionBuffer = this.regl.buffer([
     [-2, 0],
     [0, -2],
@@ -56,7 +57,7 @@ Output.prototype.getTexture = function () {
 Output.prototype.clear = function () {
   this.transformIndex = 0
   this.fragHeader = `
-  precision highp float;
+  precision ${this.precision} float;
 
   uniform float time;
   varying vec2 uv;
@@ -68,7 +69,7 @@ Output.prototype.clear = function () {
   //   gl_FragColor = color;
   // }`
   this.vert = `
-  precision highp float;
+  precision ${this.precision} float;
   attribute vec2 position;
   varying vec2 uv;
 
