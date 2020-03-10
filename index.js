@@ -30,6 +30,7 @@ class HydraSynth {
     this.makeGlobal = makeGlobal
     this.renderAll = false
     this.detectAudio = detectAudio
+    this.loop = undefined
 
     // boolean to store when to save screenshot
     this.saveFrame = false
@@ -62,7 +63,9 @@ class HydraSynth {
     //  window.bpm = this.bpm
       window.bpm = this._setBpm.bind(this)
   //  }
-    if(autoLoop) loop(this.tick.bind(this)).start()
+    if(autoLoop){
+     this.loop = loop(this.tick.bind(this)).start()
+    }
   }
 
   getScreenImage(callback) {
