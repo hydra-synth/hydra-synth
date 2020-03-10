@@ -50,7 +50,15 @@ const seq = (arr = []) => ({time, bpm}) =>
     }
   }
   speed = speed ? speed : 1
-  return arr[Math.floor(time * speed * (bpm / 60) % (arr.length))]
+  if (arr.easingFunction) {
+    let t = (time * speed * (bpm / 60))
+    let start = arr[Math.floor(t) % arr.length]
+    let stop = arr[Math.ceil(t) % arr.length]
+    return arr.easingFunction(t%1.0) * (stop - start) + start;
+  }
+  else {
+	return arr[Math.floor(time * speed * (bpm / 60) % (arr.length))]
+  }
 }
 // when possible, reformats arguments to be the correct type
 // creates unique names for variables requiring a uniform to be passed in (i.e. a texture)
@@ -114,8 +122,16 @@ var GeneratorFactory = function (defaultOutput) {
   let self = this
   self.functions = {}
 
-
   window.frag = shaderManager(defaultOutput)
+
+  const easingFunctions = {
+	linear: t => t,
+	quad:  t => t<.5 ? 2*t*t : -1+(4-2*t)*t,
+	cubic: t => t<.5 ? 4*t*t*t : (t-1)*(2*t-2)*(2*t-2)+1,
+	quart: t => t<.5 ? 8*t*t*t*t : 1-8*(--t)*t*t*t,
+	quint: t => t<.5 ? 16*t*t*t*t*t : 1+16*(--t)*t*t*t*t,
+	sin: t => (1 + Math.sin(Math.PI*t-Math.PI/2))/2
+  }
 
   // extend Array prototype
   Array.prototype.fast = function(speed) {
@@ -125,6 +141,18 @@ var GeneratorFactory = function (defaultOutput) {
       speed = () => aspeed
     }
     this.speed = speed
+    return this
+  }
+
+  Array.prototype.easingFunction = false
+  
+  Array.prototype.ease = function(value = 'linear') {
+    if (typeof value == 'function') {
+      this.easingFunction = value
+    }
+    else {
+      this.easingFunction = easingFunctions[value]
+    }
     return this
   }
 
