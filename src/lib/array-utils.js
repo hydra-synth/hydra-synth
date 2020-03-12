@@ -46,19 +46,20 @@ module.exports = {
       return newArr
     }
   },
+  
   getValue: (arr = []) => ({time, bpm}) =>{
     let speed = arr._speed ? arr._speed : 1
     let smooth = arr._smooth ? arr._smooth : 0
     let ease = arr._ease ? arr._ease : easing['linear']
-    // console.log(smooth)
     let index = time * speed * (bpm / 60)
 
-    let currValue = arr[Math.floor(index % (arr.length))]
-    let nextValue = arr[Math.floor((index + 1) % (arr.length))]
-
-    let _t = (index%1)*smooth
-    let t = ease(_t)
-    //  console.log(arr, Math.floor(index/newArr.length), index/newArr.length)
-    return nextValue*t + currValue*(1-t)
+    if (smooth) {
+      let currValue = arr[Math.floor(index % (arr.length))]
+      let nextValue = arr[Math.floor((index + 1) % (arr.length))]
+      return ease(index%1) * (nextValue - currValue) + currValue
+    }
+    else {
+      return arr[Math.floor(index % (arr.length))]
+    }
   }
 }
