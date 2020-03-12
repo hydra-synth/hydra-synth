@@ -11,7 +11,6 @@ var map = (num, in_min, in_max, out_min, out_max) => {
 module.exports = {
   init: () => {
 
-
     Array.prototype.fast = function(speed = 1) {
       this._speed = speed
       return this
@@ -23,7 +22,11 @@ module.exports = {
     }
 
     Array.prototype.ease = function(ease) {
-      if(ease && easing[ease]) {
+      if (typeof ease == 'function') {
+        this._smooth = 1
+        this._ease = ease
+      }
+      else if (easing[ease]){
         this._smooth = 1
         this._ease = easing[ease]
       }
