@@ -21,7 +21,7 @@ module.exports = {
       return this
     }
 
-    Array.prototype.ease = function(ease) {
+    Array.prototype.ease = function(ease = 'linear') {
       if (typeof ease == 'function') {
         this._smooth = 1
         this._ease = ease
