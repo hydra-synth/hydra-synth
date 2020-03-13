@@ -53,13 +53,15 @@ module.exports = {
   getValue: (arr = []) => ({time, bpm}) =>{
     let speed = arr._speed ? arr._speed : 1
     let smooth = arr._smooth ? arr._smooth : 0
-    let ease = arr._ease ? arr._ease : easing['linear']
     let index = time * speed * (bpm / 60)
-
-    if (smooth) {
-      let currValue = arr[Math.floor(index % (arr.length))]
-      let nextValue = arr[Math.floor((index + 1) % (arr.length))]
-      return ease(index%1) * (nextValue - currValue) + currValue
+	
+    if (smooth!==0) {
+	  let ease = arr._ease ? arr._ease : easing['linear']
+	  let _index = index - (smooth / 2)
+      let currValue = arr[Math.floor(_index % (arr.length))]
+	  let nextValue = arr[Math.floor((_index + 1) % (arr.length))]
+	  let t = Math.min((_index%1)/smooth,1)
+	  return ease(t) * (nextValue - currValue) + currValue
     }
     else {
       return arr[Math.floor(index % (arr.length))]
