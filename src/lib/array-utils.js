@@ -33,6 +33,10 @@ module.exports = {
       return this
     }
 
+    Array.prototype.offset = function(offset = 0.5) {
+      this._offset = offset%1.0
+      return this
+    }
 
     // Array.prototype.bounce = function() {
     //   this.modifiers.bounce = true
@@ -53,15 +57,15 @@ module.exports = {
   getValue: (arr = []) => ({time, bpm}) =>{
     let speed = arr._speed ? arr._speed : 1
     let smooth = arr._smooth ? arr._smooth : 0
-    let index = time * speed * (bpm / 60)
-	
+    let index = time * speed * (bpm / 60) + (arr._offset || 0)
+
     if (smooth!==0) {
-	  let ease = arr._ease ? arr._ease : easing['linear']
-	  let _index = index - (smooth / 2)
+      let ease = arr._ease ? arr._ease : easing['linear']
+      let _index = index - (smooth / 2)
       let currValue = arr[Math.floor(_index % (arr.length))]
-	  let nextValue = arr[Math.floor((_index + 1) % (arr.length))]
-	  let t = Math.min((_index%1)/smooth,1)
-	  return ease(t) * (nextValue - currValue) + currValue
+      let nextValue = arr[Math.floor((_index + 1) % (arr.length))]
+      let t = Math.min((_index%1)/smooth,1)
+      return ease(t) * (nextValue - currValue) + currValue
     }
     else {
       return arr[Math.floor(index % (arr.length))]
