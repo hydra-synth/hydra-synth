@@ -22,8 +22,8 @@ GlslSource.prototype.out = function (_output) {
   var output = _output || this.defaultOutput
   var glsl = this.glsl(output)
   this.synth.currentFunctions = []
-  output.renderPasses(glsl)
-
+ // output.renderPasses(glsl)
+  output.render(glsl[0])
 }
 
 GlslSource.prototype.glsl = function (_output) {
@@ -51,7 +51,7 @@ GlslSource.prototype.glsl = function (_output) {
 
 
   if (transforms.length > 0) passes.push(this.compile(transforms, output))
-  console.log('PASSES', passes)
+  //console.log('PASSES', passes)
 
   return passes
 }

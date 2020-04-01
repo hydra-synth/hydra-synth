@@ -343,7 +343,6 @@ class HydraSynth {
   }
 
   tick (dt, uniforms) {
-
   //  if(self.detectAudio === true) self.fft = self.audio.frequencies()
   // this.regl.frame(function () {
     this.time += dt * 0.001

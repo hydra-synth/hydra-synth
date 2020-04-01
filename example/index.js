@@ -46,16 +46,18 @@ function init () {
     }`
   })
 
-  ooo(10, 0.01, 1.2).blur().out()
+  // ooo(10, 0.01, 1.2).blur().out()
+  //
+  // // Example array sequences
+  // shape([4, 5, 3]).out()
+  //
+  // // array easing
+  // shape([4, 3, 2].ease('easeInQuad')).out()
+  //
+  // // array smoothing
+  // shape([4, 3, 2].smooth()).out()
 
-  // Example array sequences
-  shape([4, 5, 3]).out()
-
-  // array easing
-  shape([4, 3, 2].ease('easeInQuad')).out()
-
-  // array smoothing
-  shape([4, 3, 2].smooth()).out()
+  osc().out()
 
   // set bpm
   bpm(30)
