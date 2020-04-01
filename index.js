@@ -1,10 +1,12 @@
 const Output = require('./src/output.js')
 const loop = require('raf-loop')
 const Source = require('./src/hydra-source.js')
-const GeneratorFactory = require('./src/GeneratorFactory.js')
-const mouse = require('mouse-change')()
-const Audio = require('./src/audio.js')
-const VidRecorder = require('./src/video-recorder.js')
+const Mouse = require('mouse-change')()
+const Audio = require('./src/lib/audio.js')
+const VidRecorder = require('./src/lib/video-recorder.js')
+const ArrayUtils = require('./src/lib/array-utils.js')
+
+const Synth = require('./src/create-synth.js')
 
 // to do: add ability to pass in certain uniforms and transforms
 class HydraSynth {
@@ -20,7 +22,8 @@ class HydraSynth {
     detectAudio = true,
     enableStreamCapture = true,
     canvas,
-    precision = 'mediump'
+    precision = 'mediump',
+    extendTransforms = {} // add your own functions on init
   } = {}) {
 
     this.bpm = 60
@@ -42,37 +45,46 @@ class HydraSynth {
       console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
     }
 
+    this.extendTransforms = extendTransforms
+
     // boolean to store when to save screenshot
     this.saveFrame = false
 
     // if stream capture is enabled, this object contains the capture stream
     this.captureStream = null
 
+    this.synth = undefined
+
     this._initCanvas(canvas)
     this._initRegl()
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
+  // this._generateRenderPasses()
 
-    window.screencap = () => {
+    this.screencap = () => {
       this.saveFrame = true
     }
+    if (this.makeGlobal) window.screencap = this.screencap
 
     if (enableStreamCapture) {
       this.captureStream = this.canvas.captureStream(25)
 
       // to do: enable capture stream of specific sources and outputs
-      window.vidRecorder = new VidRecorder(this.captureStream)
+      this.vidRecorder = new VidRecorder(this.captureStream)
+      if (this.makeGlobal) window.vidRecorder = this.vidRecorder
     }
 
     if(detectAudio) this._initAudio()
-    //if(makeGlobal) {
-      window.mouse = mouse
-      window.time = this.time
-      window['render'] = this.render.bind(this)
-    //  window.bpm = this.bpm
-      window.bpm = this._setBpm.bind(this)
-  //  }
+
+    this.mouse = Mouse
+
+    if (makeGlobal) window.mouse = this.mouse
+    if (makeGlobal) window.time = this.time
+    if (makeGlobal) window.render = this.render.bind(this)
+    if (makeGlobal) window.bpm = this._setBpm.bind(this)
+    if (makeGlobal) ArrayUtils.init() // add extra functions to Array.prototype
+
     if(autoLoop) loop(this.tick.bind(this)).start()
   }
 
@@ -122,8 +134,21 @@ class HydraSynth {
   }
 
   _initAudio () {
+    const that = this
     this.audio = new Audio({
-      numBins: 4
+      numBins: 4,
+      changeListener: ({audio}) => {
+        that.a = audio.bins.map((_, index) =>
+          (scale = 1, offset = 0) => () => (audio.fft[index] * scale + offset)
+        )
+
+        if (that.makeGlobal) {
+          that.a.forEach((a, index) => {
+            const aname = `a${index}`
+            window[aname] = a
+          })
+        }
+      }
     })
     if(this.makeGlobal) window.a = this.audio
   }
@@ -263,7 +288,7 @@ class HydraSynth {
         height: this.height,
         precision: this.precision
       })
-      o.render()
+    //  o.render()
       o.id = index
       if (self.makeGlobal) window['o' + index] = o
       return o
@@ -294,15 +319,18 @@ class HydraSynth {
   }
 
   _generateGlslTransforms () {
-    const self = this
-    const gen = new GeneratorFactory(this.o[0], this.precision)
-    window.generator = gen
-    Object.keys(gen.functions).forEach((key)=>{
-      self[key] = gen.functions[key]
-      if(self.makeGlobal === true) {
-        window[key] = gen.functions[key]
+    this.synth = new Synth(this.o[0], this.extendTransforms, ({type, method, synth}) => {
+      if (this.makeGlobal) {
+        if (type === 'add') {
+          window[method] = synth.generators[method]
+        } else if (type === 'remove') {
+          delete window[method]
+        }
       }
     })
+
+    if (this.makeGlobal) window.synth = this.synth
+
   }
 
   render (output) {
@@ -315,7 +343,6 @@ class HydraSynth {
   }
 
   tick (dt, uniforms) {
-
   //  if(self.detectAudio === true) self.fft = self.audio.frequencies()
   // this.regl.frame(function () {
     this.time += dt * 0.001
@@ -323,7 +350,7 @@ class HydraSynth {
     // this.regl.clear({
     //   color: [0, 0, 0, 1]
     // })
-    window.time = this.time
+    if (this.makeGlobal) window.time = this.time
     if(this.detectAudio === true) this.audio.tick()
     for (let i = 0; i < this.s.length; i++) {
       this.s[i].tick(this.time)
@@ -333,7 +360,7 @@ class HydraSynth {
     //  console.log('WIDTH', this.canvas.width, this.o[0].getCurrent())
       this.o[i].tick({
         time: this.time,
-        mouse: mouse,
+        mouse: this.mouse,
         bpm: this.bpm,
         resolution: [this.canvas.width, this.canvas.height]
       })

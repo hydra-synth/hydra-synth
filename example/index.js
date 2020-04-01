@@ -20,49 +20,61 @@ function init () {
   //  autoLoad: false
     canvas: canvas,
     enableStreamCapture: true,
-    detectAudio: false
+    detectAudio: true
   })
 
   window.hydra = hydra
 
+  var sinN = v => (Math.sin(v)+1)/2
+  var cosN = v => (Math.cos(v)+1)/2
 
-//  hydra.s[0].init({ src: canvas})
-  //hydra.src(hydra.s[0]).out()
+  // example custom function
+  synth.setFunction('ooo', {
+    type: 'src',
+    inputs: [
+      {
+        name: 'frequency',
+        type: 'float',
+        default: 60.0
+      },
+      {
+        name: 'sync',
+        type: 'float',
+        default: 0.1
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0.0
+      }
+    ],
+    glsl: `vec4 ooo(vec2 _st, float freq, float sync, float offset){
+      vec2 st = _st;
+      float r = sin((st.x-offset/freq+time*sync)*freq)*0.5  + 0.5;
+      float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
+      float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
+      return vec4(r, g, b, 1.0);
+    }`
+  })
 
-  s0.initCam()
+  // ooo(10, 0.01, 1.2).blur().out()
+  //
+  // // Example array sequences
+  // shape([4, 5, 3]).out()
+  //
+  // // array easing
+  // shape([4, 3, 2].ease('easeInQuad')).out()
+  //
+  // // array smoothing
+  // shape([4, 3, 2].smooth()).out()
 
-  shape()
-//  .scrollY(0, -0.10)
-  .diff(o0)
-  .add(o0, 0.1)
-  //.color(0.8, 0.8, 0.8)
-  //.shift(-0.1, -0.10, 0, 0.2)
- /// .scrollY(0.2, 0.1)
-//  .scrollX(0, -0.2)
-  .scale(1.01, 1.0, 1.0, 0.5,  -0.2)
-//  .scrollX(0.0, 0.2)
- // .scrollY(-0.2, -0.1)
-  .out()
-//   voronoi(4, 0.2).out()
-// /*osc(40, 0).rotate(1.57, 0.0).thresh(0.6).out()
-//
-//   osc(50, 0).mult(osc(10).rotate(1.58)).out(o1)
-//
-//   src(o2).scale(1.2).modulateRotate(osc(200, -0.02).rotate(0.5), -0.3).out(o3)
-//   src(o0).modulateRotate(o1, 2).out(o2)
-//   render()*/
+  osc().out()
 
-
-  
+  // set bpm
+  bpm(30)
 
   var x = 0
   loop((dt) => {
-    x++
-    // ctx.moveTo(x, 0);
-    // ctx.lineTo(200, 100);
-    // ctx.stroke();
-    // ctx.fillStyle = 'green';
-    // ctx.fillRect(10, 10, 100, 100);
     hydra.tick(dt)
   }).start()
 

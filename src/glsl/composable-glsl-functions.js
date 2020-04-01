@@ -1,10 +1,5 @@
-// to add: ripple: https://www.shadertoy.com/view/4djGzz
-// mask
-// convolution
-// basic sdf shapes
-// repeat
-// iq color palletes
 
+<<<<<<< HEAD:src/composable-glsl-functions.js
 module.exports = {
 
   _noise: {
@@ -84,6 +79,10 @@ module.exports = {
                                       dot(p2,x2), dot(p3,x3) ) );
     }`
   },
+=======
+
+module.exports = {
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   noise: {
     type: 'src',
     inputs: [
@@ -555,6 +554,7 @@ module.exports = {
     ],
     glsl: `vec2 scrollX(vec2 st, float amount, float speed){
       st.x += amount + time*speed;
+<<<<<<< HEAD:src/composable-glsl-functions.js
       return fract(st);
     }`,
     example: `
@@ -574,6 +574,10 @@ module.exports = {
         .scale(0.15)
         .modulate(noise(1,0.25))
         .out()`,
+=======
+      return st;
+    }`
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   },
   modulateScrollX: {
     type: 'combineCoord',
@@ -589,6 +593,7 @@ module.exports = {
       See also: [\`scrollX\`](#scrollX)`,
     glsl: `vec2 modulateScrollX(vec2 st, vec4 c1, float amount, float speed){
       st.x += c1.r*amount + time*speed;
+<<<<<<< HEAD:src/composable-glsl-functions.js
       return fract(st);
     }`,
     example: `
@@ -601,6 +606,10 @@ module.exports = {
       voronoi(25,0,0)
         .modulateScrollX(osc(10),0.5,0.25)
         .out(o0)`,
+=======
+      return st;
+    }`
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   },
   scrollY: {
     type: 'coord',
@@ -610,6 +619,7 @@ module.exports = {
     ],
     glsl: `vec2 scrollY(vec2 st, float amount, float speed){
       st.y += amount + time*speed;
+<<<<<<< HEAD:src/composable-glsl-functions.js
       return fract(st);
     }`,
     example: `
@@ -629,6 +639,10 @@ module.exports = {
         .scale(0.15)
         .modulate(noise(1,0.25))
         .out()`,
+=======
+      return st;
+    }`
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   },
   modulateScrollY: {
     type: 'combineCoord',
@@ -644,6 +658,7 @@ module.exports = {
       See also: [\`scrollY\`](#scrollY)`,
     glsl: `vec2 modulateScrollY(vec2 st, vec4 c1, float amount, float speed){
       st.y += c1.r*amount + time*speed;
+<<<<<<< HEAD:src/composable-glsl-functions.js
       return fract(st);
     }`,
     example: `
@@ -656,12 +671,28 @@ module.exports = {
       voronoi(25,0,0)
         .modulateScrollY(osc(10),0.5,0.25)
         .out(o0)`,
+=======
+      return st;
+    }`
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   },
   add: {
     type: 'combine',
     inputs: [
+<<<<<<< HEAD:src/composable-glsl-functions.js
       { name: 'texture', type: 'vec4' },
       { name: 'amount', type: 'float', default: 0.5 }
+=======
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
     ],
     description: `
       Add textures.
@@ -675,6 +706,23 @@ module.exports = {
       shape().scale(0.5).add(shape(4),[0,0.25,0.5,0.75,1]).out()
 
       osc(9,0.1,1).add(osc(13,0.5,5)).out()`,
+  },
+  sub: {
+    type: 'combine',
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
+    glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
+            return (c0-c1)*amount + c0*(1.0-amount);
+          }`
   },
   layer: {
     type: 'combine',
@@ -909,6 +957,7 @@ module.exports = {
         .brightness( ({time}) => Math.sin(time) )
         .out(o0)`,
   },
+<<<<<<< HEAD:src/composable-glsl-functions.js
   luminance: {
     type: 'util',
     glsl: `float luminance(vec3 rgb){
@@ -916,13 +965,15 @@ module.exports = {
       return dot(rgb, W);
     }`,
   },
+=======
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   mask: {
     type: 'combine',
     inputs: [
       { name: 'texture', type: 'vec4' }
     ],
     glsl: `vec4 mask(vec4 c0, vec4 c1){
-      float a = luminance(c1.rgb);
+      float a = _luminance(c1.rgb);
       return vec4(c0.rgb*a, a);
     }`,
     example: `
@@ -944,7 +995,7 @@ module.exports = {
       { name: 'tolerance', type: 'float', default: 0.1 }
     ],
     glsl: `vec4 luma(vec4 c0, float threshold, float tolerance){
-      float a = smoothstep(threshold-tolerance, threshold+tolerance, luminance(c0.rgb));
+      float a = smoothstep(threshold-tolerance, threshold+tolerance, _luminance(c0.rgb));
       return vec4(c0.rgb*a, a);
     }`,
     example: `
@@ -960,6 +1011,7 @@ module.exports = {
       { name: 'tolerance', type: 'float', default: 0.04 }
     ],
     glsl: `vec4 thresh(vec4 c0, float threshold, float tolerance){
+<<<<<<< HEAD:src/composable-glsl-functions.js
       return vec4(vec3(smoothstep(threshold-tolerance, threshold+tolerance, luminance(c0.rgb))), c0.a);
     }`,
     example: `
@@ -969,6 +1021,10 @@ module.exports = {
       noise(3,0.1)
         .thresh( ({time})=>Math.sin(time/2) , [0.04,0.25,0.75,1].fast(0.25) )
         .out(o0)`,
+=======
+      return vec4(vec3(smoothstep(threshold-tolerance, threshold+tolerance, _luminance(c0.rgb))), c0.a);
+    }`
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   },
   color: {
     type: 'color',
@@ -988,6 +1044,7 @@ module.exports = {
       return vec4(mix((1.0-c0)*abs(c), c*c0, pos));
     }`,
   },
+<<<<<<< HEAD:src/composable-glsl-functions.js
   _rgbToHsv: {
     type: 'util',
     glsl: `vec3 _rgbToHsv(vec3 c){
@@ -1008,6 +1065,8 @@ module.exports = {
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
     }`,
   },
+=======
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   saturate: {
     type: 'color',
     inputs: [
@@ -1045,6 +1104,7 @@ module.exports = {
       c = _hsvToRgb(c);
       c = fract(c);
       return vec4(c, c0.a);
+<<<<<<< HEAD:src/composable-glsl-functions.js
     }`,
     example: `
       // 20Hz oscillator source
@@ -1055,5 +1115,76 @@ module.exports = {
         .color([1,0,0,1,0],[0,1,0,1,0],[0,0,1,1,0])
         .colorama([0.005,0.33,0.66,1.0].fast(0.125))
         .out(o0)`,
+=======
+    }`
+  },
+  prev: {
+    type: 'src',
+    notes: 'renders previous buffer',
+    inputs: [],
+    glsl: `vec4 prev(vec2 _st) {
+      return texture2D(prevBuffer, fract(_st));
+    }
+    `
+  },
+  sum: {
+    type: 'color',
+    inputs: [
+      {
+        name: 'scale',
+        type: 'vec4',
+        default: [1, 1, 1, 1]
+      }
+    ],
+    glsl: `float sum(vec4 c0, vec4 s) {
+      vec4 v = c0 * s;
+      return v.r + v.g + v.b + v.a;
+    }
+
+float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is not overloaded
+  vec2 v = _st.xy * s.xy;
+  return v.x + v.y;
+}`
+  },
+  r: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `vec4 r(vec4 c0, float scale, float offset) {
+      return vec4(c0.r * scale + offset);
+    }`
+  },
+  g: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `vec4 g(vec4 c0, float scale, float offset) {
+      return vec4(c0.g * scale + offset);
+    }`
+  },
+  b: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `vec4 b(vec4 c0, float scale, float offset) {
+      return vec4(c0.b * scale + offset);
+    }`
+  },
+  a: {
+    type: 'color',
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
+    glsl: `vec4 a(vec4 c0, float scale, float offset) {
+      return vec4(c0.a * scale + offset);
+    }`
+>>>>>>> dev-nomultipass:src/glsl/composable-glsl-functions.js
   }
 }

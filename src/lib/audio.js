@@ -7,13 +7,15 @@ class Audio {
     smooth = 0.4,
     max = 15,
     scale = 10,
-    isDrawing = false
+    isDrawing = false,
+    changeListener = (() => {})
   }) {
     this.vol = 0
     this.scale = scale
     this.max = max
     this.cutoff = cutoff
     this.smooth = smooth
+    this.changeListener = changeListener
     this.setBins(numBins)
 
     // beat detection from: https://github.com/therewasaguy/p5-music-viz/blob/gh-pages/demos/01d_beat_detect_amplitude/sketch.js
@@ -143,10 +145,11 @@ class Audio {
       scale: this.scale,
       smooth: this.smooth
     }))
-    // to do: what to do in non-global mode?
-    this.bins.forEach((bin, index) => {
-      window['a' + index] = (scale = 1, offset = 0) => () => (a.fft[index] * scale + offset)
-    })
+
+    if (this.changeListener) {
+      this.changeListener({type: 'reconfig', audio: this})
+    }
+
     console.log(this.settings)
   }
 
