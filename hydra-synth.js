@@ -38,7 +38,12 @@ class HydraRenderer {
       time: 0,
       bpm: 30,
       width: this.width,
-      height: this.height
+      height: this.height,
+      fps: null,
+      mouse: Mouse,
+      render: this._render.bind(this),
+      resize: this.resize.bind(this),
+      update: (dt) => {} // user defined update function
     }
 
     // only allow valid precision options
@@ -79,10 +84,8 @@ class HydraRenderer {
 
     if(detectAudio) this._initAudio()
 
-    this.renderer.mouse = Mouse
     if(autoLoop) loop(this.tick.bind(this)).start()
 
-    this.renderer.render = this._render.bind(this)
     this.sandbox = new Sandbox(this.renderer, makeGlobal)
   }
 
@@ -108,6 +111,7 @@ class HydraRenderer {
       source.resize(width, height)
     })
   }
+
   canvasToImage (callback) {
     const a = document.createElement('a')
     a.style.display = 'none'
@@ -340,6 +344,9 @@ class HydraRenderer {
 
   tick (dt, uniforms) {
     this.renderer.time += dt * 0.001
+    if(this.renderer.update) {
+      try { this.renderer.update(dt) } catch (e) { console.log(error) }
+    }
     if(this.detectAudio === true) this.renderer.a.tick()
     for (let i = 0; i < this.s.length; i++) {
       this.s[i].tick(this.renderer.time)

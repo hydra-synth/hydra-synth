@@ -5,8 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha",
-    "example": "budo ./example/index.js --ssl --open --live --port 8000 --",
-    "example-editor": "budo ./example/editor-example.js --ssl --open --live ",
+    "dev": "budo ./dev/index.js --ssl --open --live --port 8000 --",
+    "build-hydra": "browserify hydra-synth.js --standalone Hydra > dist/hydra-synth.js",
+    "build-shader-generator": "browserify shader-generator.js --standalone HydraShaders > dist/hydra-shaders.js",
+    "build": "npm run build-hydra && npm run build-shader-generator",
     "coverage": "nyc npm run test"
   },
   "repository": {
