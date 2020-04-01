@@ -109,13 +109,13 @@ function formatArguments (userArgs, defaultArgs) {
 }
 
 
-var GeneratorFactory = function (defaultOutput) {
+var GeneratorFactory = function (defaultOutput, precision) {
 
   let self = this
   self.functions = {}
 
 
-  window.frag = shaderManager(defaultOutput)
+  window.frag = shaderManager(defaultOutput, precision)
 
   // extend Array prototype
   Array.prototype.fast = function(speed) {
@@ -159,7 +159,8 @@ var GeneratorFactory = function (defaultOutput) {
             glslString += ')'
             return glslString
           },
-          uniforms: []
+          uniforms: [],
+          precision: precision
         }
         inputs.forEach((input, index) => {
           if (input.isUniform) {
@@ -216,9 +217,9 @@ var GeneratorFactory = function (defaultOutput) {
 //   iterate through transform types and create a function for each
 //
 Generator.prototype.compile = function (pass) {
-//  console.log("compiling", pass)
+ // console.log("compiling", pass)
   var frag = `
-  precision highp float;
+  precision ${pass.precision} float;
   ${pass.uniforms.map((uniform) => {
     let type = ''
     switch (uniform.type) {
@@ -258,7 +259,7 @@ Generator.prototype.compile = function (pass) {
 // fragment shader code
 Generator.prototype.compileRenderPass = function (pass) {
   var frag = `
-      precision highp float;
+      precision ${pass.precision} float;
       ${pass.uniforms.map((uniform) => {
         let type = ''
         switch (uniform.type) {

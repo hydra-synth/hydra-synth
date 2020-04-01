@@ -19,7 +19,8 @@ class HydraSynth {
     autoLoop = true,
     detectAudio = true,
     enableStreamCapture = true,
-    canvas
+    canvas,
+    precision = 'mediump'
   } = {}) {
 
     this.bpm = 60
@@ -30,6 +31,16 @@ class HydraSynth {
     this.makeGlobal = makeGlobal
     this.renderAll = false
     this.detectAudio = detectAudio
+
+    // only allow valid precision options
+    let precisionOptions = ['lowp','mediump','highp']
+    let precisionValid = precisionOptions.includes(precision.toLowerCase())
+
+    this.precision = precisionValid ? precision.toLowerCase() : 'mediump'
+
+    if(!precisionValid){
+      console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
+    }
 
     // boolean to store when to save screenshot
     this.saveFrame = false
@@ -152,7 +163,7 @@ class HydraSynth {
 
     this.renderAll = this.regl({
       frag: `
-      precision highp float;
+      precision ${this.precision} float;
       varying vec2 uv;
       uniform sampler2D tex0;
       uniform sampler2D tex1;
@@ -180,7 +191,7 @@ class HydraSynth {
       }
       `,
       vert: `
-      precision highp float;
+      precision ${this.precision} float;
       attribute vec2 position;
       varying vec2 uv;
 
@@ -207,7 +218,7 @@ class HydraSynth {
 
     this.renderFbo = this.regl({
       frag: `
-      precision highp float;
+      precision ${this.precision} float;
       varying vec2 uv;
       uniform vec2 resolution;
       uniform sampler2D tex0;
@@ -217,7 +228,7 @@ class HydraSynth {
       }
       `,
       vert: `
-      precision highp float;
+      precision ${this.precision} float;
       attribute vec2 position;
       varying vec2 uv;
 
@@ -244,7 +255,12 @@ class HydraSynth {
   _initOutputs (numOutputs) {
     const self = this
     this.o = (Array(numOutputs)).fill().map((el, index) => {
-      var o = new Output({regl: this.regl, width: this.width, height: this.height})
+      var o = new Output({
+        regl: this.regl,
+        width: this.width,
+        height: this.height,
+        precision: this.precision
+      })
       o.render()
       o.id = index
       if (self.makeGlobal) window['o' + index] = o
@@ -277,7 +293,7 @@ class HydraSynth {
 
   _generateGlslTransforms () {
     const self = this
-    const gen = new GeneratorFactory(this.o[0])
+    const gen = new GeneratorFactory(this.o[0], this.precision)
     window.generator = gen
     Object.keys(gen.functions).forEach((key)=>{
       self[key] = gen.functions[key]
