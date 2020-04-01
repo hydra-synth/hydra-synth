@@ -145,16 +145,18 @@ class HydraSynth {
 
   _initRegl () {
     this.regl = require('regl')({
+      profile: true,
       canvas: this.canvas,
-      pixelRatio: 1,
-      extensions: [
-        'oes_texture_half_float',
-        'oes_texture_half_float_linear'
-      ],
-      optionalExtensions: [
-        'oes_texture_float',
-        'oes_texture_float_linear'
-      ]})
+      pixelRatio: 1//,
+      // extensions: [
+      //   'oes_texture_half_float',
+      //   'oes_texture_half_float_linear'
+      // ],
+      // optionalExtensions: [
+      //   'oes_texture_float',
+      //   'oes_texture_float_linear'
+     //]
+   })
 
     // This clears the color buffer to black and the depth buffer to 1
     this.regl.clear({
@@ -357,6 +359,7 @@ class HydraSynth {
       this.canvasToImage()
       this.saveFrame = false
     }
+    this.regl.poll()
   }
 
 
