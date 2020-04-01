@@ -3,6 +3,7 @@ const loop = require('raf-loop')
 
 function init () {
   var hydra = new Hydra()
+  window.hydra = hydra
  //  const canvas = document.createElement('canvas')
  //  canvas.style.backgroundColor = "#000"
  //  canvas.width = 800
@@ -79,7 +80,7 @@ function init () {
  //    hydra.tick(dt)
  //  }).start()
 
-  osc(5).out()
+osc(5).out()
 }
 
 window.onload = init
