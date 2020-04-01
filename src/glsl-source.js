@@ -5,7 +5,6 @@ const glslTransforms = require('./glsl/composable-glsl-functions.js')
 const utilityGlsl = require('./glsl/utility-functions.js')
 
 var GlslSource = function (obj) {
-  console.log('creating', obj)
   this.transforms = []
   this.transforms.push(obj)
   this.defaultOutput = obj.defaultOutput
@@ -49,9 +48,7 @@ GlslSource.prototype.glsl = function (_output) {
     }
   })
 
-
   if (transforms.length > 0) passes.push(this.compile(transforms, output))
-  //console.log('PASSES', passes)
 
   return passes
 }
@@ -62,7 +59,6 @@ GlslSource.prototype.compile = function (transforms, output) {
   var uniforms = {}
   shaderInfo.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
 
-//  console.log('transforms', shaderInfo)
   var frag = `
   precision mediump float;
   ${Object.values(shaderInfo.uniforms).map((uniform) => {

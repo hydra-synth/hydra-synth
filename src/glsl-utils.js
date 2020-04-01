@@ -3,6 +3,7 @@
 // Add extra functionality to Array.prototype for generating sequences in time
 const arrayUtils = require('./lib/array-utils.js')
 
+// [WIP] how to treat different dimensions (?)
 const DEFAULT_CONVERSIONS = {
   float: {
     'vec4': {name: 'sum', args: [[1, 1, 1, 1]]},
@@ -89,9 +90,8 @@ function mergeArrays (a, b) {
   }))
 }
 
-// check whether
+// check whether array
 function contains(object, arr) {
-  console.log('checking', object.name, arr)
   for(var i = 0; i < arr.length; i++){
     if(object.name == arr[i].name) return true
   }
@@ -119,7 +119,7 @@ const ensure_decimal_dot = (val) => {
 }
 
 function formatArguments (transform, startIndex) {
-  console.log('processing args', transform, startIndex)
+//  console.log('processing args', transform, startIndex)
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
   return defaultArgs.map( (input, index) => {
