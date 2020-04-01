@@ -9,8 +9,15 @@ Array.prototype.fast = function (speed) {
 }
 
 class Synth {
-  constructor (defaultOutput, extendTransforms = (x => x), changeListener = (() => {})) {
+  constructor ({
+      defaultUniforms,
+      defaultOutput,
+      extendTransforms = (x => x),
+      changeListener = (() => {})
+    } = {}
+    ) {
     this.defaultOutput = defaultOutput
+    this.defaultUniforms = defaultUniforms
     this.changeListener = changeListener
     this.extendTransforms = extendTransforms
     this.generators = {}
@@ -67,6 +74,7 @@ class Synth {
         transform: transform,
         userArgs: args,
         defaultOutput: this.defaultOutput,
+        defaultUniforms: this.defaultUniforms,
         synth: this
       })
       this.generators[method] = func

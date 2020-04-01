@@ -9,7 +9,7 @@ var GlslSource = function (obj) {
   this.transforms.push(obj)
   this.defaultOutput = obj.defaultOutput
   this.synth = obj.synth
-
+  this.defaultUniforms = obj.defaultUniforms
   return this
 }
 
@@ -25,12 +25,15 @@ GlslSource.prototype.out = function (_output) {
   output.render(glsl[0])
 }
 
-GlslSource.prototype.glsl = function (_output) {
-  var output = _output || this.defaultOutput
+GlslSource.prototype.glsl = function () {
+  //var output = _output || this.defaultOutput
+  var self = this
+  // uniforms included in all shaders
+//  this.defaultUniforms = output.uniforms
   var passes = []
   var transforms = []
+//  console.log('output', output)
   this.transforms.forEach((transform) => {
-
     if(transform.transform.type === 'renderpass'){
       if (transforms.length > 0) passes.push(this.compile(transforms, output))
       transforms = []
@@ -40,20 +43,20 @@ GlslSource.prototype.glsl = function (_output) {
 
       passes.push({
         frag: transform.transform.frag,
-        uniforms: Object.assign({}, output.uniforms, uniforms)
+        uniforms: Object.assign({}, self.defaultUniforms, uniforms)
       })
-      transforms.push({name: 'prev', transform:  glslTransforms['prev'], defaultOutput: output, synth: this.synth})
+      transforms.push({name: 'prev', transform:  glslTransforms['prev'], synth: this.synth})
     } else {
       transforms.push(transform)
     }
   })
 
-  if (transforms.length > 0) passes.push(this.compile(transforms, output))
+  if (transforms.length > 0) passes.push(this.compile(transforms))
 
   return passes
 }
 
-GlslSource.prototype.compile = function (transforms, output) {
+GlslSource.prototype.compile = function (transforms) {
 
   var shaderInfo = generateGlsl(transforms)
   var uniforms = {}
@@ -98,7 +101,7 @@ GlslSource.prototype.compile = function (transforms, output) {
 
   return {
     frag: frag,
-    uniforms: Object.assign({}, output.uniforms, uniforms)
+    uniforms: Object.assign({}, this.defaultUniforms, uniforms)
   }
 
 }

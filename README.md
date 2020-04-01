@@ -54,7 +54,9 @@ If `opts` is specified, the default options (shown below) will be overridden.
   numSources: 4, // number of source buffers to create initially
 
   numOutputs: 4, // number of output buffers to use. Note: untested with numbers other than 4. render() method might behave unpredictably
-  extendTransforms: {} // An object of transforms to be added to the synth. Can also be a function that receives the current transformations as an argument and returns an object of all transformations (don't forget the include the existing ones)
+  extendTransforms: {} // An object of transforms to be added to the synth. Can also be a function that receives the current transformations as an argument and returns an object of all transformations (don't forget the include the existing ones),
+
+  precision: 'mediump' // precision of shaders, can also be 'highp'
 }
 
 ```

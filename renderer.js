@@ -5,8 +5,6 @@ const Mouse = require('mouse-change')()
 const Audio = require('./src/lib/audio.js')
 const VidRecorder = require('./src/lib/video-recorder.js')
 const ArrayUtils = require('./src/lib/array-utils.js')
-const Sandbox = require('./sandbox.js')
-
 
 const Synth = require('./src/create-synth.js')
 
@@ -36,11 +34,6 @@ class HydraSynth {
     this.makeGlobal = makeGlobal
     this.renderAll = false
     this.detectAudio = detectAudio
-
-    this.sandbox = Sandbox(this)
-    this.sandbox.addToContext('test', 'hydra.makeGlobal')
-
-    this.sandbox.eval('console.log(test)')
 
     // only allow valid precision options
     let precisionOptions = ['lowp','mediump','highp']
@@ -326,17 +319,12 @@ class HydraSynth {
   }
 
   _generateGlslTransforms () {
-    this.synth = new Synth({
-      defaultOutput: this.o[0],
-      defaultUniforms: this.o[0].uniforms,
-      extendTransforms: this.extendTransforms,
-      changeListener: ({type, method, synth}) => {
-        if (this.makeGlobal) {
-          if (type === 'add') {
-            window[method] = synth.generators[method]
-          } else if (type === 'remove') {
-            delete window[method]
-          }
+    this.synth = new Synth(this.o[0], this.extendTransforms, ({type, method, synth}) => {
+      if (this.makeGlobal) {
+        if (type === 'add') {
+          window[method] = synth.generators[method]
+        } else if (type === 'remove') {
+          delete window[method]
         }
       }
     })
