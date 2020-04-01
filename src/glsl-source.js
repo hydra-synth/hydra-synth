@@ -22,7 +22,7 @@ GlslSource.prototype.out = function (_output) {
   var glsl = this.glsl(output)
   this.synth.currentFunctions = []
  // output.renderPasses(glsl)
-  output.render(glsl[0])
+  if(output) output.render(glsl)
 }
 
 GlslSource.prototype.glsl = function () {

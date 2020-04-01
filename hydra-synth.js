@@ -7,7 +7,7 @@ const VidRecorder = require('./src/lib/video-recorder.js')
 const ArrayUtils = require('./src/lib/array-utils.js')
 const Sandbox = require('./src/eval-sandbox.js')
 
-const Synth = require('./src/create-synth.js')
+const Synth = require('./src/generator-factory.js')
 
 // to do: add ability to pass in certain uniforms and transforms
 class HydraRenderer {

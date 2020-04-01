@@ -1,4 +1,7 @@
-const Renderer = require('./renderer.js')
+const Synth = require('./hydra-synth.js')
+const ShaderGenerator = require('./shader-generator.js')
 
-
-module.exports = Renderer
+module.exports = {
+  synth : Synth,
+  shaderGenerator: ShaderGenerator
+}

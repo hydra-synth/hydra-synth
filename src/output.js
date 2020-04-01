@@ -85,7 +85,8 @@ Output.prototype.clear = function () {
 }
 
 
-Output.prototype.render = function (pass) {
+Output.prototype.render = function (passes) {
+  let pass = passes[0]
   console.log('pass', pass, this.pingPongIndex)
   var self = this
       var uniforms = Object.assign(pass.uniforms, { prevBuffer:  () =>  {

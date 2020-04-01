@@ -1,0 +1,5 @@
+- resize() function
+- ShaderGenerator
+- updates to MakeGlobal
+- eval() function on hydra synth
+- dynamically add functions

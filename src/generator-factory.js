@@ -8,7 +8,7 @@ Array.prototype.fast = function (speed) {
   return this
 }
 
-class Synth {
+class GeneratorFactory {
   constructor ({
       defaultUniforms,
       defaultOutput,
@@ -90,4 +90,4 @@ class Synth {
   }
 }
 
-module.exports = Synth
+module.exports = GeneratorFactory
