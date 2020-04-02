@@ -53,7 +53,7 @@ class HydraSource  {
        self.src = response.video
        self.tex = self.regl.texture(self.src)
      //  console.log("received screen input")
-     })
+   }).catch((err) => console.log('could not get screen', err))
   }
 
   resize (width, height) {

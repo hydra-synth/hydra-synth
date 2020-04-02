@@ -8,6 +8,7 @@ function init () {
   window.hydra = hydra
 
   exampleAddFunction(hydra)
+  exampleScreen()
   ///var generator = new shader()
 
  //  const canvas = document.createElement('canvas')
@@ -97,6 +98,11 @@ function exampleAddFunction(hydra) {
   myOsc(10, 0.2, 0.8).out()
   //
   //  // ooo(10, 0.01, 1.2).blur().out()
+}
+
+function exampleScreen() {
+  s0.initScreen()
+  src(s0).out()
 }
 
 
