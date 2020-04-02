@@ -42,7 +42,7 @@ class GeneratorFactory {
       })
 
     addTransforms(glslTransforms)
-    addTransforms(renderpassFunctions)
+    //addTransforms(renderpassFunctions)
 
     if (typeof this.extendTransforms === 'function') {
       functions = this.extendTransforms(functions)
