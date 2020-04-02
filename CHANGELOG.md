@@ -1,4 +1,8 @@
 # Changelog
+## [1.1.4] - 2020-04-02
+### Changed
+ - s0.initScreen() now possible with no extension installed (in chrome)
+
 ## [1.1.2] - 2020-04-02
 ### Changed
  - changed format for defining custom functions

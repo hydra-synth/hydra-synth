@@ -4,6 +4,8 @@ const Screen = require('./lib/screenmedia.js')
 class HydraSource  {
 
   constructor (opts) {
+    opts.width = 100
+    opts.height  = 100
     this.regl = opts.regl
     this.src = null
     this.dynamic = true
