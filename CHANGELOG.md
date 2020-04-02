@@ -3,6 +3,7 @@
 ### Changed
  - s0.initScreen() now possible with no extension installed (in chrome)
  - source textures default to one pixel when no source is specified
+ - s0.clear() stops webcam and clears texture
 
 ## [1.1.2] - 2020-04-02
 ### Changed
