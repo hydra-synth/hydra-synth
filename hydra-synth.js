@@ -40,12 +40,15 @@ class HydraRenderer {
       width: this.width,
       height: this.height,
       fps: null,
+      speed: 1,
       mouse: Mouse,
       render: this._render.bind(this),
       resize: this.resize.bind(this),
       update: (dt) => {},// user defined update function
       hush: this.hush.bind(this)
     }
+
+    window.synth = this.synth
 
     // only allow valid precision options
     let precisionOptions = ['lowp','mediump','highp']
@@ -355,7 +358,8 @@ class HydraRenderer {
   }
 
   tick (dt, uniforms) {
-    this.synth.time += dt * 0.001
+    this.synth.time += dt * 0.001 *this.synth.speed
+  //  console.log(this.synth.speed, this.synth.time)
     if(this.synth.update) {
       try { this.synth.update(dt) } catch (e) { console.log(error) }
     }
