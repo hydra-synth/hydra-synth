@@ -63,6 +63,11 @@ class HydraSource  {
   }
 
   clear () {
+    if(this.src.srcObject) {
+      if (this.src.srcObject.getTracks) {
+        this.src.srcObject.getTracks().forEach((track) => track.stop())
+      }
+    }
     this.src = null
     this.tex = this.regl.texture({
       shape: [1, 1]
