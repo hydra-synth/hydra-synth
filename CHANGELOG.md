@@ -3,6 +3,7 @@
 
 ### Added
  - hush() function clears all screens and stops cameras
+ - speed variable for controlling time
  
 ### Changed
  - s0.initScreen() now possible with no extension installed (in chrome)

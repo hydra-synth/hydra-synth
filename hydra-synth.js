@@ -90,7 +90,8 @@ class HydraRenderer {
 
     if(autoLoop) loop(this.tick.bind(this)).start()
 
-    this.sandbox = new Sandbox(this.synth, makeGlobal)
+    // final argument is properties that the user can set, all others are treated as read-only
+    this.sandbox = new Sandbox(this.synth, makeGlobal, ['speed', 'update', 'bpm'])
   }
 
   eval(code) {
@@ -358,6 +359,7 @@ class HydraRenderer {
   }
 
   tick (dt, uniforms) {
+    this.sandbox.tick()
     this.synth.time += dt * 0.001 *this.synth.speed
   //  console.log(this.synth.speed, this.synth.time)
     if(this.synth.update) {
