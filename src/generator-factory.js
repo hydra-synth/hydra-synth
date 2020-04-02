@@ -1,7 +1,7 @@
 const glslTransforms = require('./glsl/composable-glsl-functions.js')
 const GlslSource = require('./glsl-source.js')
 
-const renderpassFunctions = require('./glsl/renderpass-functions.js')
+//const renderpassFunctions = require('./glsl/renderpass-functions.js')
 
 Array.prototype.fast = function (speed) {
   this.speed = speed
