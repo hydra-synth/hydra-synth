@@ -1,15 +1,15 @@
-const Hydra = require('./../index.js').synth
+const Hydra = require('./../index.js')
 const loop = require('raf-loop')
 
-const shader = require('./../index.js').shaderGenerator
+//const shader = require('./../index.js').shaderGenerator
 
 function init () {
   var hydra = new Hydra()
   window.hydra = hydra
 
-  var generator = new shader()
-  var pass = generator.eval('osc().out()')
-  console.log('GOT', pass)
+  exampleAddFunction(hydra)
+  ///var generator = new shader()
+
  //  const canvas = document.createElement('canvas')
  //  canvas.style.backgroundColor = "#000"
  //  canvas.width = 800
@@ -49,7 +49,7 @@ function init () {
  //    hydra.tick(dt)
  //  }).start()
 
-osc(5).out()
+//osc(5).out()
 }
 
 function exampleEasingFunctions() {
@@ -65,35 +65,36 @@ function exampleEasingFunctions() {
 }
 
 
-function exampleAddFunction() {
+function exampleAddFunction(hydra) {
  // example custom function
-  //  hydra.synth.setFunction('ooo', {
-  //    type: 'src',
-  //    inputs: [
-  //      {
-  //        name: 'frequency',
-  //        type: 'float',
-  //        default: 60.0
-  //      },
-  //      {
-  //        name: 'sync',
-  //        type: 'float',
-  //        default: 0.1
-  //      },
-  //      {
-  //        name: 'offset',
-  //        type: 'float',
-  //        default: 0.0
-  //      }
-  //    ],
-  //    glsl: `vec4 ooo(vec2 _st, float freq, float sync, float offset){
-  //      vec2 st = _st;
-  //      float r = sin((st.x-offset/freq+time*sync)*freq)*0.5  + 0.5;
-  //      float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
-  //      float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
-  //      return vec4(r, g, b, 1.0);
-  //    }`
-  //  })
+ setFunction({
+ name: 'myOsc', // name that will be used to access function as well as within glsl
+ type: 'src', // can be src: vec4(vec2 _st), coord: vec2(vec2 _st), color: vec4(vec4 _c0), combine: vec4(vec4 _c0, vec4 _c1), combineCoord: vec2(vec2 _st, vec4 _c0)
+ inputs: [
+   {
+     name: 'freq',
+     type: 'float', // 'float'   //, 'texture', 'vec4'
+     default: 0.2
+   },
+   {
+         name: 'sync',
+         type: 'float',
+         default: 0.1
+       },
+       {
+         name: 'offset',
+         type: 'float',
+         default: 0.0
+       }
+ ],    glsl: `
+    vec2 st = _st;
+   float r = sin((st.x-offset*20./freq-time*sync)*freq)*0.5  + 0.5;
+   float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
+   float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
+   return vec4(r, g, b, 1.0);
+  `})
+
+  myOsc(10, 0.2, 0.8).out()
   //
   //  // ooo(10, 0.01, 1.2).blur().out()
 }

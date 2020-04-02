@@ -1,3 +1,8 @@
+# Changelog
+## [1.1.2] - 2020-04-02
+### Changed
+ - changed format for defining custom functions
+
 2.0.0
 
 - resize() function

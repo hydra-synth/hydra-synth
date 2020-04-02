@@ -7,7 +7,7 @@ const VidRecorder = require('./src/lib/video-recorder.js')
 const ArrayUtils = require('./src/lib/array-utils.js')
 const Sandbox = require('./src/eval-sandbox.js')
 
-const Synth = require('./src/generator-factory.js')
+const Generator = require('./src/generator-factory.js')
 
 // to do: add ability to pass in certain uniforms and transforms
 class HydraRenderer {
@@ -34,7 +34,7 @@ class HydraRenderer {
     this.detectAudio = detectAudio
 
     // object that contains all properties that will be made available on the global context and during local evaluation
-    this.renderer = {
+    this.synth = {
       time: 0,
       bpm: 30,
       width: this.width,
@@ -64,7 +64,7 @@ class HydraRenderer {
     // if stream capture is enabled, this object contains the capture stream
     this.captureStream = null
 
-    this.synth = undefined
+    this.generator = undefined
 
     this._initCanvas(canvas)
     this._initRegl()
@@ -72,21 +72,21 @@ class HydraRenderer {
     this._initSources(numSources)
     this._generateGlslTransforms()
 
-    this.renderer.screencap = () => {
+    this.synth.screencap = () => {
       this.saveFrame = true
     }
 
     if (enableStreamCapture) {
       this.captureStream = this.canvas.captureStream(25)
       // to do: enable capture stream of specific sources and outputs
-      this.renderer.vidRecorder = new VidRecorder(this.captureStream)
+      this.synth.vidRecorder = new VidRecorder(this.captureStream)
     }
 
     if(detectAudio) this._initAudio()
 
     if(autoLoop) loop(this.tick.bind(this)).start()
 
-    this.sandbox = new Sandbox(this.renderer, makeGlobal)
+    this.sandbox = new Sandbox(this.synth, makeGlobal)
   }
 
   eval(code) {
@@ -138,7 +138,7 @@ class HydraRenderer {
 
   _initAudio () {
     const that = this
-    this.renderer.a = new Audio({
+    this.synth.a = new Audio({
       numBins: 4,
       // changeListener: ({audio}) => {
       //   that.a = audio.bins.map((_, index) =>
@@ -293,7 +293,7 @@ class HydraRenderer {
       })
     //  o.render()
       o.id = index
-      self.renderer['o'+index] = o
+      self.synth['o'+index] = o
       return o
     })
 
@@ -310,20 +310,21 @@ class HydraRenderer {
 
   createSource () {
     let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height})
-    this.renderer['s' + this.s.length] = s
+    this.synth['s' + this.s.length] = s
     this.s.push(s)
     return s
   }
 
   _generateGlslTransforms () {
     var self = this
-    this.synth = new Synth({
+    this.generator = new Generator({
       defaultOutput: this.o[0],
       defaultUniforms: this.o[0].uniforms,
       extendTransforms: this.extendTransforms,
       changeListener: ({type, method, synth}) => {
           if (type === 'add') {
-            self.renderer[method] = synth.generators[method]
+            self.synth[method] = synth.generators[method]
+            if(self.sandbox) self.sandbox.add(method)
           } else if (type === 'remove') {
             // what to do here? dangerously deleting window methods
             //delete window[method]
@@ -331,6 +332,7 @@ class HydraRenderer {
       //  }
       }
     })
+    this.synth.setFunction = this.generator.setFunction.bind(this.generator)
   }
 
   _render (output) {
@@ -343,20 +345,20 @@ class HydraRenderer {
   }
 
   tick (dt, uniforms) {
-    this.renderer.time += dt * 0.001
-    if(this.renderer.update) {
-      try { this.renderer.update(dt) } catch (e) { console.log(error) }
+    this.synth.time += dt * 0.001
+    if(this.synth.update) {
+      try { this.synth.update(dt) } catch (e) { console.log(error) }
     }
-    if(this.detectAudio === true) this.renderer.a.tick()
+    if(this.detectAudio === true) this.synth.a.tick()
     for (let i = 0; i < this.s.length; i++) {
-      this.s[i].tick(this.renderer.time)
+      this.s[i].tick(this.synth.time)
     }
 
     for (let i = 0; i < this.o.length; i++) {
       this.o[i].tick({
-        time: this.renderer.time,
-        mouse: this.renderer.mouse,
-        bpm: this.renderer.bpm,
+        time: this.synth.time,
+        mouse: this.synth.mouse,
+        bpm: this.synth.bpm,
         resolution: [this.canvas.width, this.canvas.height]
       })
     }

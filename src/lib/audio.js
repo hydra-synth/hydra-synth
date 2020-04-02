@@ -26,7 +26,7 @@ class Audio {
     }
 
     this.onBeat = () => {
-      console.log("beat")
+    //  console.log("beat")
     }
 
     this.canvas = document.createElement('canvas')
@@ -47,13 +47,13 @@ class Audio {
 
     window.navigator.mediaDevices.getUserMedia({video: false, audio: true})
       .then((stream) => {
-        console.log('got mic stream', stream)
+      //  console.log('got mic stream', stream)
         this.stream = stream
         this.context = new AudioContext()
         //  this.context = new AudioContext()
         let audio_stream = this.context.createMediaStreamSource(stream)
 
-        console.log(this.context)
+      //  console.log(this.context)
         this.meyda = Meyda.createMeydaAnalyzer({
           audioContext: this.context,
           source: audio_stream,
@@ -147,7 +147,7 @@ class Audio {
     this.bins.forEach((bin, index) => {
       window['a' + index] = (scale = 1, offset = 0) => () => (a.fft[index] * scale + offset)
     })
-    console.log(this.settings)
+  //  console.log(this.settings)
   }
 
   setScale(scale){
