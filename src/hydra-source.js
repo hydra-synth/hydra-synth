@@ -4,15 +4,14 @@ const Screen = require('./lib/screenmedia.js')
 class HydraSource  {
 
   constructor (opts) {
-    opts.width = 100
-    opts.height  = 100
     this.regl = opts.regl
     this.src = null
     this.dynamic = true
     this.width = opts.width
     this.height = opts.height
     this.tex = this.regl.texture({
-      shape: [opts.width, opts.height]
+      shape: [1, 1]
+    //  shape: [opts.width, opts.height]
     })
     this.pb = opts.pb
   }
@@ -66,20 +65,21 @@ class HydraSource  {
   clear () {
     this.src = null
     this.tex = this.regl.texture({
-      shape: [this.width, this.height]
+      shape: [1, 1]
     })
   }
 
   tick (time) {
-
+    //  console.log(this.src, this.tex.width, this.tex.height)
     if (this.src !== null && this.dynamic === true) {
-
         if(this.src.videoWidth && this.src.videoWidth !== this.tex.width) {
+          console.log(this.src.videoWidth, this.src.videoHeight, this.tex.width, this.tex.height)
           this.tex.resize(this.src.videoWidth, this.src.videoHeight)
         }
 
+        if(this.src.width && this.src.width !== this.tex.width)   this.tex.resize(this.src.width, this.src.height)
+
         this.tex.subimage(this.src)
-       //this.tex = this.regl.texture(this.src)
     }
   }
 

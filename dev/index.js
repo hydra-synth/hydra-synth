@@ -8,21 +8,12 @@ function init () {
   window.hydra = hydra
 
   exampleAddFunction(hydra)
-  exampleScreen()
+//  exampleScreen()
+
+exampleCustomCanvas()
   ///var generator = new shader()
 
- //  const canvas = document.createElement('canvas')
- //  canvas.style.backgroundColor = "#000"
- //  canvas.width = 800
- //  canvas.height = 200
- //
- //  canvas.style.width = '100%'
- //  canvas.style.height = '100%'
- //
- //  // var ctx = canvas.getContext('2d')
- //  // ctx.moveTo(0, 0);
- //  // ctx.lineTo(200, 100);
- //  // ctx.stroke();
+
  // document.body.appendChild(canvas)
  //  var hydra = new Hydra({
  //  //  autoLoad: false
@@ -102,8 +93,24 @@ function exampleAddFunction(hydra) {
 
 function exampleScreen() {
   s0.initScreen()
-  src(s0).out()
+  //src(s0).out()
 }
 
+function exampleCustomCanvas() {
+   const canvas = document.createElement('canvas')
+   canvas.style.backgroundColor = "#000"
+   canvas.width = 800
+   canvas.height = 200
+
+   canvas.style.width = '100%'
+   canvas.style.height = '100%'
+
+   var ctx = canvas.getContext('2d')
+   ctx.moveTo(0, 0);
+   ctx.lineTo(200, 100);
+   ctx.stroke();
+
+   s0.init({src: canvas})
+}
 
 window.onload = init

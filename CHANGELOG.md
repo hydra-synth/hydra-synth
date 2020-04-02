@@ -2,6 +2,7 @@
 ## [1.1.4] - 2020-04-02
 ### Changed
  - s0.initScreen() now possible with no extension installed (in chrome)
+ - source textures default to one pixel when no source is specified
 
 ## [1.1.2] - 2020-04-02
 ### Changed

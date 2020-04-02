@@ -22,7 +22,11 @@ GlslSource.prototype.out = function (_output) {
   var glsl = this.glsl(output)
   this.synth.currentFunctions = []
  // output.renderPasses(glsl)
-  if(output) output.render(glsl)
+  if(output) try{
+    output.render(glsl)
+  } catch {
+    console.log('shader could not compile')
+  }
 }
 
 GlslSource.prototype.glsl = function () {
