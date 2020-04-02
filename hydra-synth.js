@@ -43,7 +43,8 @@ class HydraRenderer {
       mouse: Mouse,
       render: this._render.bind(this),
       resize: this.resize.bind(this),
-      update: (dt) => {} // user defined update function
+      update: (dt) => {},// user defined update function
+      hush: this.hush.bind(this)
     }
 
     // only allow valid precision options
@@ -96,6 +97,15 @@ class HydraRenderer {
   getScreenImage(callback) {
     this.imageCallback = callback
     this.saveFrame = true
+  }
+
+  hush() {
+    this.s.forEach((source) => {
+      source.clear()
+    })
+    this.o.forEach((output) => {
+      this.synth.solid().out(output)
+    })
   }
 
   resize(width, height) {

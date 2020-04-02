@@ -1,7 +1,7 @@
-const enumerateDevices = require('enumerate-devices')
+//const enumerateDevices = require('enumerate-devices')
 
 module.exports = function (deviceId) {
-  return enumerateDevices()
+  return navigator.mediaDevices.enumerateDevices()
     .then(devices => devices.filter(devices => devices.kind === 'videoinput'))
     .then(cameras => {
       let constraints = { audio: false, video: true}
@@ -10,7 +10,7 @@ module.exports = function (deviceId) {
           deviceId: { exact: cameras[deviceId].deviceId }
         }
       }
-      console.log(cameras)
+    //  console.log(cameras)
       return window.navigator.mediaDevices.getUserMedia(constraints)
     })
     .then(stream => {

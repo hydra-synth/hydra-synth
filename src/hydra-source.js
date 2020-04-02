@@ -29,11 +29,11 @@ class HydraSource  {
     Webcam(index).then((response) => {
       self.src = response.video
       self.tex = self.regl.texture(self.src)
-    })
+    }).catch((err) => console.log('could not get camera', err))
   }
 
   initStream (streamName) {
-    console.log("initing stream!", streamName)
+  //  console.log("initing stream!", streamName)
     let self = this
     if (streamName && this.pb) {
         this.pb.initSource(streamName)
@@ -63,7 +63,7 @@ class HydraSource  {
   }
 
   clear () {
-    if(this.src.srcObject) {
+    if(this.src && this.src.srcObject) {
       if (this.src.srcObject.getTracks) {
         this.src.srcObject.getTracks().forEach((track) => track.stop())
       }

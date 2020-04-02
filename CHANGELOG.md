@@ -1,9 +1,15 @@
 # Changelog
 ## [1.1.4] - 2020-04-02
+
+### Added
+ - hush() function clears all screens and stops cameras
+ 
 ### Changed
  - s0.initScreen() now possible with no extension installed (in chrome)
  - source textures default to one pixel when no source is specified
+ - screen share working in FireFox
  - s0.clear() stops webcam and clears texture
+ - removed dependency on webrtc-adapter
 
 ## [1.1.2] - 2020-04-02
 ### Changed
