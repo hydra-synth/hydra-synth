@@ -6,6 +6,9 @@
  - when canvas is stretched, uses pixelated rendering rather than blurry
  - stats.fps shows current fps (read-only)
 
+### Fixed
+ - invalid function does not crash editor
+
 ## [1.1.4] - 2020-04-02
 
 ### Added
