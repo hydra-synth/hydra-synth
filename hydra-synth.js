@@ -39,7 +39,10 @@ class HydraRenderer {
       bpm: 30,
       width: this.width,
       height: this.height,
-      fps: null,
+      fps: undefined,
+      stats: {
+        fps: 0
+      },
       speed: 1,
       mouse: Mouse,
       render: this._render.bind(this),
@@ -47,6 +50,9 @@ class HydraRenderer {
       update: (dt) => {},// user defined update function
       hush: this.hush.bind(this)
     }
+
+    this.timeSinceLastUpdate = 0
+    this._time = 0 // for internal use, only to use for deciding when to render frames
 
     window.synth = this.synth
 
@@ -91,7 +97,7 @@ class HydraRenderer {
     if(autoLoop) loop(this.tick.bind(this)).start()
 
     // final argument is properties that the user can set, all others are treated as read-only
-    this.sandbox = new Sandbox(this.synth, makeGlobal, ['speed', 'update', 'bpm'])
+    this.sandbox = new Sandbox(this.synth, makeGlobal, ['speed', 'update', 'bpm', 'fps'])
   }
 
   eval(code) {
@@ -181,6 +187,7 @@ class HydraRenderer {
       this.canvas.height = this.height
       this.canvas.style.width = '100%'
       this.canvas.style.height = '100%'
+      this.canvas.style.imageRendering = 'pixelated'
       document.body.appendChild(this.canvas)
     }
   }
@@ -358,40 +365,49 @@ class HydraRenderer {
     }
   }
 
+  // dt in ms
   tick (dt, uniforms) {
     this.sandbox.tick()
-    this.synth.time += dt * 0.001 *this.synth.speed
-  //  console.log(this.synth.speed, this.synth.time)
+    if(this.detectAudio === true) this.synth.a.tick()
+  //  let updateInterval = 1000/this.synth.fps // ms
     if(this.synth.update) {
       try { this.synth.update(dt) } catch (e) { console.log(error) }
     }
-    if(this.detectAudio === true) this.synth.a.tick()
-    for (let i = 0; i < this.s.length; i++) {
-      this.s[i].tick(this.synth.time)
-    }
 
-    for (let i = 0; i < this.o.length; i++) {
-      this.o[i].tick({
-        time: this.synth.time,
-        mouse: this.synth.mouse,
-        bpm: this.synth.bpm,
-        resolution: [this.canvas.width, this.canvas.height]
-      })
-    }
-    if (this.isRenderingAll) {
-      this.renderAll({
-        tex0: this.o[0].getCurrent(),
-        tex1: this.o[1].getCurrent(),
-        tex2: this.o[2].getCurrent(),
-        tex3: this.o[3].getCurrent(),
-        resolution: [this.canvas.width, this.canvas.height]
-      })
-    } else {
+    this.sandbox.set('time', this.synth.time += dt * 0.001 * this.synth.speed)
+    this.timeSinceLastUpdate += dt
+    if(!this.synth.fps || this.timeSinceLastUpdate >= 1000/this.synth.fps) {
+    //  console.log(1000/this.timeSinceLastUpdate)
+      this.synth.stats.fps = Math.ceil(1000/this.timeSinceLastUpdate)
+    //  console.log(this.synth.speed, this.synth.time)
+      for (let i = 0; i < this.s.length; i++) {
+        this.s[i].tick(this.synth.time)
+      }
 
-      this.renderFbo({
-        tex0: this.output.getCurrent(),
-        resolution: [this.canvas.width, this.canvas.height]
-      })
+      for (let i = 0; i < this.o.length; i++) {
+        this.o[i].tick({
+          time: this.synth.time,
+          mouse: this.synth.mouse,
+          bpm: this.synth.bpm,
+          resolution: [this.canvas.width, this.canvas.height]
+        })
+      }
+      if (this.isRenderingAll) {
+        this.renderAll({
+          tex0: this.o[0].getCurrent(),
+          tex1: this.o[1].getCurrent(),
+          tex2: this.o[2].getCurrent(),
+          tex3: this.o[3].getCurrent(),
+          resolution: [this.canvas.width, this.canvas.height]
+        })
+      } else {
+
+        this.renderFbo({
+          tex0: this.output.getCurrent(),
+          resolution: [this.canvas.width, this.canvas.height]
+        })
+      }
+      this.timeSinceLastUpdate = 0
     }
     if(this.saveFrame === true) {
       this.canvasToImage()

@@ -1,10 +1,17 @@
 # Changelog
+
+## [1.1.5] - 2020-04-03
+### Added
+ - fps to set target rendering speed `fps=30`, not setting a value or `fps=undefined` will render as fast as possible
+ - when canvas is stretched, uses pixelated rendering rather than blurry
+ - stats.fps shows current fps (read-only)
+
 ## [1.1.4] - 2020-04-02
 
 ### Added
  - hush() function clears all screens and stops cameras
  - speed variable for controlling time
- 
+
 ### Changed
  - s0.initScreen() now possible with no extension installed (in chrome)
  - source textures default to one pixel when no source is specified

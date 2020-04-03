@@ -149,7 +149,14 @@ function formatArguments (transform, startIndex) {
         if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
           typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
         } else {
-          typedArg.value = (context, props, batchId) => (userArgs[index](props))
+          typedArg.value = (context, props, batchId) => {
+           try {
+             return userArgs[index](props)
+           } catch (e) {
+             console.log('ERROR', e)
+             return input.default
+           }
+         }
         }
 
         typedArg.isUniform = true

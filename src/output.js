@@ -16,6 +16,7 @@ var Output = function (opts) {
   // for each output, create two fbos for pingponging
   this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
     color: this.regl.texture({
+      mag: 'nearest',
       width: opts.width,
       height: opts.height,
       format: 'rgba'

@@ -105,6 +105,8 @@ function exampleCustomCanvas() {
    canvas.style.width = '100%'
    canvas.style.height = '100%'
 
+//canvas.style.imageRe
+
    var ctx = canvas.getContext('2d')
    ctx.moveTo(0, 0);
    ctx.lineTo(200, 100);
