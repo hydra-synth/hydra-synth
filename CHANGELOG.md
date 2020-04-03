@@ -5,6 +5,10 @@
  - fps to set target rendering speed `fps=30`, not setting a value or `fps=undefined` will render as fast as possible
  - when canvas is stretched, uses pixelated rendering rather than blurry
  - stats.fps shows current fps (read-only)
+ - update function called each time a new frame is rendered. can be used like
+ ```update = (dt) => {
+      // something i want to do
+    }``` 
 
 ### Fixed
  - invalid function does not crash editor
