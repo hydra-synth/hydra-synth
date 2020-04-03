@@ -1,389 +1,4 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Hydra = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-const Output = require('./src/output.js');
-const loop = require('raf-loop');
-const Source = require('./src/hydra-source.js');
-const Mouse = require('mouse-change')();
-const Audio = require('./src/lib/audio.js');
-const VidRecorder = require('./src/lib/video-recorder.js');
-const ArrayUtils = require('./src/lib/array-utils.js');
-const Sandbox = require('./src/eval-sandbox.js');
-
-const Synth = require('./src/generator-factory.js');
-
-// to do: add ability to pass in certain uniforms and transforms
-class HydraRenderer {
-
-  constructor({
-    pb = null,
-    width = 1280,
-    height = 720,
-    numSources = 4,
-    numOutputs = 4,
-    makeGlobal = true,
-    autoLoop = true,
-    detectAudio = true,
-    enableStreamCapture = true,
-    canvas,
-    precision = 'mediump',
-    extendTransforms = {} // add your own functions on init
-  } = {}) {
-
-    this.pb = pb;
-    this.width = width;
-    this.height = height;
-    this.renderAll = false;
-    this.detectAudio = detectAudio;
-
-    // object that contains all properties that will be made available on the global context and during local evaluation
-    this.renderer = {
-      time: 0,
-      bpm: 30,
-      width: this.width,
-      height: this.height,
-      fps: null,
-      mouse: Mouse,
-      render: this._render.bind(this),
-      resize: this.resize.bind(this),
-      update: dt => {} // user defined update function
-
-
-      // only allow valid precision options
-    };let precisionOptions = ['lowp', 'mediump', 'highp'];
-    let precisionValid = precisionOptions.includes(precision.toLowerCase());
-
-    this.precision = precisionValid ? precision.toLowerCase() : 'mediump';
-
-    if (!precisionValid) {
-      console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.');
-    }
-
-    this.extendTransforms = extendTransforms;
-
-    // boolean to store when to save screenshot
-    this.saveFrame = false;
-
-    // if stream capture is enabled, this object contains the capture stream
-    this.captureStream = null;
-
-    this.synth = undefined;
-
-    this._initCanvas(canvas);
-    this._initRegl();
-    this._initOutputs(numOutputs);
-    this._initSources(numSources);
-    this._generateGlslTransforms();
-
-    this.renderer.screencap = () => {
-      this.saveFrame = true;
-    };
-
-    if (enableStreamCapture) {
-      this.captureStream = this.canvas.captureStream(25);
-      // to do: enable capture stream of specific sources and outputs
-      this.renderer.vidRecorder = new VidRecorder(this.captureStream);
-    }
-
-    if (detectAudio) this._initAudio();
-
-    if (autoLoop) loop(this.tick.bind(this)).start();
-
-    this.sandbox = new Sandbox(this.renderer, makeGlobal);
-  }
-
-  eval(code) {
-    this.sandbox.eval(code);
-  }
-
-  getScreenImage(callback) {
-    this.imageCallback = callback;
-    this.saveFrame = true;
-  }
-
-  resize(width, height) {
-    //  console.log(width, height)
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.width = width;
-    this.height = height;
-    this.o.forEach(output => {
-      output.resize(width, height);
-    });
-    this.s.forEach(source => {
-      source.resize(width, height);
-    });
-  }
-
-  canvasToImage(callback) {
-    const a = document.createElement('a');
-    a.style.display = 'none';
-
-    let d = new Date();
-    a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.png`;
-    document.body.appendChild(a);
-    var self = this;
-    this.canvas.toBlob(blob => {
-      if (self.imageCallback) {
-        self.imageCallback(blob);
-        delete self.imageCallback;
-      } else {
-        a.href = URL.createObjectURL(blob);
-        console.log(a.href);
-        a.click();
-      }
-    }, 'image/png');
-    setTimeout(() => {
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(a.href);
-    }, 300);
-  }
-
-  _initAudio() {
-    const that = this;
-    this.renderer.a = new Audio({
-      numBins: 4
-      // changeListener: ({audio}) => {
-      //   that.a = audio.bins.map((_, index) =>
-      //     (scale = 1, offset = 0) => () => (audio.fft[index] * scale + offset)
-      //   )
-      //
-      //   if (that.makeGlobal) {
-      //     that.a.forEach((a, index) => {
-      //       const aname = `a${index}`
-      //       window[aname] = a
-      //     })
-      //   }
-      // }
-    });
-  }
-
-  // create main output canvas and add to screen
-  _initCanvas(canvas) {
-    if (canvas) {
-      this.canvas = canvas;
-      this.width = canvas.width;
-      this.height = canvas.height;
-    } else {
-      this.canvas = document.createElement('canvas');
-      this.canvas.width = this.width;
-      this.canvas.height = this.height;
-      this.canvas.style.width = '100%';
-      this.canvas.style.height = '100%';
-      document.body.appendChild(this.canvas);
-    }
-  }
-
-  _initRegl() {
-    this.regl = require('regl')({
-      //  profile: true,
-      canvas: this.canvas,
-      pixelRatio: 1 //,
-      // extensions: [
-      //   'oes_texture_half_float',
-      //   'oes_texture_half_float_linear'
-      // ],
-      // optionalExtensions: [
-      //   'oes_texture_float',
-      //   'oes_texture_float_linear'
-      //]
-    });
-
-    // This clears the color buffer to black and the depth buffer to 1
-    this.regl.clear({
-      color: [0, 0, 0, 1]
-    });
-
-    this.renderAll = this.regl({
-      frag: `
-      precision ${this.precision} float;
-      varying vec2 uv;
-      uniform sampler2D tex0;
-      uniform sampler2D tex1;
-      uniform sampler2D tex2;
-      uniform sampler2D tex3;
-
-      void main () {
-        vec2 st = vec2(1.0 - uv.x, uv.y);
-        st*= vec2(2);
-        vec2 q = floor(st).xy*(vec2(2.0, 1.0));
-        int quad = int(q.x) + int(q.y);
-        st.x += step(1., mod(st.y,2.0));
-        st.y += step(1., mod(st.x,2.0));
-        st = fract(st);
-        if(quad==0){
-          gl_FragColor = texture2D(tex0, st);
-        } else if(quad==1){
-          gl_FragColor = texture2D(tex1, st);
-        } else if (quad==2){
-          gl_FragColor = texture2D(tex2, st);
-        } else {
-          gl_FragColor = texture2D(tex3, st);
-        }
-
-      }
-      `,
-      vert: `
-      precision ${this.precision} float;
-      attribute vec2 position;
-      varying vec2 uv;
-
-      void main () {
-        uv = position;
-        gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
-      }`,
-      attributes: {
-        position: [[-2, 0], [0, -2], [2, 2]]
-      },
-      uniforms: {
-        tex0: this.regl.prop('tex0'),
-        tex1: this.regl.prop('tex1'),
-        tex2: this.regl.prop('tex2'),
-        tex3: this.regl.prop('tex3')
-      },
-      count: 3,
-      depth: { enable: false }
-    });
-
-    this.renderFbo = this.regl({
-      frag: `
-      precision ${this.precision} float;
-      varying vec2 uv;
-      uniform vec2 resolution;
-      uniform sampler2D tex0;
-
-      void main () {
-        gl_FragColor = texture2D(tex0, vec2(1.0 - uv.x, uv.y));
-      }
-      `,
-      vert: `
-      precision ${this.precision} float;
-      attribute vec2 position;
-      varying vec2 uv;
-
-      void main () {
-        uv = position;
-        gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
-      }`,
-      attributes: {
-        position: [[-2, 0], [0, -2], [2, 2]]
-      },
-      uniforms: {
-        tex0: this.regl.prop('tex0'),
-        resolution: this.regl.prop('resolution')
-      },
-      count: 3,
-      depth: { enable: false }
-    });
-  }
-
-  _initOutputs(numOutputs) {
-    const self = this;
-    this.o = Array(numOutputs).fill().map((el, index) => {
-      var o = new Output({
-        regl: this.regl,
-        width: this.width,
-        height: this.height,
-        precision: this.precision
-      });
-      //  o.render()
-      o.id = index;
-      self.renderer['o' + index] = o;
-      return o;
-    });
-
-    // set default output
-    this.output = this.o[0];
-  }
-
-  _initSources(numSources) {
-    this.s = [];
-    for (var i = 0; i < numSources; i++) {
-      this.createSource();
-    }
-  }
-
-  createSource() {
-    let s = new Source({ regl: this.regl, pb: this.pb, width: this.width, height: this.height });
-    this.renderer['s' + this.s.length] = s;
-    this.s.push(s);
-    return s;
-  }
-
-  _generateGlslTransforms() {
-    var self = this;
-    this.synth = new Synth({
-      defaultOutput: this.o[0],
-      defaultUniforms: this.o[0].uniforms,
-      extendTransforms: this.extendTransforms,
-      changeListener: ({ type, method, synth }) => {
-        if (type === 'add') {
-          self.renderer[method] = synth.generators[method];
-        } else if (type === 'remove') {}
-        // what to do here? dangerously deleting window methods
-        //delete window[method]
-
-        //  }
-      }
-    });
-  }
-
-  _render(output) {
-    if (output) {
-      this.output = output;
-      this.isRenderingAll = false;
-    } else {
-      this.isRenderingAll = true;
-    }
-  }
-
-  tick(dt, uniforms) {
-    this.renderer.time += dt * 0.001;
-    if (this.renderer.update) {
-      try {
-        this.renderer.update(dt);
-      } catch (e) {
-        console.log(error);
-      }
-    }
-    if (this.detectAudio === true) this.renderer.a.tick();
-    for (let i = 0; i < this.s.length; i++) {
-      this.s[i].tick(this.renderer.time);
-    }
-
-    for (let i = 0; i < this.o.length; i++) {
-      this.o[i].tick({
-        time: this.renderer.time,
-        mouse: this.renderer.mouse,
-        bpm: this.renderer.bpm,
-        resolution: [this.canvas.width, this.canvas.height]
-      });
-    }
-    if (this.isRenderingAll) {
-      this.renderAll({
-        tex0: this.o[0].getCurrent(),
-        tex1: this.o[1].getCurrent(),
-        tex2: this.o[2].getCurrent(),
-        tex3: this.o[3].getCurrent(),
-        resolution: [this.canvas.width, this.canvas.height]
-      });
-    } else {
-
-      this.renderFbo({
-        tex0: this.output.getCurrent(),
-        resolution: [this.canvas.width, this.canvas.height]
-      });
-    }
-    if (this.saveFrame === true) {
-      this.canvasToImage();
-      this.saveFrame = false;
-    }
-    //  this.regl.poll()
-  }
-
-}
-
-module.exports = HydraRenderer;
-
-},{"./src/eval-sandbox.js":15,"./src/generator-factory.js":16,"./src/hydra-source.js":22,"./src/lib/array-utils.js":23,"./src/lib/audio.js":24,"./src/lib/video-recorder.js":29,"./src/output.js":31,"mouse-change":7,"raf-loop":11,"regl":13}],2:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -908,74 +523,617 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],3:[function(require,module,exports){
-module.exports = function (cb) {
-    if (typeof Promise !== 'function') {
-      var err = new Error('Device enumeration not supported.');
-      err.kind = 'METHOD_NOT_AVAILABLE';
-      if (cb) {
-          console.warn('module now uses promise based api - callback is deprecated');
-          return cb(err);
-      }
-      throw err;
+},{}],2:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
     }
 
-    return new Promise(function(resolve, reject) {
-        var processDevices = function (devices) {
-            var normalizedDevices = [];
-            for (var i = 0; i < devices.length; i++) {
-                var device = devices[i];
-                //make chrome values match spec
-                var kind = device.kind || null;
-                if (kind && kind.toLowerCase() === 'audio') {
-                    kind = 'audioinput';
-                } else if (kind && kind.toLowerCase() === 'video') {
-                    kind = 'videoinput';
-                }
-                normalizedDevices.push({
-                    facing: device.facing || null,
-                    deviceId: device.id || device.deviceId || null,
-                    label: device.label || null,
-                    kind: kind,
-                    groupId: device.groupId || null
-                });
-            }
-            resolve(normalizedDevices);
-            if (cb) {
-                console.warn('module now uses promise based api - callback is deprecated');
-                cb(null, normalizedDevices);
-            }
-        };
 
-        if (window.navigator && window.navigator.mediaDevices && window.navigator.mediaDevices.enumerateDevices) {
-            window.navigator.mediaDevices.enumerateDevices().then(processDevices);
-        } else if (window.MediaStreamTrack && window.MediaStreamTrack.getSources) {
-            window.MediaStreamTrack.getSources(processDevices);
-        } else {
-            var err = new Error('Device enumeration not supported.');
-            err.kind = 'METHOD_NOT_AVAILABLE';
-            reject(err);
-            if (cb) {
-                console.warn('module now uses promise based api - callback is deprecated');
-                cb(err);
-            }
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
         }
-    });
-};
+    }
 
-},{}],4:[function(require,module,exports){
-module.exports = function(strings) {
-  if (typeof strings === 'string') strings = [strings]
-  var exprs = [].slice.call(arguments,1)
-  var parts = []
-  for (var i = 0; i < strings.length-1; i++) {
-    parts.push(strings[i], exprs[i] || '')
-  }
-  parts.push(strings[i])
-  return parts.join('')
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
 }
 
-},{}],5:[function(require,module,exports){
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],3:[function(require,module,exports){
+const Output = require('./src/output.js')
+const loop = require('raf-loop')
+const Source = require('./src/hydra-source.js')
+const Mouse = require('mouse-change')()
+const Audio = require('./src/lib/audio.js')
+const VidRecorder = require('./src/lib/video-recorder.js')
+const ArrayUtils = require('./src/lib/array-utils.js')
+const Sandbox = require('./src/eval-sandbox.js')
+
+const Generator = require('./src/generator-factory.js')
+
+// to do: add ability to pass in certain uniforms and transforms
+class HydraRenderer {
+
+  constructor ({
+    pb = null,
+    width = 1280,
+    height = 720,
+    numSources = 4,
+    numOutputs = 4,
+    makeGlobal = true,
+    autoLoop = true,
+    detectAudio = true,
+    enableStreamCapture = true,
+    canvas,
+    precision = 'mediump',
+    extendTransforms = {} // add your own functions on init
+  } = {}) {
+
+    this.pb = pb
+    this.width = width
+    this.height = height
+    this.renderAll = false
+    this.detectAudio = detectAudio
+
+    // object that contains all properties that will be made available on the global context and during local evaluation
+    this.synth = {
+      time: 0,
+      bpm: 30,
+      width: this.width,
+      height: this.height,
+      fps: undefined,
+      stats: {
+        fps: 0
+      },
+      speed: 1,
+      mouse: Mouse,
+      render: this._render.bind(this),
+      resize: this.resize.bind(this),
+      update: (dt) => {},// user defined update function
+      hush: this.hush.bind(this)
+    }
+
+    this.timeSinceLastUpdate = 0
+    this._time = 0 // for internal use, only to use for deciding when to render frames
+
+    window.synth = this.synth
+
+    // only allow valid precision options
+    let precisionOptions = ['lowp','mediump','highp']
+    let precisionValid = precisionOptions.includes(precision.toLowerCase())
+
+    this.precision = precisionValid ? precision.toLowerCase() : 'mediump'
+
+    if(!precisionValid){
+      console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
+    }
+
+    this.extendTransforms = extendTransforms
+
+    // boolean to store when to save screenshot
+    this.saveFrame = false
+
+    // if stream capture is enabled, this object contains the capture stream
+    this.captureStream = null
+
+    this.generator = undefined
+
+    this._initCanvas(canvas)
+    this._initRegl()
+    this._initOutputs(numOutputs)
+    this._initSources(numSources)
+    this._generateGlslTransforms()
+
+    this.synth.screencap = () => {
+      this.saveFrame = true
+    }
+
+    if (enableStreamCapture) {
+      this.captureStream = this.canvas.captureStream(25)
+      // to do: enable capture stream of specific sources and outputs
+      this.synth.vidRecorder = new VidRecorder(this.captureStream)
+    }
+
+    if(detectAudio) this._initAudio()
+
+    if(autoLoop) loop(this.tick.bind(this)).start()
+
+    // final argument is properties that the user can set, all others are treated as read-only
+    this.sandbox = new Sandbox(this.synth, makeGlobal, ['speed', 'update', 'bpm', 'fps'])
+  }
+
+  eval(code) {
+    this.sandbox.eval(code)
+  }
+
+  getScreenImage(callback) {
+    this.imageCallback = callback
+    this.saveFrame = true
+  }
+
+  hush() {
+    this.s.forEach((source) => {
+      source.clear()
+    })
+    this.o.forEach((output) => {
+      this.synth.solid().out(output)
+    })
+  }
+
+  resize(width, height) {
+  //  console.log(width, height)
+    this.canvas.width = width
+    this.canvas.height = height
+    this.width = width
+    this.height = height
+    this.o.forEach((output) => {
+      output.resize(width, height)
+    })
+    this.s.forEach((source) => {
+      source.resize(width, height)
+    })
+  }
+
+  canvasToImage (callback) {
+    const a = document.createElement('a')
+    a.style.display = 'none'
+
+    let d = new Date()
+    a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.png`
+    document.body.appendChild(a)
+    var self = this
+    this.canvas.toBlob( (blob) => {
+        if(self.imageCallback){
+          self.imageCallback(blob)
+          delete self.imageCallback
+        } else {
+          a.href = URL.createObjectURL(blob)
+          console.log(a.href)
+          a.click()
+        }
+    }, 'image/png')
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(a.href);
+    }, 300);
+  }
+
+  _initAudio () {
+    const that = this
+    this.synth.a = new Audio({
+      numBins: 4,
+      // changeListener: ({audio}) => {
+      //   that.a = audio.bins.map((_, index) =>
+      //     (scale = 1, offset = 0) => () => (audio.fft[index] * scale + offset)
+      //   )
+      //
+      //   if (that.makeGlobal) {
+      //     that.a.forEach((a, index) => {
+      //       const aname = `a${index}`
+      //       window[aname] = a
+      //     })
+      //   }
+      // }
+    })
+  }
+
+  // create main output canvas and add to screen
+  _initCanvas (canvas) {
+    if (canvas) {
+      this.canvas = canvas
+      this.width = canvas.width
+      this.height = canvas.height
+    } else {
+      this.canvas = document.createElement('canvas')
+      this.canvas.width = this.width
+      this.canvas.height = this.height
+      this.canvas.style.width = '100%'
+      this.canvas.style.height = '100%'
+      this.canvas.style.imageRendering = 'pixelated'
+      document.body.appendChild(this.canvas)
+    }
+  }
+
+  _initRegl () {
+    this.regl = require('regl')({
+    //  profile: true,
+      canvas: this.canvas,
+      pixelRatio: 1//,
+      // extensions: [
+      //   'oes_texture_half_float',
+      //   'oes_texture_half_float_linear'
+      // ],
+      // optionalExtensions: [
+      //   'oes_texture_float',
+      //   'oes_texture_float_linear'
+     //]
+   })
+
+    // This clears the color buffer to black and the depth buffer to 1
+    this.regl.clear({
+      color: [0, 0, 0, 1]
+    })
+
+    this.renderAll = this.regl({
+      frag: `
+      precision ${this.precision} float;
+      varying vec2 uv;
+      uniform sampler2D tex0;
+      uniform sampler2D tex1;
+      uniform sampler2D tex2;
+      uniform sampler2D tex3;
+
+      void main () {
+        vec2 st = vec2(1.0 - uv.x, uv.y);
+        st*= vec2(2);
+        vec2 q = floor(st).xy*(vec2(2.0, 1.0));
+        int quad = int(q.x) + int(q.y);
+        st.x += step(1., mod(st.y,2.0));
+        st.y += step(1., mod(st.x,2.0));
+        st = fract(st);
+        if(quad==0){
+          gl_FragColor = texture2D(tex0, st);
+        } else if(quad==1){
+          gl_FragColor = texture2D(tex1, st);
+        } else if (quad==2){
+          gl_FragColor = texture2D(tex2, st);
+        } else {
+          gl_FragColor = texture2D(tex3, st);
+        }
+
+      }
+      `,
+      vert: `
+      precision ${this.precision} float;
+      attribute vec2 position;
+      varying vec2 uv;
+
+      void main () {
+        uv = position;
+        gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
+      }`,
+      attributes: {
+        position: [
+          [-2, 0],
+          [0, -2],
+          [2, 2]
+        ]
+      },
+      uniforms: {
+        tex0: this.regl.prop('tex0'),
+        tex1: this.regl.prop('tex1'),
+        tex2: this.regl.prop('tex2'),
+        tex3: this.regl.prop('tex3')
+      },
+      count: 3,
+      depth: { enable: false }
+    })
+
+    this.renderFbo = this.regl({
+      frag: `
+      precision ${this.precision} float;
+      varying vec2 uv;
+      uniform vec2 resolution;
+      uniform sampler2D tex0;
+
+      void main () {
+        gl_FragColor = texture2D(tex0, vec2(1.0 - uv.x, uv.y));
+      }
+      `,
+      vert: `
+      precision ${this.precision} float;
+      attribute vec2 position;
+      varying vec2 uv;
+
+      void main () {
+        uv = position;
+        gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
+      }`,
+      attributes: {
+        position: [
+          [-2, 0],
+          [0, -2],
+          [2, 2]
+        ]
+      },
+      uniforms: {
+        tex0: this.regl.prop('tex0'),
+        resolution: this.regl.prop('resolution')
+      },
+      count: 3,
+      depth: { enable: false }
+    })
+  }
+
+  _initOutputs (numOutputs) {
+    const self = this
+    this.o = (Array(numOutputs)).fill().map((el, index) => {
+      var o = new Output({
+        regl: this.regl,
+        width: this.width,
+        height: this.height,
+        precision: this.precision
+      })
+    //  o.render()
+      o.id = index
+      self.synth['o'+index] = o
+      return o
+    })
+
+    // set default output
+    this.output = this.o[0]
+  }
+
+  _initSources (numSources) {
+    this.s = []
+    for(var i = 0; i < numSources; i++) {
+      this.createSource()
+    }
+  }
+
+  createSource () {
+    let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height})
+    this.synth['s' + this.s.length] = s
+    this.s.push(s)
+    return s
+  }
+
+  _generateGlslTransforms () {
+    var self = this
+    this.generator = new Generator({
+      defaultOutput: this.o[0],
+      defaultUniforms: this.o[0].uniforms,
+      extendTransforms: this.extendTransforms,
+      changeListener: ({type, method, synth}) => {
+          if (type === 'add') {
+            self.synth[method] = synth.generators[method]
+            if(self.sandbox) self.sandbox.add(method)
+          } else if (type === 'remove') {
+            // what to do here? dangerously deleting window methods
+            //delete window[method]
+          }
+      //  }
+      }
+    })
+    this.synth.setFunction = this.generator.setFunction.bind(this.generator)
+  }
+
+  _render (output) {
+    if (output) {
+      this.output = output
+      this.isRenderingAll = false
+    } else {
+      this.isRenderingAll = true
+    }
+  }
+
+  // dt in ms
+  tick (dt, uniforms) {
+    this.sandbox.tick()
+    if(this.detectAudio === true) this.synth.a.tick()
+  //  let updateInterval = 1000/this.synth.fps // ms
+    if(this.synth.update) {
+      try { this.synth.update(dt) } catch (e) { console.log(error) }
+    }
+
+    this.sandbox.set('time', this.synth.time += dt * 0.001 * this.synth.speed)
+    this.timeSinceLastUpdate += dt
+    if(!this.synth.fps || this.timeSinceLastUpdate >= 1000/this.synth.fps) {
+    //  console.log(1000/this.timeSinceLastUpdate)
+      this.synth.stats.fps = Math.ceil(1000/this.timeSinceLastUpdate)
+    //  console.log(this.synth.speed, this.synth.time)
+      for (let i = 0; i < this.s.length; i++) {
+        this.s[i].tick(this.synth.time)
+      }
+
+      for (let i = 0; i < this.o.length; i++) {
+        this.o[i].tick({
+          time: this.synth.time,
+          mouse: this.synth.mouse,
+          bpm: this.synth.bpm,
+          resolution: [this.canvas.width, this.canvas.height]
+        })
+      }
+      if (this.isRenderingAll) {
+        this.renderAll({
+          tex0: this.o[0].getCurrent(),
+          tex1: this.o[1].getCurrent(),
+          tex2: this.o[2].getCurrent(),
+          tex3: this.o[3].getCurrent(),
+          resolution: [this.canvas.width, this.canvas.height]
+        })
+      } else {
+
+        this.renderFbo({
+          tex0: this.output.getCurrent(),
+          resolution: [this.canvas.width, this.canvas.height]
+        })
+      }
+      this.timeSinceLastUpdate = 0
+    }
+    if(this.saveFrame === true) {
+      this.canvasToImage()
+      this.saveFrame = false
+    }
+  //  this.regl.poll()
+  }
+
+
+}
+
+module.exports = HydraRenderer
+
+},{"./src/eval-sandbox.js":13,"./src/generator-factory.js":14,"./src/hydra-source.js":19,"./src/lib/array-utils.js":20,"./src/lib/audio.js":21,"./src/lib/video-recorder.js":25,"./src/output.js":27,"mouse-change":6,"raf-loop":9,"regl":11}],4:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -1000,7 +1158,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],6:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 !function(t,r){"object"==typeof exports&&"object"==typeof module?module.exports=r():"function"==typeof define&&define.amd?define([],r):"object"==typeof exports?exports.Meyda=r():t.Meyda=r()}(this,function(){return function(t){function r(n){if(e[n])return e[n].exports;var o=e[n]={i:n,l:!1,exports:{}};return t[n].call(o.exports,o,o.exports,r),o.l=!0,o.exports}var e={};return r.m=t,r.c=e,r.i=function(t){return t},r.d=function(t,e,n){r.o(t,e)||Object.defineProperty(t,e,{configurable:!1,enumerable:!0,get:n})},r.n=function(t){var e=t&&t.__esModule?function(){return t.default}:function(){return t};return r.d(e,"a",e),e},r.o=function(t,r){return Object.prototype.hasOwnProperty.call(t,r)},r.p="",r(r.s=23)}([function(t,r,e){"use strict";function n(t){if(Array.isArray(t)){for(var r=0,e=Array(t.length);r<t.length;r++)e[r]=t[r];return e}return Array.from(t)}function o(t){for(;t%2==0&&t>1;)t/=2;return 1===t}function i(t,r){for(var e=[],n=0;n<Math.min(t.length,r.length);n++)e[n]=t[n]*r[n];return e}function a(t,r){if("rect"!==r){if(""!==r&&r||(r="hanning"),g[r]||(g[r]={}),!g[r][t.length])try{g[r][t.length]=b[r](t.length)}catch(t){throw new Error("Invalid windowing function")}t=i(t,g[r][t.length])}return t}function u(t,r,e){for(var n=new Float32Array(t),o=0;o<n.length;o++)n[o]=o*r/e,n[o]=13*Math.atan(n[o]/1315.8)+3.5*Math.atan(Math.pow(n[o]/7518,2));return n}function c(t){return Float32Array.from(t)}function f(t){return 700*(Math.exp(t/1125)-1)}function l(t){return 1125*Math.log(1+t/700)}function s(t,r,e){for(var n=new Float32Array(t+2),o=new Float32Array(t+2),i=r/2,a=l(0),u=l(i),c=u-a,s=c/(t+1),p=Array(t+2),m=0;m<n.length;m++)n[m]=m*s,o[m]=f(n[m]),p[m]=Math.floor((e+1)*o[m]/r);for(var y=Array(t),h=0;h<y.length;h++){y[h]=Array.apply(null,new Array(e/2+1)).map(Number.prototype.valueOf,0);for(var b=p[h];b<p[h+1];b++)y[h][b]=(b-p[h])/(p[h+1]-p[h]);for(var g=p[h+1];g<p[h+2];g++)y[h][g]=(p[h+2]-g)/(p[h+2]-p[h+1])}return y}function p(t,r){return Math.log2(16*t/r)}function m(t){var r=t[0].map(function(){return 0}),e=t.reduce(function(t,r){return r.forEach(function(r,e){t[e]+=Math.pow(r,2)}),t},r).map(Math.sqrt);return t.map(function(t,r){return t.map(function(t,r){return t/(e[r]||1)})})}function y(t,r,e){var o=arguments.length>3&&void 0!==arguments[3]?arguments[3]:5,i=arguments.length>4&&void 0!==arguments[4]?arguments[4]:2,a=!(arguments.length>5&&void 0!==arguments[5])||arguments[5],u=arguments.length>6&&void 0!==arguments[6]?arguments[6]:440,c=Math.floor(e/2)+1,f=new Array(e).fill(0).map(function(n,o){return t*p(r*o/e,u)});f[0]=f[1]-1.5*t;var l=f.slice(1).map(function(t,r){return Math.max(t-f[r])},1).concat([1]),s=Math.round(t/2),y=new Array(t).fill(0).map(function(r,e){return f.map(function(r){return(10*t+s+r-e)%t-s})}),h=y.map(function(t,r){return t.map(function(t,e){return Math.exp(-.5*Math.pow(2*y[r][e]/l[e],2))})});if(h=m(h),i){var b=f.map(function(r){return Math.exp(-.5*Math.pow((r/t-o)/i,2))});h=h.map(function(t){return t.map(function(t,r){return t*b[r]})})}return a&&(h=[].concat(n(h.slice(3)),n(h.slice(0,3)))),h.map(function(t){return t.slice(0,c)})}function h(t,r,e){if(t.length<r)throw new Error("Buffer is too short for frame length");if(e<1)throw new Error("Hop length cannot be less that 1");if(r<1)throw new Error("Frame length cannot be less that 1");var n=1+Math.floor((t.length-r)/e);return new Array(n).fill(0).map(function(n,o){return t.slice(o*e,o*e+r)})}r.b=o,r.a=a,r.c=u,r.f=c,r.d=s,r.e=y,r.g=h;var b=e(25),g={}},function(t,r,e){"use strict";function n(t,r){for(var e=0,n=0,o=0;o<r.length;o++)e+=Math.pow(o,t)*Math.abs(r[o]),n+=r[o];return e/n}r.a=n},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(t){if("object"!==n(t.ampSpectrum)||"object"!==n(t.barkScale))throw new TypeError;var r=new Float32Array(24),e=0,o=t.ampSpectrum,i=new Int32Array(25);i[0]=0;for(var a=t.barkScale[o.length-1]/24,u=1,c=0;c<o.length;c++)for(;t.barkScale[c]>a;)i[u++]=c,a=u*t.barkScale[o.length-1]/24;i[24]=o.length-1;for(var f=0;f<24;f++){for(var l=0,s=i[f];s<i[f+1];s++)l+=o[s];r[f]=Math.pow(l,.23)}for(var p=0;p<r.length;p++)e+=r[p];return{specific:r,total:e}}},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==n(arguments[0].ampSpectrum))throw new TypeError;for(var t=new Float32Array(arguments[0].ampSpectrum.length),r=0;r<t.length;r++)t[r]=Math.pow(arguments[0].ampSpectrum[r],2);return t}},function(t,r,e){"use strict";Object.defineProperty(r,"__esModule",{value:!0}),e.d(r,"buffer",function(){return v}),e.d(r,"complexSpectrum",function(){return w}),e.d(r,"amplitudeSpectrum",function(){return x});var n=e(13),o=e(9),i=e(20),a=e(14),u=e(18),c=e(15),f=e(21),l=e(19),s=e(17),p=e(22),m=e(2),y=e(12),h=e(11),b=e(10),g=e(8),S=e(3),d=e(16);e.d(r,"rms",function(){return n.a}),e.d(r,"energy",function(){return o.a}),e.d(r,"spectralSlope",function(){return i.a}),e.d(r,"spectralCentroid",function(){return a.a}),e.d(r,"spectralRolloff",function(){return u.a}),e.d(r,"spectralFlatness",function(){return c.a}),e.d(r,"spectralSpread",function(){return f.a}),e.d(r,"spectralSkewness",function(){return l.a}),e.d(r,"spectralKurtosis",function(){return s.a}),e.d(r,"zcr",function(){return p.a}),e.d(r,"loudness",function(){return m.a}),e.d(r,"perceptualSpread",function(){return y.a}),e.d(r,"perceptualSharpness",function(){return h.a}),e.d(r,"powerSpectrum",function(){return S.a}),e.d(r,"mfcc",function(){return b.a}),e.d(r,"chroma",function(){return g.a}),e.d(r,"spectralFlux",function(){return d.a});var v=function(t){return t.signal},w=function(t){return t.complexSpectrum},x=function(t){return t.ampSpectrum}},function(t,r){var e;e=function(){return this}();try{e=e||Function("return this")()||(0,eval)("this")}catch(t){"object"==typeof window&&(e=window)}t.exports=e},function(t,r,e){"use strict";Object.defineProperty(r,"__esModule",{value:!0});var n=e(0),o=e(4),i=e(28),a=(e.n(i),e(24)),u="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t},c={audioContext:null,spn:null,bufferSize:512,sampleRate:44100,melBands:26,chromaBands:12,callback:null,windowingFunction:"hanning",featureExtractors:o,EXTRACTION_STARTED:!1,_featuresToExtract:[],windowing:n.a,_errors:{notPow2:new Error("Meyda: Buffer size must be a power of 2, e.g. 64 or 512"),featureUndef:new Error("Meyda: No features defined."),invalidFeatureFmt:new Error("Meyda: Invalid feature format"),invalidInput:new Error("Meyda: Invalid input."),noAC:new Error("Meyda: No AudioContext specified."),noSource:new Error("Meyda: No source node specified.")},createMeydaAnalyzer:function(t){return new a.a(t,c)},extract:function(t,r,e){if(!r)throw this._errors.invalidInput;if("object"!=(void 0===r?"undefined":u(r)))throw this._errors.invalidInput;if(!t)throw this._errors.featureUndef;if(!n.b(r.length))throw this._errors.notPow2;void 0!==this.barkScale&&this.barkScale.length==this.bufferSize||(this.barkScale=n.c(this.bufferSize,this.sampleRate,this.bufferSize)),void 0!==this.melFilterBank&&this.barkScale.length==this.bufferSize&&this.melFilterBank.length==this.melBands||(this.melFilterBank=n.d(this.melBands,this.sampleRate,this.bufferSize)),void 0!==this.chromaFilterBank&&this.chromaFilterBank.length==this.chromaBands||(this.chromaFilterBank=n.e(this.chromaBands,this.sampleRate,this.bufferSize)),void 0===r.buffer?this.signal=n.f(r):this.signal=r;var o=f(r,this.windowingFunction,this.bufferSize);if(this.signal=o.windowedSignal,this.complexSpectrum=o.complexSpectrum,this.ampSpectrum=o.ampSpectrum,e){var i=f(e,this.windowingFunction,this.bufferSize);this.previousSignal=i.windowedSignal,this.previousComplexSpectrum=i.complexSpectrum,this.previousAmpSpectrum=i.ampSpectrum}if("object"===(void 0===t?"undefined":u(t))){for(var a={},c=0;c<t.length;c++)a[t[c]]=this.featureExtractors[t[c]]({ampSpectrum:this.ampSpectrum,chromaFilterBank:this.chromaFilterBank,complexSpectrum:this.complexSpectrum,signal:this.signal,bufferSize:this.bufferSize,sampleRate:this.sampleRate,barkScale:this.barkScale,melFilterBank:this.melFilterBank,previousSignal:this.previousSignal,previousAmpSpectrum:this.previousAmpSpectrum,previousComplexSpectrum:this.previousComplexSpectrum});return a}if("string"==typeof t)return this.featureExtractors[t]({ampSpectrum:this.ampSpectrum,chromaFilterBank:this.chromaFilterBank,complexSpectrum:this.complexSpectrum,signal:this.signal,bufferSize:this.bufferSize,sampleRate:this.sampleRate,barkScale:this.barkScale,melFilterBank:this.melFilterBank,previousSignal:this.previousSignal,previousAmpSpectrum:this.previousAmpSpectrum,previousComplexSpectrum:this.previousComplexSpectrum});throw this._errors.invalidFeatureFmt}},f=function(t,r,o){var a={};void 0===t.buffer?a.signal=n.f(t):a.signal=t,a.windowedSignal=n.a(a.signal,r),a.complexSpectrum=e.i(i.fft)(a.windowedSignal),a.ampSpectrum=new Float32Array(o/2);for(var u=0;u<o/2;u++)a.ampSpectrum[u]=Math.sqrt(Math.pow(a.complexSpectrum.real[u],2)+Math.pow(a.complexSpectrum.imag[u],2));return a};r.default=c,"undefined"!=typeof window&&(window.Meyda=c)},function(t,r,e){"use strict";(function(r){/*!
  * The buffer module from node.js, for the browser.
  *
@@ -1009,7 +1167,7 @@ if (typeof Object.create === 'function') {
  */
 function n(t,r){if(t===r)return 0;for(var e=t.length,n=r.length,o=0,i=Math.min(e,n);o<i;++o)if(t[o]!==r[o]){e=t[o],n=r[o];break}return e<n?-1:n<e?1:0}function o(t){return r.Buffer&&"function"==typeof r.Buffer.isBuffer?r.Buffer.isBuffer(t):!(null==t||!t._isBuffer)}function i(t){return Object.prototype.toString.call(t)}function a(t){return!o(t)&&("function"==typeof r.ArrayBuffer&&("function"==typeof ArrayBuffer.isView?ArrayBuffer.isView(t):!!t&&(t instanceof DataView||!!(t.buffer&&t.buffer instanceof ArrayBuffer))))}function u(t){if(v.isFunction(t)){if(E)return t.name;var r=t.toString(),e=r.match(M);return e&&e[1]}}function c(t,r){return"string"==typeof t?t.length<r?t:t.slice(0,r):t}function f(t){if(E||!v.isFunction(t))return v.inspect(t);var r=u(t);return"[Function"+(r?": "+r:"")+"]"}function l(t){return c(f(t.actual),128)+" "+t.operator+" "+c(f(t.expected),128)}function s(t,r,e,n,o){throw new _.AssertionError({message:e,actual:t,expected:r,operator:n,stackStartFunction:o})}function p(t,r){t||s(t,!0,r,"==",_.ok)}function m(t,r,e,u){if(t===r)return!0;if(o(t)&&o(r))return 0===n(t,r);if(v.isDate(t)&&v.isDate(r))return t.getTime()===r.getTime();if(v.isRegExp(t)&&v.isRegExp(r))return t.source===r.source&&t.global===r.global&&t.multiline===r.multiline&&t.lastIndex===r.lastIndex&&t.ignoreCase===r.ignoreCase;if(null!==t&&"object"==typeof t||null!==r&&"object"==typeof r){if(a(t)&&a(r)&&i(t)===i(r)&&!(t instanceof Float32Array||t instanceof Float64Array))return 0===n(new Uint8Array(t.buffer),new Uint8Array(r.buffer));if(o(t)!==o(r))return!1;u=u||{actual:[],expected:[]};var c=u.actual.indexOf(t);return-1!==c&&c===u.expected.indexOf(r)||(u.actual.push(t),u.expected.push(r),h(t,r,e,u))}return e?t===r:t==r}function y(t){return"[object Arguments]"==Object.prototype.toString.call(t)}function h(t,r,e,n){if(null===t||void 0===t||null===r||void 0===r)return!1;if(v.isPrimitive(t)||v.isPrimitive(r))return t===r;if(e&&Object.getPrototypeOf(t)!==Object.getPrototypeOf(r))return!1;var o=y(t),i=y(r);if(o&&!i||!o&&i)return!1;if(o)return t=x.call(t),r=x.call(r),m(t,r,e);var a,u,c=A(t),f=A(r);if(c.length!==f.length)return!1;for(c.sort(),f.sort(),u=c.length-1;u>=0;u--)if(c[u]!==f[u])return!1;for(u=c.length-1;u>=0;u--)if(a=c[u],!m(t[a],r[a],e,n))return!1;return!0}function b(t,r,e){m(t,r,!0)&&s(t,r,e,"notDeepStrictEqual",b)}function g(t,r){if(!t||!r)return!1;if("[object RegExp]"==Object.prototype.toString.call(r))return r.test(t);try{if(t instanceof r)return!0}catch(t){}return!Error.isPrototypeOf(r)&&!0===r.call({},t)}function S(t){var r;try{t()}catch(t){r=t}return r}function d(t,r,e,n){var o;if("function"!=typeof r)throw new TypeError('"block" argument must be a function');"string"==typeof e&&(n=e,e=null),o=S(r),n=(e&&e.name?" ("+e.name+").":".")+(n?" "+n:"."),t&&!o&&s(o,e,"Missing expected exception"+n);var i="string"==typeof n,a=!t&&v.isError(o),u=!t&&o&&!e;if((a&&i&&g(o,e)||u)&&s(o,e,"Got unwanted exception"+n),t&&o&&e&&!g(o,e)||!t&&o)throw o}var v=e(33),w=Object.prototype.hasOwnProperty,x=Array.prototype.slice,E=function(){return"foo"===function(){}.name}(),_=t.exports=p,M=/\s*function\s+([^\(\s]*)\s*/;_.AssertionError=function(t){this.name="AssertionError",this.actual=t.actual,this.expected=t.expected,this.operator=t.operator,t.message?(this.message=t.message,this.generatedMessage=!1):(this.message=l(this),this.generatedMessage=!0);var r=t.stackStartFunction||s;if(Error.captureStackTrace)Error.captureStackTrace(this,r);else{var e=new Error;if(e.stack){var n=e.stack,o=u(r),i=n.indexOf("\n"+o);if(i>=0){var a=n.indexOf("\n",i+1);n=n.substring(a+1)}this.stack=n}}},v.inherits(_.AssertionError,Error),_.fail=s,_.ok=p,_.equal=function(t,r,e){t!=r&&s(t,r,e,"==",_.equal)},_.notEqual=function(t,r,e){t==r&&s(t,r,e,"!=",_.notEqual)},_.deepEqual=function(t,r,e){m(t,r,!1)||s(t,r,e,"deepEqual",_.deepEqual)},_.deepStrictEqual=function(t,r,e){m(t,r,!0)||s(t,r,e,"deepStrictEqual",_.deepStrictEqual)},_.notDeepEqual=function(t,r,e){m(t,r,!1)&&s(t,r,e,"notDeepEqual",_.notDeepEqual)},_.notDeepStrictEqual=b,_.strictEqual=function(t,r,e){t!==r&&s(t,r,e,"===",_.strictEqual)},_.notStrictEqual=function(t,r,e){t===r&&s(t,r,e,"!==",_.notStrictEqual)},_.throws=function(t,r,e){d(!0,t,r,e)},_.doesNotThrow=function(t,r,e){d(!1,t,r,e)},_.ifError=function(t){if(t)throw t};var A=Object.keys||function(t){var r=[];for(var e in t)w.call(t,e)&&r.push(e);return r}}).call(r,e(5))},function(t,r,e){"use strict";function n(t){if(Array.isArray(t)){for(var r=0,e=Array(t.length);r<t.length;r++)e[r]=t[r];return e}return Array.from(t)}var o=(e(0),"function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t});r.a=function(t){if("object"!==o(t.ampSpectrum))throw new TypeError("Valid ampSpectrum is required to generate chroma");if("object"!==o(t.chromaFilterBank))throw new TypeError("Valid chromaFilterBank is required to generate chroma");var r=t.chromaFilterBank.map(function(r,e){return t.ampSpectrum.reduce(function(t,e,n){return t+e*r[n]},0)}),e=Math.max.apply(Math,n(r));return e?r.map(function(t){return t/e}):r}},function(t,r,e){"use strict";var n=e(7),o=(e.n(n),"function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t});r.a=function(){if("object"!==o(arguments[0].signal))throw new TypeError;for(var t=0,r=0;r<arguments[0].signal.length;r++)t+=Math.pow(Math.abs(arguments[0].signal[r]),2);return t}},function(t,r,e){"use strict";var n=e(3),o=(e(0),"function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t}),i=e(26);r.a=function(t){if("object"!==o(t.ampSpectrum))throw new TypeError("Valid ampSpectrum is required to generate MFCC");if("object"!==o(t.melFilterBank))throw new TypeError("Valid melFilterBank is required to generate MFCC");for(var r=e.i(n.a)(t),a=t.melFilterBank.length,u=Array(a),c=new Float32Array(a),f=0;f<c.length;f++){u[f]=new Float32Array(t.bufferSize/2),c[f]=0;for(var l=0;l<t.bufferSize/2;l++)u[f][l]=t.melFilterBank[f][l]*r[l],c[f]+=u[f][l];c[f]=Math.log(c[f]+1)}var s=Array.prototype.slice.call(c);return i(s).slice(0,13)}},function(t,r,e){"use strict";var n=e(2),o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==o(arguments[0].signal))throw new TypeError;for(var t=e.i(n.a)(arguments[0]),r=t.specific,i=0,a=0;a<r.length;a++)i+=a<15?(a+1)*r[a+1]:.066*Math.exp(.171*(a+1));return i*=.11/t.total}},function(t,r,e){"use strict";var n=e(2),o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==o(arguments[0].signal))throw new TypeError;for(var t=e.i(n.a)(arguments[0]),r=0,i=0;i<t.specific.length;i++)t.specific[i]>r&&(r=t.specific[i]);return Math.pow((t.total-r)/t.total,2)}},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(t){if("object"!==n(t.signal))throw new TypeError;for(var r=0,e=0;e<t.signal.length;e++)r+=Math.pow(t.signal[e],2);return r/=t.signal.length,r=Math.sqrt(r)}},function(t,r,e){"use strict";var n=e(1),o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==o(arguments[0].ampSpectrum))throw new TypeError;return e.i(n.a)(1,arguments[0].ampSpectrum)}},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==n(arguments[0].ampSpectrum))throw new TypeError;for(var t=0,r=0,e=0;e<arguments[0].ampSpectrum.length;e++)t+=Math.log(arguments[0].ampSpectrum[e]),r+=arguments[0].ampSpectrum[e];return Math.exp(t/arguments[0].ampSpectrum.length)*arguments[0].ampSpectrum.length/r}},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(t){if("object"!==n(t.signal)||"object"!=n(t.previousSignal))throw new TypeError;for(var r=0,e=-t.bufferSize/2;e<signal.length/2-1;e++)x=Math.abs(t.signal[e])-Math.abs(t.previousSignal[e]),r+=(x+Math.abs(x))/2;return r}},function(t,r,e){"use strict";var n=e(1),o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==o(arguments[0].ampSpectrum))throw new TypeError;var t=arguments[0].ampSpectrum,r=e.i(n.a)(1,t),i=e.i(n.a)(2,t),a=e.i(n.a)(3,t),u=e.i(n.a)(4,t);return(-3*Math.pow(r,4)+6*r*i-4*r*a+u)/Math.pow(Math.sqrt(i-Math.pow(r,2)),4)}},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==n(arguments[0].ampSpectrum))throw new TypeError;for(var t=arguments[0].ampSpectrum,r=arguments[0].sampleRate/(2*(t.length-1)),e=0,o=0;o<t.length;o++)e+=t[o];for(var i=.99*e,a=t.length-1;e>i&&a>=0;)e-=t[a],--a;return(a+1)*r}},function(t,r,e){"use strict";var n=e(1),o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(t){if("object"!==o(t.ampSpectrum))throw new TypeError;var r=e.i(n.a)(1,t.ampSpectrum),i=e.i(n.a)(2,t.ampSpectrum),a=e.i(n.a)(3,t.ampSpectrum);return(2*Math.pow(r,3)-3*r*i+a)/Math.pow(Math.sqrt(i-Math.pow(r,2)),3)}},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(t){if("object"!==n(t.ampSpectrum))throw new TypeError;for(var r=0,e=0,o=new Float32Array(t.ampSpectrum.length),i=0,a=0,u=0;u<t.ampSpectrum.length;u++){r+=t.ampSpectrum[u];var c=u*t.sampleRate/t.bufferSize;o[u]=c,i+=c*c,e+=c,a+=c*t.ampSpectrum[u]}return(t.ampSpectrum.length*a-e*r)/(r*(i-Math.pow(e,2)))}},function(t,r,e){"use strict";var n=e(1),o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(t){if("object"!==o(t.ampSpectrum))throw new TypeError;return Math.sqrt(e.i(n.a)(2,t.ampSpectrum)-Math.pow(e.i(n.a)(1,t.ampSpectrum),2))}},function(t,r,e){"use strict";var n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(t){return typeof t}:function(t){return t&&"function"==typeof Symbol&&t.constructor===Symbol&&t!==Symbol.prototype?"symbol":typeof t};r.a=function(){if("object"!==n(arguments[0].signal))throw new TypeError;for(var t=0,r=0;r<arguments[0].signal.length;r++)(arguments[0].signal[r]>=0&&arguments[0].signal[r+1]<0||arguments[0].signal[r]<0&&arguments[0].signal[r+1]>=0)&&t++;return t}},function(t,r,e){t.exports=e(6).default},function(t,r,e){"use strict";function n(t,r){if(!(t instanceof r))throw new TypeError("Cannot call a class as a function")}e.d(r,"a",function(){return u});var o=e(0),i=e(4),a=function(){function t(t,r){for(var e=0;e<r.length;e++){var n=r[e];n.enumerable=n.enumerable||!1,n.configurable=!0,"value"in n&&(n.writable=!0),Object.defineProperty(t,n.key,n)}}return function(r,e,n){return e&&t(r.prototype,e),n&&t(r,n),r}}(),u=function(){function t(r,e){var a=this;if(n(this,t),this._m=e,!r.audioContext)throw this._m.errors.noAC;if(r.bufferSize&&!o.b(r.bufferSize))throw this._m._errors.notPow2;if(!r.source)throw this._m._errors.noSource;this._m.audioContext=r.audioContext,this._m.bufferSize=r.bufferSize||this._m.bufferSize||256,this._m.hopSize=r.hopSize||this._m.hopSize||this._m.bufferSize,this._m.sampleRate=r.sampleRate||this._m.audioContext.sampleRate||44100,this._m.callback=r.callback,this._m.windowingFunction=r.windowingFunction||"hanning",this._m.featureExtractors=i,this._m.EXTRACTION_STARTED=r.startImmediately||!1,this._m.spn=this._m.audioContext.createScriptProcessor(this._m.bufferSize,1,1),this._m.spn.connect(this._m.audioContext.destination),this._m._featuresToExtract=r.featureExtractors||[],this._m.barkScale=o.c(this._m.bufferSize,this._m.sampleRate,this._m.bufferSize),this._m.melFilterBank=o.d(this._m.melBands,this._m.sampleRate,this._m.bufferSize),this._m.inputData=null,this._m.previousInputData=null,this._m.frame=null,this._m.previousFrame=null,this.setSource(r.source),this._m.spn.onaudioprocess=function(t){if(null!==a._m.inputData&&(a._m.previousInputData=a._m.inputData),a._m.inputData=t.inputBuffer.getChannelData(0),a._m.previousInputData){var r=new Float32Array(a._m.previousInputData.length+a._m.inputData.length-a._m.hopSize);r.set(a._m.previousInputData.slice(a._m.hopSize)),r.set(a._m.inputData,a._m.previousInputData.length-a._m.hopSize)}else var r=a._m.inputData;o.g(r,a._m.bufferSize,a._m.hopSize).forEach(function(t){a._m.frame=t;var r=a._m.extract(a._m._featuresToExtract,a._m.frame,a._m.previousFrame);"function"==typeof a._m.callback&&a._m.EXTRACTION_STARTED&&a._m.callback(r),a._m.previousFrame=a._m.frame})}}return a(t,[{key:"start",value:function(t){this._m._featuresToExtract=t||this._m._featuresToExtract,this._m.EXTRACTION_STARTED=!0}},{key:"stop",value:function(){this._m.EXTRACTION_STARTED=!1}},{key:"setSource",value:function(t){t.connect(this._m.spn)}},{key:"get",value:function(t){return this._m.inputData?this._m.extract(t||this._m._featuresToExtract,this._m.inputData,this._m.previousInputData):null}}]),t}()},function(t,r,e){"use strict";function n(t){for(var r=new Float32Array(t),e=2*Math.PI/(t-1),n=2*e,o=0;o<t/2;o++)r[o]=.42-.5*Math.cos(o*e)+.08*Math.cos(o*n);for(var i=t/2;i>0;i--)r[t-i]=r[i-1];return r}function o(t){for(var r=Math.PI/(t-1),e=new Float32Array(t),n=0;n<t;n++)e[n]=Math.sin(r*n);return e}function i(t){for(var r=new Float32Array(t),e=0;e<t;e++)r[e]=.5-.5*Math.cos(2*Math.PI*e/(t-1));return r}function a(t){for(var r=new Float32Array(t),e=0;e<t;e++)r[e]=.54-.46*Math.cos(2*Math.PI*(e/t-1));return r}Object.defineProperty(r,"__esModule",{value:!0}),r.blackman=n,r.sine=o,r.hanning=i,r.hamming=a},function(t,r,e){t.exports=e(27)},function(t,r){function e(t,r){var e=t.length;return r=r||2,cosMap&&cosMap[e]||n(e),t.map(function(){return 0}).map(function(n,o){return r*t.reduce(function(t,r,n,i){return t+r*cosMap[e][n+o*e]},0)})}cosMap=null;var n=function(t){cosMap=cosMap||{},cosMap[t]=new Array(t*t);for(var r=Math.PI/t,e=0;e<t;e++)for(var n=0;n<t;n++)cosMap[t][n+e*t]=Math.cos(r*(n+.5)*e)};t.exports=e},function(t,r,e){"use strict";var n=e(29),o=function(t){var r={};void 0===t.real||void 0===t.imag?r=n.constructComplexArray(t):(r.real=t.real.slice(),r.imag=t.imag.slice());var e=r.real.length,o=Math.log2(e);if(Math.round(o)!=o)throw new Error("Input size must be a power of 2.");if(r.real.length!=r.imag.length)throw new Error("Real and imaginary components must have the same length.");for(var i=n.bitReverseArray(e),a={real:[],imag:[]},u=0;u<e;u++)a.real[i[u]]=r.real[u],a.imag[i[u]]=r.imag[u];for(var c=0;c<e;c++)r.real[c]=a.real[c],r.imag[c]=a.imag[c];for(var f=1;f<=o;f++)for(var l=Math.pow(2,f),s=0;s<l/2;s++)for(var p=n.euler(s,l),m=0;m<e/l;m++){var y=l*m+s,h=l*m+s+l/2,b={real:r.real[y],imag:r.imag[y]},g={real:r.real[h],imag:r.imag[h]},S=n.multiply(p,g),d=n.subtract(b,S);r.real[h]=d.real,r.imag[h]=d.imag;var v=n.add(S,b);r.real[y]=v.real,r.imag[y]=v.imag}return r},i=function(t){if(void 0===t.real||void 0===t.imag)throw new Error("IFFT only accepts a complex input.");for(var r=t.real.length,e={real:[],imag:[]},i=0;i<r;i++){var a={real:t.real[i],imag:t.imag[i]},u=n.conj(a);e.real[i]=u.real,e.imag[i]=u.imag}var c=o(e);return e.real=c.real.map(function(t){return t/r}),e.imag=c.imag.map(function(t){return t/r}),e};t.exports={fft:o,ifft:i}},function(t,r,e){"use strict";function n(t){if(Array.isArray(t)){for(var r=0,e=Array(t.length);r<t.length;r++)e[r]=t[r];return e}return Array.from(t)}var o={},i={},a=function(t){var r={};r.real=void 0===t.real?t.slice():t.real.slice();var e=r.real.length;return void 0===i[e]&&(i[e]=Array.apply(null,Array(e)).map(Number.prototype.valueOf,0)),r.imag=i[e].slice(),r},u=function(t){if(void 0===o[t]){for(var r=(t-1).toString(2).length,e="0".repeat(r),i={},a=0;a<t;a++){var u=a.toString(2);u=e.substr(u.length)+u,u=[].concat(n(u)).reverse().join(""),i[a]=parseInt(u,2)}o[t]=i}return o[t]},c=function(t,r){return{real:t.real*r.real-t.imag*r.imag,imag:t.real*r.imag+t.imag*r.real}},f=function(t,r){return{real:t.real+r.real,imag:t.imag+r.imag}},l=function(t,r){return{real:t.real-r.real,imag:t.imag-r.imag}},s=function(t,r){var e=-2*Math.PI*t/r;return{real:Math.cos(e),imag:Math.sin(e)}},p=function(t){return t.imag*=-1,t};t.exports={bitReverseArray:u,multiply:c,add:f,subtract:l,euler:s,conj:p,constructComplexArray:a}},function(t,r){function e(){throw new Error("setTimeout has not been defined")}function n(){throw new Error("clearTimeout has not been defined")}function o(t){if(l===setTimeout)return setTimeout(t,0);if((l===e||!l)&&setTimeout)return l=setTimeout,setTimeout(t,0);try{return l(t,0)}catch(r){try{return l.call(null,t,0)}catch(r){return l.call(this,t,0)}}}function i(t){if(s===clearTimeout)return clearTimeout(t);if((s===n||!s)&&clearTimeout)return s=clearTimeout,clearTimeout(t);try{return s(t)}catch(r){try{return s.call(null,t)}catch(r){return s.call(this,t)}}}function a(){h&&m&&(h=!1,m.length?y=m.concat(y):b=-1,y.length&&u())}function u(){if(!h){var t=o(a);h=!0;for(var r=y.length;r;){for(m=y,y=[];++b<r;)m&&m[b].run();b=-1,r=y.length}m=null,h=!1,i(t)}}function c(t,r){this.fun=t,this.array=r}function f(){}var l,s,p=t.exports={};!function(){try{l="function"==typeof setTimeout?setTimeout:e}catch(t){l=e}try{s="function"==typeof clearTimeout?clearTimeout:n}catch(t){s=n}}();var m,y=[],h=!1,b=-1;p.nextTick=function(t){var r=new Array(arguments.length-1);if(arguments.length>1)for(var e=1;e<arguments.length;e++)r[e-1]=arguments[e];y.push(new c(t,r)),1!==y.length||h||o(u)},c.prototype.run=function(){this.fun.apply(null,this.array)},p.title="browser",p.browser=!0,p.env={},p.argv=[],p.version="",p.versions={},p.on=f,p.addListener=f,p.once=f,p.off=f,p.removeListener=f,p.removeAllListeners=f,p.emit=f,p.prependListener=f,p.prependOnceListener=f,p.listeners=function(t){return[]},p.binding=function(t){throw new Error("process.binding is not supported")},p.cwd=function(){return"/"},p.chdir=function(t){throw new Error("process.chdir is not supported")},p.umask=function(){return 0}},function(t,r){"function"==typeof Object.create?t.exports=function(t,r){t.super_=r,t.prototype=Object.create(r.prototype,{constructor:{value:t,enumerable:!1,writable:!0,configurable:!0}})}:t.exports=function(t,r){t.super_=r;var e=function(){};e.prototype=r.prototype,t.prototype=new e,t.prototype.constructor=t}},function(t,r){t.exports=function(t){return t&&"object"==typeof t&&"function"==typeof t.copy&&"function"==typeof t.fill&&"function"==typeof t.readUInt8}},function(t,r,e){(function(t,n){function o(t,e){var n={seen:[],stylize:a};return arguments.length>=3&&(n.depth=arguments[2]),arguments.length>=4&&(n.colors=arguments[3]),h(e)?n.showHidden=e:e&&r._extend(n,e),w(n.showHidden)&&(n.showHidden=!1),w(n.depth)&&(n.depth=2),w(n.colors)&&(n.colors=!1),w(n.customInspect)&&(n.customInspect=!0),n.colors&&(n.stylize=i),c(n,t,n.depth)}function i(t,r){var e=o.styles[r];return e?"["+o.colors[e][0]+"m"+t+"["+o.colors[e][1]+"m":t}function a(t,r){return t}function u(t){var r={};return t.forEach(function(t,e){r[t]=!0}),r}function c(t,e,n){if(t.customInspect&&e&&A(e.inspect)&&e.inspect!==r.inspect&&(!e.constructor||e.constructor.prototype!==e)){var o=e.inspect(n,t);return d(o)||(o=c(t,o,n)),o}var i=f(t,e);if(i)return i;var a=Object.keys(e),h=u(a);if(t.showHidden&&(a=Object.getOwnPropertyNames(e)),M(e)&&(a.indexOf("message")>=0||a.indexOf("description")>=0))return l(e);if(0===a.length){if(A(e)){var b=e.name?": "+e.name:"";return t.stylize("[Function"+b+"]","special")}if(x(e))return t.stylize(RegExp.prototype.toString.call(e),"regexp");if(_(e))return t.stylize(Date.prototype.toString.call(e),"date");if(M(e))return l(e)}var g="",S=!1,v=["{","}"];if(y(e)&&(S=!0,v=["[","]"]),A(e)){g=" [Function"+(e.name?": "+e.name:"")+"]"}if(x(e)&&(g=" "+RegExp.prototype.toString.call(e)),_(e)&&(g=" "+Date.prototype.toUTCString.call(e)),M(e)&&(g=" "+l(e)),0===a.length&&(!S||0==e.length))return v[0]+g+v[1];if(n<0)return x(e)?t.stylize(RegExp.prototype.toString.call(e),"regexp"):t.stylize("[Object]","special");t.seen.push(e);var w;return w=S?s(t,e,n,h,a):a.map(function(r){return p(t,e,n,h,r,S)}),t.seen.pop(),m(w,g,v)}function f(t,r){if(w(r))return t.stylize("undefined","undefined");if(d(r)){var e="'"+JSON.stringify(r).replace(/^"|"$/g,"").replace(/'/g,"\\'").replace(/\\"/g,'"')+"'";return t.stylize(e,"string")}return S(r)?t.stylize(""+r,"number"):h(r)?t.stylize(""+r,"boolean"):b(r)?t.stylize("null","null"):void 0}function l(t){return"["+Error.prototype.toString.call(t)+"]"}function s(t,r,e,n,o){for(var i=[],a=0,u=r.length;a<u;++a)z(r,String(a))?i.push(p(t,r,e,n,String(a),!0)):i.push("");return o.forEach(function(o){o.match(/^\d+$/)||i.push(p(t,r,e,n,o,!0))}),i}function p(t,r,e,n,o,i){var a,u,f;if(f=Object.getOwnPropertyDescriptor(r,o)||{value:r[o]},f.get?u=f.set?t.stylize("[Getter/Setter]","special"):t.stylize("[Getter]","special"):f.set&&(u=t.stylize("[Setter]","special")),z(n,o)||(a="["+o+"]"),u||(t.seen.indexOf(f.value)<0?(u=b(e)?c(t,f.value,null):c(t,f.value,e-1),u.indexOf("\n")>-1&&(u=i?u.split("\n").map(function(t){return"  "+t}).join("\n").substr(2):"\n"+u.split("\n").map(function(t){return"   "+t}).join("\n"))):u=t.stylize("[Circular]","special")),w(a)){if(i&&o.match(/^\d+$/))return u;a=JSON.stringify(""+o),a.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)?(a=a.substr(1,a.length-2),a=t.stylize(a,"name")):(a=a.replace(/'/g,"\\'").replace(/\\"/g,'"').replace(/(^"|"$)/g,"'"),a=t.stylize(a,"string"))}return a+": "+u}function m(t,r,e){var n=0;return t.reduce(function(t,r){return n++,r.indexOf("\n")>=0&&n++,t+r.replace(/\u001b\[\d\d?m/g,"").length+1},0)>60?e[0]+(""===r?"":r+"\n ")+" "+t.join(",\n  ")+" "+e[1]:e[0]+r+" "+t.join(", ")+" "+e[1]}function y(t){return Array.isArray(t)}function h(t){return"boolean"==typeof t}function b(t){return null===t}function g(t){return null==t}function S(t){return"number"==typeof t}function d(t){return"string"==typeof t}function v(t){return"symbol"==typeof t}function w(t){return void 0===t}function x(t){return E(t)&&"[object RegExp]"===T(t)}function E(t){return"object"==typeof t&&null!==t}function _(t){return E(t)&&"[object Date]"===T(t)}function M(t){return E(t)&&("[object Error]"===T(t)||t instanceof Error)}function A(t){return"function"==typeof t}function j(t){return null===t||"boolean"==typeof t||"number"==typeof t||"string"==typeof t||"symbol"==typeof t||void 0===t}function T(t){return Object.prototype.toString.call(t)}function F(t){return t<10?"0"+t.toString(10):t.toString(10)}function k(){var t=new Date,r=[F(t.getHours()),F(t.getMinutes()),F(t.getSeconds())].join(":");return[t.getDate(),R[t.getMonth()],r].join(" ")}function z(t,r){return Object.prototype.hasOwnProperty.call(t,r)}var O=/%[sdj%]/g;r.format=function(t){if(!d(t)){for(var r=[],e=0;e<arguments.length;e++)r.push(o(arguments[e]));return r.join(" ")}for(var e=1,n=arguments,i=n.length,a=String(t).replace(O,function(t){if("%%"===t)return"%";if(e>=i)return t;switch(t){case"%s":return String(n[e++]);case"%d":return Number(n[e++]);case"%j":try{return JSON.stringify(n[e++])}catch(t){return"[Circular]"}default:return t}}),u=n[e];e<i;u=n[++e])b(u)||!E(u)?a+=" "+u:a+=" "+o(u);return a},r.deprecate=function(e,o){function i(){if(!a){if(n.throwDeprecation)throw new Error(o);n.traceDeprecation?console.trace(o):console.error(o),a=!0}return e.apply(this,arguments)}if(w(t.process))return function(){return r.deprecate(e,o).apply(this,arguments)};if(!0===n.noDeprecation)return e;var a=!1;return i};var B,D={};r.debuglog=function(t){if(w(B)&&(B=n.env.NODE_DEBUG||""),t=t.toUpperCase(),!D[t])if(new RegExp("\\b"+t+"\\b","i").test(B)){var e=n.pid;D[t]=function(){var n=r.format.apply(r,arguments);console.error("%s %d: %s",t,e,n)}}else D[t]=function(){};return D[t]},r.inspect=o,o.colors={bold:[1,22],italic:[3,23],underline:[4,24],inverse:[7,27],white:[37,39],grey:[90,39],black:[30,39],blue:[34,39],cyan:[36,39],green:[32,39],magenta:[35,39],red:[31,39],yellow:[33,39]},o.styles={special:"cyan",number:"yellow",boolean:"yellow",undefined:"grey",null:"bold",string:"green",date:"magenta",regexp:"red"},r.isArray=y,r.isBoolean=h,r.isNull=b,r.isNullOrUndefined=g,r.isNumber=S,r.isString=d,r.isSymbol=v,r.isUndefined=w,r.isRegExp=x,r.isObject=E,r.isDate=_,r.isError=M,r.isFunction=A,r.isPrimitive=j,r.isBuffer=e(32);var R=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];r.log=function(){console.log("%s - %s",k(),r.format.apply(r,arguments))},r.inherits=e(31),r._extend=function(t,r){if(!r||!E(r))return t;for(var e=Object.keys(r),n=e.length;n--;)t[e[n]]=r[e[n]];return t}}).call(r,e(5),e(30))}])});
 
-},{}],7:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 'use strict'
 
 module.exports = mouseListen
@@ -1216,7 +1374,7 @@ function mouseListen (element, callback) {
   return result
 }
 
-},{"mouse-event":8}],8:[function(require,module,exports){
+},{"mouse-event":7}],7:[function(require,module,exports){
 'use strict'
 
 function mouseButtons(ev) {
@@ -1278,7 +1436,7 @@ function mouseRelativeY(ev) {
 }
 exports.y = mouseRelativeY
 
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 (function (process){
 // Generated by CoffeeScript 1.12.2
 (function() {
@@ -1318,193 +1476,7 @@ exports.y = mouseRelativeY
 
 
 }).call(this,require('_process'))
-},{"_process":10}],10:[function(require,module,exports){
-// shim for using process in browser
-var process = module.exports = {};
-
-// cached from whatever global is present so that test runners that stub it
-// don't break things.  But we need to wrap it in a try catch in case it is
-// wrapped in strict mode code which doesn't define any globals.  It's inside a
-// function because try/catches deoptimize in certain engines.
-
-var cachedSetTimeout;
-var cachedClearTimeout;
-
-function defaultSetTimout() {
-    throw new Error('setTimeout has not been defined');
-}
-function defaultClearTimeout () {
-    throw new Error('clearTimeout has not been defined');
-}
-(function () {
-    try {
-        if (typeof setTimeout === 'function') {
-            cachedSetTimeout = setTimeout;
-        } else {
-            cachedSetTimeout = defaultSetTimout;
-        }
-    } catch (e) {
-        cachedSetTimeout = defaultSetTimout;
-    }
-    try {
-        if (typeof clearTimeout === 'function') {
-            cachedClearTimeout = clearTimeout;
-        } else {
-            cachedClearTimeout = defaultClearTimeout;
-        }
-    } catch (e) {
-        cachedClearTimeout = defaultClearTimeout;
-    }
-} ())
-function runTimeout(fun) {
-    if (cachedSetTimeout === setTimeout) {
-        //normal enviroments in sane situations
-        return setTimeout(fun, 0);
-    }
-    // if setTimeout wasn't available but was latter defined
-    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
-        cachedSetTimeout = setTimeout;
-        return setTimeout(fun, 0);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedSetTimeout(fun, 0);
-    } catch(e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-            return cachedSetTimeout.call(null, fun, 0);
-        } catch(e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-            return cachedSetTimeout.call(this, fun, 0);
-        }
-    }
-
-
-}
-function runClearTimeout(marker) {
-    if (cachedClearTimeout === clearTimeout) {
-        //normal enviroments in sane situations
-        return clearTimeout(marker);
-    }
-    // if clearTimeout wasn't available but was latter defined
-    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
-        cachedClearTimeout = clearTimeout;
-        return clearTimeout(marker);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedClearTimeout(marker);
-    } catch (e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-            return cachedClearTimeout.call(null, marker);
-        } catch (e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-            return cachedClearTimeout.call(this, marker);
-        }
-    }
-
-
-
-}
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) {
-        return;
-    }
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = runTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    runClearTimeout(timeout);
-}
-
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        runTimeout(drainQueue);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-process.prependListener = noop;
-process.prependOnceListener = noop;
-
-process.listeners = function (name) { return [] }
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],11:[function(require,module,exports){
+},{"_process":2}],9:[function(require,module,exports){
 var inherits = require('inherits')
 var EventEmitter = require('events').EventEmitter
 var now = require('right-now')
@@ -1549,7 +1521,7 @@ Engine.prototype.tick = function() {
     this.emit('tick', dt)
     this.last = time
 }
-},{"events":2,"inherits":5,"raf":12,"right-now":14}],12:[function(require,module,exports){
+},{"events":1,"inherits":4,"raf":10,"right-now":12}],10:[function(require,module,exports){
 (function (global){
 var now = require('performance-now')
   , root = typeof window === 'undefined' ? global : window
@@ -1628,7 +1600,7 @@ module.exports.polyfill = function(object) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"performance-now":9}],13:[function(require,module,exports){
+},{"performance-now":8}],11:[function(require,module,exports){
 (function(aa,ia){"object"===typeof exports&&"undefined"!==typeof module?module.exports=ia():"function"===typeof define&&define.amd?define(ia):aa.createREGL=ia()})(this,function(){function aa(a,b){this.id=Ab++;this.type=a;this.data=b}function ia(a){if(0===a.length)return[];var b=a.charAt(0),c=a.charAt(a.length-1);if(1<a.length&&b===c&&('"'===b||"'"===b))return['"'+a.substr(1,a.length-2).replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"'];if(b=/\[(false|true|null|\d+|'[^']*'|"[^"]*")\]/.exec(a))return ia(a.substr(0,
 b.index)).concat(ia(b[1])).concat(ia(a.substr(b.index+b[0].length)));b=a.split(".");if(1===b.length)return['"'+a.replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"'];a=[];for(c=0;c<b.length;++c)a=a.concat(ia(b[c]));return a}function Za(a){return"["+ia(a).join("][")+"]"}function Bb(){var a={"":0},b=[""];return{id:function(c){var e=a[c];if(e)return e;e=a[c]=b.length;b.push(c);return e},str:function(a){return b[a]}}}function Cb(a,b,c){function e(){var b=window.innerWidth,e=window.innerHeight;a!==document.body&&
 (e=a.getBoundingClientRect(),b=e.right-e.left,e=e.bottom-e.top);g.width=c*b;g.height=c*e;E(g.style,{width:b+"px",height:e+"px"})}var g=document.createElement("canvas");E(g.style,{border:0,margin:0,padding:0,top:0,left:0});a.appendChild(g);a===document.body&&(g.style.position="absolute",E(a.style,{margin:0,padding:0}));window.addEventListener("resize",e,!1);e();return{canvas:g,onDestroy:function(){window.removeEventListener("resize",e);a.removeChild(g)}}}function Db(a,b){function c(c){try{return a.getContext(c,
@@ -1780,7 +1752,7 @@ d,!1));var aa=K.setFBO=n({framebuffer:la.define.call(null,1,"framebuffer")});m()
 renderbuffer:M.create,framebuffer:K.create,framebufferCube:K.createCube,attributes:h,frame:r,on:function(a,b){var c;switch(a){case "frame":return r(b);case "lost":c=U;break;case "restore":c=W;break;case "destroy":c=Z}c.push(b);return{cancel:function(){for(var a=0;a<c.length;++a)if(c[a]===b){c[a]=c[c.length-1];c.pop();break}}}},limits:R,hasExtension:function(a){return 0<=R.extensions.indexOf(a.toLowerCase())},read:u,destroy:function(){G.length=0;e();L&&(L.removeEventListener("webglcontextlost",g),
 L.removeEventListener("webglcontextrestored",d));Q.clear();K.clear();M.clear();A.clear();T.clear();F.clear();B&&B.clear();Z.forEach(function(a){a()})},_gl:k,_refresh:m,poll:function(){t();B&&B.update()},now:y,stats:v});a.onDone(null,h);return h}});
 
-},{}],14:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 (function (global){
 module.exports =
   global.performance &&
@@ -1791,101 +1763,124 @@ module.exports =
   }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],15:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 // handles code evaluation and attaching relevant objects to global and evaluation contexts
 
-const Sandbox = require('./lib/sandbox.js');
-const ArrayUtils = require('./lib/array-utils.js');
+const Sandbox = require('./lib/sandbox.js')
+const ArrayUtils = require('./lib/array-utils.js')
 
 class EvalSandbox {
-  constructor(parent, makeGlobal) {
-    this.makeGlobal = makeGlobal;
-    this.sandbox = Sandbox(parent);
-    this.parent = parent;
-    var properties = Object.keys(parent);
-    properties.forEach(property => this.add(property));
+  constructor(parent, makeGlobal, userProps = []) {
+    this.makeGlobal = makeGlobal
+    this.sandbox = Sandbox(parent)
+    this.parent = parent
+    var properties = Object.keys(parent)
+    properties.forEach((property) => this.add(property))
+    this.userProps = userProps
   }
 
   add(name) {
-    if (this.makeGlobal) window[name] = this.parent[name];
-    this.sandbox.addToContext(name, `parent.${name}`);
+    if(this.makeGlobal) window[name] = this.parent[name]
+    this.sandbox.addToContext(name, `parent.${name}`)
+  }
+
+// sets on window as well as synth object if global (not needed for objects, which can be set directly)
+
+  set(property, value) {
+    if(this.makeGlobal) {
+      window[property] = value
+      parent[property] = value
+    }
+  }
+
+  tick() {
+    if(this.makeGlobal) {
+      this.userProps.forEach((property) => {
+        this.parent[property] = window[property]
+      })
+      //  this.parent.speed = window.speed
+    }
   }
 
   eval(code) {
-    this.sandbox.eval(code);
+    this.sandbox.eval(code)
   }
 }
 
-module.exports = EvalSandbox;
+module.exports = EvalSandbox
 
-},{"./lib/array-utils.js":23,"./lib/sandbox.js":27}],16:[function(require,module,exports){
-const glslTransforms = require('./glsl/composable-glsl-functions.js');
-const GlslSource = require('./glsl-source.js');
+},{"./lib/array-utils.js":20,"./lib/sandbox.js":23}],14:[function(require,module,exports){
+const glslTransforms = require('./glsl/composable-glsl-functions.js')
+const GlslSource = require('./glsl-source.js')
 
-const renderpassFunctions = require('./glsl/renderpass-functions.js');
+//const renderpassFunctions = require('./glsl/renderpass-functions.js')
 
 Array.prototype.fast = function (speed) {
-  this.speed = speed;
-  return this;
-};
+  this.speed = speed
+  return this
+}
 
 class GeneratorFactory {
-  constructor({
-    defaultUniforms,
-    defaultOutput,
-    extendTransforms = x => x,
-    changeListener = () => {}
-  } = {}) {
-    this.defaultOutput = defaultOutput;
-    this.defaultUniforms = defaultUniforms;
-    this.changeListener = changeListener;
-    this.extendTransforms = extendTransforms;
-    this.generators = {};
-    this.init();
+  constructor ({
+      defaultUniforms,
+      defaultOutput,
+      extendTransforms = (x => x),
+      changeListener = (() => {})
+    } = {}
+    ) {
+    this.defaultOutput = defaultOutput
+    this.defaultUniforms = defaultUniforms
+    this.changeListener = changeListener
+    this.extendTransforms = extendTransforms
+    this.generators = {}
+    this.init()
   }
-  init() {
-    this.glslTransforms = {};
+  init () {
+    this.glslTransforms = {}
     this.generators = Object.entries(this.generators).reduce((prev, [method, transform]) => {
-      this.changeListener({ type: 'remove', synth: this, method });
-      return prev;
-    }, {});
+      this.changeListener({type: 'remove', synth: this, method})
+      return prev
+    }, {})
 
     this.sourceClass = (() => {
-      return class extends GlslSource {};
-    })();
+      return class extends GlslSource {
+      }
+    })()
 
-    let functions = {};
-    const addTransforms = transforms => Object.entries(transforms).forEach(([method, transform]) => {
-      functions[method] = transform;
-    });
+    let functions = {}
+    const addTransforms = (transforms) =>
+      Object.entries(transforms).forEach(([method, transform]) => {
+        functions[method] = transform
+      })
 
-    addTransforms(glslTransforms);
-    addTransforms(renderpassFunctions);
+    addTransforms(glslTransforms)
+    //addTransforms(renderpassFunctions)
 
     if (typeof this.extendTransforms === 'function') {
-      functions = this.extendTransforms(functions);
+      functions = this.extendTransforms(functions)
     } else if (Array.isArray(this.extendTransforms)) {
       addTransforms(this.extendTransforms.reduce((h, transform) => {
-        h[transform.name] = transform;
-        return h;
-      }, {}));
+        h[transform.name] = transform
+        return h
+      }, {}))
     } else if (typeof this.extendTransforms === 'object') {
-      addTransforms(this.extendTransforms);
+      addTransforms(this.extendTransforms)
     }
 
     Object.entries(functions).forEach(([method, transform]) => {
       if (typeof transform.glsl_return_type === 'undefined' && transform.glsl) {
-        transform.glsl_return_type = transform.glsl.replace(new RegExp(`^(?:[\\s\\S]*\\W)?(\\S+)\\s+${method}\\s*[(][\\s\\S]*`, 'ugm'), '$1');
+        transform.glsl_return_type = transform.glsl.replace(new RegExp(`^(?:[\\s\\S]*\\W)?(\\S+)\\s+${method}\\s*[(][\\s\\S]*`, 'ugm'), '$1')
       }
 
-      functions[method] = this.setFunction(method, transform);
-    });
+      functions[method] = this._addMethod(method, transform)
+    })
 
-    return functions;
-  }
+    return functions
+ }
 
-  setFunction(method, transform) {
-    this.glslTransforms[method] = transform;
+ _addMethod (method, transform) {
+   console.log('adding', method, transform)
+    this.glslTransforms[method] = transform
     if (transform.type === 'src') {
       const func = (...args) => new this.sourceClass({
         name: method,
@@ -1894,119 +1889,210 @@ class GeneratorFactory {
         defaultOutput: this.defaultOutput,
         defaultUniforms: this.defaultUniforms,
         synth: this
-      });
-      this.generators[method] = func;
-      this.changeListener({ type: 'add', synth: this, method });
-      return func;
-    } else {
+      })
+      this.generators[method] = func
+      this.changeListener({type: 'add', synth: this, method})
+      return func
+    } else  {
       this.sourceClass.prototype[method] = function (...args) {
-        this.transforms.push({ name: method, transform: transform, userArgs: args });
-        return this;
-      };
+        this.transforms.push({name: method, transform: transform, userArgs: args})
+        return this
+      }
     }
-    return undefined;
+    return undefined
+  }
+
+  setFunction(obj) {
+    var processedGlsl = processGlsl(obj)
+    console.log(processedGlsl)
+    this._addMethod(obj.name, processedGlsl)
   }
 }
 
-module.exports = GeneratorFactory;
 
-},{"./glsl-source.js":17,"./glsl/composable-glsl-functions.js":19,"./glsl/renderpass-functions.js":20}],17:[function(require,module,exports){
-const generateGlsl = require('./glsl-utils.js').generateGlsl;
-const formatArguments = require('./glsl-utils.js').formatArguments;
 
-const glslTransforms = require('./glsl/composable-glsl-functions.js');
-const utilityGlsl = require('./glsl/utility-functions.js');
+const typeLookup = {
+  'src': {
+    returnType: 'vec4',
+    args: ['vec2 _st']
+  },
+  'coord': {
+    returnType: 'vec2',
+    args: ['vec2 _st']
+  },
+  'color': {
+    returnType: 'vec4',
+    args: ['vec4 _c0']
+  },
+  'combine': {
+    returnType: 'vec4',
+    args: ['vec4 _c0', 'vec4 _c1']
+  },
+  'combineCoords': {
+    returnType: 'vec2',
+    args: ['vec2 _st', 'vec4 c0']
+  }
+}
+// expects glsl of format
+// {
+//   name: 'osc', // name that will be used to access function as well as within glsl
+//   type: 'src', // can be src: vec4(vec2 _st), coord: vec2(vec2 _st), color: vec4(vec4 _c0), combine: vec4(vec4 _c0, vec4 _c1), combineCoord: vec2(vec2 _st, vec4 _c0)
+//   inputs: [
+//     {
+//       name: 'freq',
+//       type: 'float', // 'float'   //, 'texture', 'vec4'
+//       default: 0.2
+//     },
+//     {
+//           name: 'sync',
+//           type: 'float',
+//           default: 0.1
+//         },
+//         {
+//           name: 'offset',
+//           type: 'float',
+//           default: 0.0
+//         }
+//   ],
+   //  glsl: `
+   //    vec2 st = _st;
+   //    float r = sin((st.x-offset*2/freq+time*sync)*freq)*0.5  + 0.5;
+   //    float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
+   //    float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
+   //    return vec4(r, g, b, 1.0);
+   // `
+// }
+
+// // generates glsl function:
+// `vec4 osc(vec2 _st, float freq, float sync, float offset){
+//  vec2 st = _st;
+//  float r = sin((st.x-offset*2/freq+time*sync)*freq)*0.5  + 0.5;
+//  float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
+//  float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
+//  return vec4(r, g, b, 1.0);
+// }`
+
+function processGlsl(obj) {
+  let t = typeLookup[obj.type]
+  let baseArgs = t.args.map((arg) => arg).join(", ")
+  // @todo: make sure this works for all input types, add validation
+  let customArgs = obj.inputs.map((input) => `${input.type} ${input.name}`).join(', ')
+  let args = `${baseArgs}${customArgs.length > 0 ? ', '+ customArgs: ''}`
+  console.log('args are ', args)
+  if(t) {
+    let glslFunction =
+`
+  ${t.returnType} ${obj.name}(${args}) {
+      ${obj.glsl}
+  }
+`
+    console.log('function', glslFunction)
+    return Object.assign({}, obj, { glsl: glslFunction})
+  } else {
+    console.error(`type ${obj.type} not recognized`)
+  }
+
+}
+
+module.exports = GeneratorFactory
+
+},{"./glsl-source.js":15,"./glsl/composable-glsl-functions.js":17}],15:[function(require,module,exports){
+const generateGlsl = require('./glsl-utils.js').generateGlsl
+const formatArguments = require('./glsl-utils.js').formatArguments
+
+const glslTransforms = require('./glsl/composable-glsl-functions.js')
+const utilityGlsl = require('./glsl/utility-functions.js')
 
 var GlslSource = function (obj) {
-  this.transforms = [];
-  this.transforms.push(obj);
-  this.defaultOutput = obj.defaultOutput;
-  this.synth = obj.synth;
-  this.defaultUniforms = obj.defaultUniforms;
-  return this;
-};
+  this.transforms = []
+  this.transforms.push(obj)
+  this.defaultOutput = obj.defaultOutput
+  this.synth = obj.synth
+  this.defaultUniforms = obj.defaultUniforms
+  return this
+}
 
-GlslSource.prototype.addTransform = function (obj) {
-  this.transforms.push(obj);
-};
+GlslSource.prototype.addTransform = function (obj)  {
+    this.transforms.push(obj)
+}
 
 GlslSource.prototype.out = function (_output) {
-  var output = _output || this.defaultOutput;
-  var glsl = this.glsl(output);
-  this.synth.currentFunctions = [];
-  // output.renderPasses(glsl)
-  if (output) output.render(glsl);
-};
+  var output = _output || this.defaultOutput
+  var glsl = this.glsl(output)
+  this.synth.currentFunctions = []
+ // output.renderPasses(glsl)
+  if(output) try{
+    output.render(glsl)
+  } catch (error) {
+    console.log('shader could not compile', error)
+  }
+}
 
 GlslSource.prototype.glsl = function () {
   //var output = _output || this.defaultOutput
-  var self = this;
+  var self = this
   // uniforms included in all shaders
-  //  this.defaultUniforms = output.uniforms
-  var passes = [];
-  var transforms = [];
-  //  console.log('output', output)
-  this.transforms.forEach(transform => {
-    if (transform.transform.type === 'renderpass') {
-      if (transforms.length > 0) passes.push(this.compile(transforms, output));
-      transforms = [];
-      var uniforms = {};
-      const inputs = formatArguments(transform, -1);
-      inputs.forEach(uniform => {
-        uniforms[uniform.name] = uniform.value;
-      });
+//  this.defaultUniforms = output.uniforms
+  var passes = []
+  var transforms = []
+//  console.log('output', output)
+  this.transforms.forEach((transform) => {
+    if(transform.transform.type === 'renderpass'){
+      if (transforms.length > 0) passes.push(this.compile(transforms, output))
+      transforms = []
+      var uniforms = {}
+      const inputs = formatArguments(transform, -1)
+      inputs.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
 
       passes.push({
         frag: transform.transform.frag,
         uniforms: Object.assign({}, self.defaultUniforms, uniforms)
-      });
-      transforms.push({ name: 'prev', transform: glslTransforms['prev'], synth: this.synth });
+      })
+      transforms.push({name: 'prev', transform:  glslTransforms['prev'], synth: this.synth})
     } else {
-      transforms.push(transform);
+      transforms.push(transform)
     }
-  });
+  })
 
-  if (transforms.length > 0) passes.push(this.compile(transforms));
+  if (transforms.length > 0) passes.push(this.compile(transforms))
 
-  return passes;
-};
+  return passes
+}
 
 GlslSource.prototype.compile = function (transforms) {
 
-  var shaderInfo = generateGlsl(transforms);
-  var uniforms = {};
-  shaderInfo.uniforms.forEach(uniform => {
-    uniforms[uniform.name] = uniform.value;
-  });
+  var shaderInfo = generateGlsl(transforms)
+  var uniforms = {}
+  shaderInfo.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
 
   var frag = `
   precision mediump float;
-  ${Object.values(shaderInfo.uniforms).map(uniform => {
-    let type = uniform.type;
+  ${Object.values(shaderInfo.uniforms).map((uniform) => {
+    let type = uniform.type
     switch (uniform.type) {
       case 'texture':
-        type = 'sampler2D';
-        break;
+        type = 'sampler2D'
+        break
     }
     return `
-      uniform ${type} ${uniform.name};`;
+      uniform ${type} ${uniform.name};`
   }).join('')}
   uniform float time;
   uniform vec2 resolution;
   varying vec2 uv;
   uniform sampler2D prevBuffer;
 
-  ${Object.values(utilityGlsl).map(transform => {
-    //  console.log(transform.glsl)
+  ${Object.values(utilityGlsl).map((transform) => {
+  //  console.log(transform.glsl)
     return `
             ${transform.glsl}
-          `;
+          `
   }).join('')}
 
-  ${shaderInfo.glslFunctions.map(transform => {
+  ${shaderInfo.glslFunctions.map((transform) => {
     return `
             ${transform.transform.glsl}
-          `;
+          `
   }).join('')}
 
   void main () {
@@ -2014,29 +2100,30 @@ GlslSource.prototype.compile = function (transforms) {
     vec2 st = gl_FragCoord.xy/resolution.xy;
     gl_FragColor = ${shaderInfo.fragColor};
   }
-  `;
+  `
 
   return {
     frag: frag,
     uniforms: Object.assign({}, this.defaultUniforms, uniforms)
-  };
-};
+  }
 
-module.exports = GlslSource;
+}
 
-},{"./glsl-utils.js":18,"./glsl/composable-glsl-functions.js":19,"./glsl/utility-functions.js":21}],18:[function(require,module,exports){
+module.exports = GlslSource
+
+},{"./glsl-utils.js":16,"./glsl/composable-glsl-functions.js":17,"./glsl/utility-functions.js":18}],16:[function(require,module,exports){
 // converts a tree of javascript functions to a shader
 
 // Add extra functionality to Array.prototype for generating sequences in time
-const arrayUtils = require('./lib/array-utils.js');
+const arrayUtils = require('./lib/array-utils.js')
 
 // [WIP] how to treat different dimensions (?)
 const DEFAULT_CONVERSIONS = {
   float: {
-    'vec4': { name: 'sum', args: [[1, 1, 1, 1]] },
-    'vec2': { name: 'sum', args: [[1, 1]] }
+    'vec4': {name: 'sum', args: [[1, 1, 1, 1]]},
+    'vec2': {name: 'sum', args: [[1, 1]]}
   }
-};
+}
 
 module.exports = {
   generateGlsl: function (transforms) {
@@ -2044,231 +2131,250 @@ module.exports = {
       uniforms: [], // list of uniforms used in shader
       glslFunctions: [], // list of functions used in shader
       fragColor: ''
-    };
+    }
 
-    var gen = generateGlsl(transforms, shaderParams)('st');
-    shaderParams.fragColor = gen;
-    return shaderParams;
+    var gen = generateGlsl(transforms, shaderParams)('st')
+    shaderParams.fragColor = gen
+    return shaderParams
   },
   formatArguments: formatArguments
-  // recursive function for generating shader string from object containing functions and user arguments. Order of functions in string depends on type of function
-  // to do: improve variable names
-};function generateGlsl(transforms, shaderParams) {
+}
+// recursive function for generating shader string from object containing functions and user arguments. Order of functions in string depends on type of function
+// to do: improve variable names
+function generateGlsl (transforms, shaderParams) {
 
   // transform function that outputs a shader string corresponding to gl_FragColor
-  var fragColor = () => '';
+  var fragColor = () => ''
   // var uniforms = []
   // var glslFunctions = []
-  transforms.forEach(transform => {
-    var inputs = formatArguments(transform, shaderParams.uniforms.length);
-    inputs.forEach(input => {
-      if (input.isUniform) shaderParams.uniforms.push(input);
-    });
+  transforms.forEach((transform) => {
+    var inputs = formatArguments(transform, shaderParams.uniforms.length)
+    inputs.forEach((input) => {
+      if(input.isUniform) shaderParams.uniforms.push(input)
+    })
 
-    // add new glsl function to running list of functions
-    if (!contains(transform, shaderParams.glslFunctions)) shaderParams.glslFunctions.push(transform);
+   // add new glsl function to running list of functions
+    if(!contains(transform, shaderParams.glslFunctions)) shaderParams.glslFunctions.push(transform)
 
     // current function for generating frag color shader code
-    var f0 = fragColor;
+    var f0 = fragColor
     if (transform.transform.type === 'src') {
-      fragColor = uv => `${shaderString(uv, transform.name, inputs, shaderParams)}`;
+      fragColor = (uv) => `${shaderString(uv, transform.name, inputs, shaderParams)}`
     } else if (transform.transform.type === 'coord') {
-      fragColor = uv => `${f0(`${shaderString(uv, transform.name, inputs, shaderParams)}`)}`;
+      fragColor = (uv) => `${f0(`${shaderString(uv, transform.name, inputs, shaderParams)}`)}`
     } else if (transform.transform.type === 'color') {
-      fragColor = uv => `${shaderString(`${f0(uv)}`, transform.name, inputs, shaderParams)}`;
+      fragColor = (uv) =>  `${shaderString(`${f0(uv)}`, transform.name, inputs, shaderParams)}`
     } else if (transform.transform.type === 'combine') {
       // combining two generated shader strings (i.e. for blend, mult, add funtions)
-      var f1 = inputs[0].value && inputs[0].value.transforms ? uv => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` : inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value;
-      fragColor = uv => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`;
+      var f1 = inputs[0].value && inputs[0].value.transforms ?
+        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+        (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
+      fragColor = (uv) => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`
     } else if (transform.transform.type === 'combineCoord') {
       // combining two generated shader strings (i.e. for modulate functions)
-      var f1 = inputs[0].value && inputs[0].value.transforms ? uv => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` : inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value;
-      fragColor = uv => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`;
+      var f1 = inputs[0].value && inputs[0].value.transforms ?
+        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+        (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
+      fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`
     }
-  });
+  })
 
-  return fragColor;
+  return fragColor
 }
 
 // assembles a shader string containing the arguments and the function name, i.e. 'osc(uv, frequency)'
-function shaderString(uv, method, inputs, shaderParams) {
-  const str = inputs.map(input => {
+function shaderString (uv, method, inputs, shaderParams) {
+  const str = inputs.map((input) => {
     if (input.isUniform) {
-      return input.name;
+      return input.name
     } else if (input.value && input.value.transforms) {
       // this by definition needs to be a generator, hence we start with 'st' as the initial value for generating the glsl fragment
-      return `${generateGlsl(input.value.transforms, shaderParams)('st')}`;
+      return `${generateGlsl(input.value.transforms, shaderParams)('st')}`
     }
-    return input.value;
-  }).reduce((p, c) => `${p}, ${c}`, '');
+    return input.value
+  }).reduce((p, c) => `${p}, ${c}`, '')
 
-  return `${method}(${uv}${str})`;
+  return `${method}(${uv}${str})`
 }
 
 // merge two arrays and remove duplicates
-function mergeArrays(a, b) {
+function mergeArrays (a, b) {
   return a.concat(b.filter(function (item) {
     return a.indexOf(item) < 0;
-  }));
+  }))
 }
 
 // check whether array
 function contains(object, arr) {
-  for (var i = 0; i < arr.length; i++) {
-    if (object.name == arr[i].name) return true;
+  for(var i = 0; i < arr.length; i++){
+    if(object.name == arr[i].name) return true
   }
-  return false;
+  return false
 }
 
-function fillArrayWithDefaults(arr, len) {
+function fillArrayWithDefaults (arr, len) {
   // fill the array with default values if it's too short
   while (arr.length < len) {
-    if (arr.length === 3) {
-      // push a 1 as the default for .a in vec4
-      arr.push(1.0);
+    if (arr.length === 3) { // push a 1 as the default for .a in vec4
+      arr.push(1.0)
     } else {
-      arr.push(0.0);
+      arr.push(0.0)
     }
   }
-  return arr.slice(0, len);
+  return arr.slice(0, len)
 }
 
-const ensure_decimal_dot = val => {
-  val = val.toString();
+const ensure_decimal_dot = (val) => {
+  val = val.toString()
   if (val.indexOf('.') < 0) {
-    val += '.';
+    val += '.'
   }
-  return val;
-};
+  return val
+}
 
-function formatArguments(transform, startIndex) {
-  //  console.log('processing args', transform, startIndex)
-  const defaultArgs = transform.transform.inputs;
-  const userArgs = transform.userArgs;
-  return defaultArgs.map((input, index) => {
+function formatArguments (transform, startIndex) {
+//  console.log('processing args', transform, startIndex)
+  const defaultArgs = transform.transform.inputs
+  const userArgs = transform.userArgs
+  return defaultArgs.map( (input, index) => {
     const typedArg = {
       value: input.default,
       type: input.type, //
       isUniform: false,
       name: input.name,
       vecLen: 0
-      //  generateGlsl: null // function for creating glsl
-    };
+    //  generateGlsl: null // function for creating glsl
+    }
 
     if (input.type.startsWith('vec')) {
       try {
-        typedArg.vecLen = Number.parseInt(input.type.substr(3));
+        typedArg.vecLen = Number.parseInt(input.type.substr(3))
       } catch (e) {
-        console.log(`Error determining length of vector input type ${input.type} (${input.name})`);
+        console.log(`Error determining length of vector input type ${input.type} (${input.name})`)
       }
     }
 
     // if user has input something for this argument
-    if (userArgs.length > index) {
-      typedArg.value = userArgs[index];
+    if(userArgs.length > index) {
+      typedArg.value = userArgs[index]
       // do something if a composite or transform
 
       if (typeof userArgs[index] === 'function') {
-        if (typedArg.vecLen > 0) {
-          // expected input is a vector, not a scalar
-          typedArg.value = (context, props, batchId) => fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen);
+        if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
+          typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
         } else {
-          typedArg.value = (context, props, batchId) => userArgs[index](props);
+          typedArg.value = (context, props, batchId) => {
+           try {
+             return userArgs[index](props)
+           } catch (e) {
+             console.log('ERROR', e)
+             return input.default
+           }
+         }
         }
 
-        typedArg.isUniform = true;
+        typedArg.isUniform = true
       } else if (userArgs[index].constructor === Array) {
-        if (typedArg.vecLen > 0) {
-          // expected input is a vector, not a scalar
-          typedArg.isUniform = true;
-          typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen);
+        if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
+          typedArg.isUniform = true
+          typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)
         } else {
-          //  console.log("is Array")
-          typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props);
-          typedArg.isUniform = true;
+      //  console.log("is Array")
+          typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
+          typedArg.isUniform = true
         }
       }
     }
 
-    if (startIndex < 0) {} else {
-      if (typedArg.value && typedArg.value.transforms) {
-        const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1];
+    if(startIndex< 0){
+    } else {
+    if (typedArg.value && typedArg.value.transforms) {
+      const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
 
-        if (final_transform.transform.glsl_return_type !== input.type) {
-          const defaults = DEFAULT_CONVERSIONS[input.type];
-          if (typeof defaults !== 'undefined') {
-            const default_def = defaults[final_transform.transform.glsl_return_type];
-            if (typeof default_def !== 'undefined') {
-              const { name, args } = default_def;
-              typedArg.value = typedArg.value[name](...args);
-            }
+
+
+      if (final_transform.transform.glsl_return_type !== input.type) {
+        const defaults = DEFAULT_CONVERSIONS[input.type]
+        if (typeof defaults !== 'undefined') {
+          const default_def = defaults[final_transform.transform.glsl_return_type]
+          if (typeof default_def !== 'undefined') {
+            const {name, args} = default_def
+            typedArg.value = typedArg.value[name](...args)
           }
         }
-
-        typedArg.isUniform = false;
-      } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
-        typedArg.value = ensure_decimal_dot(typedArg.value);
-      } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
-        typedArg.isUniform = false;
-        typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`;
-      } else if (input.type === 'texture') {
-        // typedArg.tex = typedArg.value
-        var x = typedArg.value;
-        typedArg.value = () => x.getTexture();
-        typedArg.isUniform = true;
-      } else {
-        // if passing in a texture reference, when function asks for vec4, convert to vec4
-        if (typedArg.value.getTexture && input.type === 'vec4') {
-          var x1 = typedArg.value;
-          typedArg.value = src(x1);
-          typedArg.isUniform = false;
-        }
       }
 
-      // add tp uniform array if is a function that will pass in a different value on each render frame,
-      // or a texture/ external source
-
-      if (typedArg.isUniform) {
-        typedArg.name += startIndex;
-        //  shaderParams.uniforms.push(typedArg)
+      typedArg.isUniform = false
+    } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
+      typedArg.value = ensure_decimal_dot(typedArg.value)
+    } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
+      typedArg.isUniform = false
+      typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
+    } else if (input.type === 'texture') {
+      // typedArg.tex = typedArg.value
+      var x = typedArg.value
+      typedArg.value = () => (x.getTexture())
+      typedArg.isUniform = true
+    } else {
+      // if passing in a texture reference, when function asks for vec4, convert to vec4
+      if (typedArg.value.getTexture && input.type === 'vec4') {
+        var x1 = typedArg.value
+        typedArg.value = src(x1)
+        typedArg.isUniform = false
       }
     }
-    return typedArg;
-  });
+
+    // add tp uniform array if is a function that will pass in a different value on each render frame,
+    // or a texture/ external source
+
+      if(typedArg.isUniform) {
+         typedArg.name += startIndex
+      //  shaderParams.uniforms.push(typedArg)
+      }
+}
+    return typedArg
+  })
 }
 
-},{"./lib/array-utils.js":23}],19:[function(require,module,exports){
+},{"./lib/array-utils.js":20}],17:[function(require,module,exports){
 module.exports = {
   noise: {
     type: 'src',
-    inputs: [{
-      type: 'float',
-      name: 'scale',
-      default: 10
-    }, {
-      type: 'float',
-      name: 'offset',
-      default: 0.1
-    }],
+    inputs: [
+      {
+        type: 'float',
+        name: 'scale',
+        default: 10
+      },
+      {
+        type: 'float',
+        name: 'offset',
+        default : 0.1
+      }
+    ],
     glsl: `vec4 noise(vec2 st, float scale, float offset){
       return vec4(vec3(_noise(vec3(st*scale, offset*time))), 1.0);
     }`
   },
   voronoi: {
     type: 'src',
-    inputs: [{
-      type: 'float',
-      name: 'scale',
-      default: 5
-    }, {
-      type: 'float',
-      name: 'speed',
-      default: 0.3
-    }, {
-      type: 'float',
-      name: 'blending',
-      default: 0.3
-    }],
+    inputs: [
+      {
+        type: 'float',
+        name: 'scale',
+        default: 5
+      },
+      {
+        type: 'float',
+        name: 'speed',
+        default : 0.3
+      },
+      {
+        type: 'float',
+        name: 'blending',
+        default : 0.3
+      }
+    ],
     notes: 'from https://thebookofshaders.com/edit.php#12/vorono-01.frag, https://www.shadertoy.com/view/ldB3zc',
     glsl: `vec4 voronoi(vec2 st, float scale, float speed, float blending) {
       vec3 color = vec3(.0);
@@ -2301,19 +2407,23 @@ module.exports = {
   },
   osc: {
     type: 'src',
-    inputs: [{
-      name: 'frequency',
-      type: 'float',
-      default: 60.0
-    }, {
-      name: 'sync',
-      type: 'float',
-      default: 0.1
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'frequency',
+        type: 'float',
+        default: 60.0
+      },
+      {
+        name: 'sync',
+        type: 'float',
+        default: 0.1
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec4 osc(vec2 _st, float freq, float sync, float offset){
             vec2 st = _st;
             float r = sin((st.x-offset/freq+time*sync)*freq)*0.5  + 0.5;
@@ -2324,19 +2434,23 @@ module.exports = {
   },
   shape: {
     type: 'src',
-    inputs: [{
-      name: 'sides',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'radius',
-      type: 'float',
-      default: 0.3
-    }, {
-      name: 'smoothing',
-      type: 'float',
-      default: 0.01
-    }],
+    inputs: [
+      {
+        name: 'sides',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'radius',
+        type: 'float',
+        default: 0.3
+      },
+      {
+        name: 'smoothing',
+        type: 'float',
+        default: 0.01
+      }
+    ],
     glsl: `vec4 shape(vec2 _st, float sides, float radius, float smoothing){
       vec2 st = _st * 2. - 1.;
       // Angle and radius from the current pixel
@@ -2348,11 +2462,13 @@ module.exports = {
   },
   gradient: {
     type: 'src',
-    inputs: [{
-      name: 'speed',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec4 gradient(vec2 _st, float speed) {
       return vec4(_st, sin(time*speed), 1.0);
     }
@@ -2360,10 +2476,12 @@ module.exports = {
   },
   src: {
     type: 'src',
-    inputs: [{
-      name: 'tex',
-      type: 'texture'
-    }],
+    inputs: [
+      {
+        name: 'tex',
+        type: 'texture'
+      }
+    ],
     glsl: `vec4 src(vec2 _st, sampler2D _tex){
     //  vec2 uv = gl_FragCoord.xy/vec2(1280., 720.);
       return texture2D(_tex, fract(_st));
@@ -2371,23 +2489,28 @@ module.exports = {
   },
   solid: {
     type: 'src',
-    inputs: [{
-      name: 'r',
-      type: 'float',
-      default: 0.0
-    }, {
-      name: 'g',
-      type: 'float',
-      default: 0.0
-    }, {
-      name: 'b',
-      type: 'float',
-      default: 0.0
-    }, {
-      name: 'a',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'r',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'g',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'b',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'a',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     notes: '',
     glsl: `vec4 solid(vec2 uv, float _r, float _g, float _b, float _a){
       return vec4(_r, _g, _b, _a);
@@ -2395,15 +2518,17 @@ module.exports = {
   },
   rotate: {
     type: 'coord',
-    inputs: [{
-      name: 'angle',
-      type: 'float',
-      default: 10.0
-    }, {
-      name: 'speed',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'angle',
+        type: 'float',
+        default: 10.0
+      }, {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 rotate(vec2 st, float _angle, float speed){
               vec2 xy = st - vec2(0.5);
               float angle = _angle + speed *time;
@@ -2414,27 +2539,33 @@ module.exports = {
   },
   scale: {
     type: 'coord',
-    inputs: [{
-      name: 'amount',
-      type: 'float',
-      default: 1.5
-    }, {
-      name: 'xMult',
-      type: 'float',
-      default: 1.0
-    }, {
-      name: 'yMult',
-      type: 'float',
-      default: 1.0
-    }, {
-      name: 'offsetX',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'offsetY',
-      type: 'float',
-      default: 0.5
-    }],
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.5
+      },
+      {
+        name: 'xMult',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'yMult',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'offsetX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'offsetY',
+        type: 'float',
+        default: 0.5
+      }
+    ],
     glsl: `vec2 scale(vec2 st, float amount, float xMult, float yMult, float offsetX, float offsetY){
       vec2 xy = st - vec2(offsetX, offsetY);
       xy*=(1.0/vec2(amount*xMult, amount*yMult));
@@ -2445,15 +2576,17 @@ module.exports = {
   },
   pixelate: {
     type: 'coord',
-    inputs: [{
-      name: 'pixelX',
-      type: 'float',
-      default: 20
-    }, {
-      name: 'pixelY',
-      type: 'float',
-      default: 20
-    }],
+    inputs: [
+      {
+        name: 'pixelX',
+        type: 'float',
+        default: 20
+      }, {
+        name: 'pixelY',
+        type: 'float',
+        default: 20
+      }
+    ],
     glsl: `vec2 pixelate(vec2 st, float pixelX, float pixelY){
       vec2 xy = vec2(pixelX, pixelY);
       return (floor(st * xy) + 0.5)/xy;
@@ -2461,15 +2594,18 @@ module.exports = {
   },
   posterize: {
     type: 'color',
-    inputs: [{
-      name: 'bins',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'gamma',
-      type: 'float',
-      default: 0.6
-    }],
+    inputs: [
+      {
+        name: 'bins',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'gamma',
+        type: 'float',
+        default: 0.6
+      }
+    ],
     glsl: `vec4 posterize(vec4 c, float bins, float gamma){
       vec4 c2 = pow(c, vec4(gamma));
       c2 *= vec4(bins);
@@ -2481,23 +2617,28 @@ module.exports = {
   },
   shift: {
     type: 'color',
-    inputs: [{
-      name: 'r',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'g',
-      type: 'float',
-      default: 0.0
-    }, {
-      name: 'b',
-      type: 'float',
-      default: 0.0
-    }, {
-      name: 'a',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'r',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'g',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'b',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'a',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec4 shift(vec4 c, float r, float g, float b, float a){
       vec4 c2 = vec4(c);
       c2.r = fract(c2.r + r);
@@ -2510,23 +2651,28 @@ module.exports = {
   },
   repeat: {
     type: 'coord',
-    inputs: [{
-      name: 'repeatX',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'repeatY',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'offsetX',
-      type: 'float',
-      default: 0.0
-    }, {
-      name: 'offsetY',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'repeatX',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'repeatY',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'offsetX',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'offsetY',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 repeat(vec2 _st, float repeatX, float repeatY, float offsetX, float offsetY){
         vec2 st = _st * vec2(repeatX, repeatY);
         st.x += step(1., mod(st.y,2.0)) * offsetX;
@@ -2536,26 +2682,32 @@ module.exports = {
   },
   modulateRepeat: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'repeatX',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'repeatY',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'offsetX',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'offsetY',
-      type: 'float',
-      default: 0.5
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'repeatX',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'repeatY',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'offsetX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'offsetY',
+        type: 'float',
+        default: 0.5
+      }
+    ],
     glsl: `vec2 modulateRepeat(vec2 _st, vec4 c1, float repeatX, float repeatY, float offsetX, float offsetY){
         vec2 st = _st * vec2(repeatX, repeatY);
         st.x += step(1., mod(st.y,2.0)) + c1.r * offsetX;
@@ -2565,15 +2717,17 @@ module.exports = {
   },
   repeatX: {
     type: 'coord',
-    inputs: [{
-      name: 'reps',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      }, {
+          name: 'offset',
+          type: 'float',
+          default: 0.0
+        }
+    ],
     glsl: `vec2 repeatX(vec2 _st, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
     //  float f =  mod(_st.y,2.0);
@@ -2583,18 +2737,22 @@ module.exports = {
   },
   modulateRepeatX: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'reps',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 0.5
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      },
+      {
+          name: 'offset',
+          type: 'float',
+          default: 0.5
+      }
+    ],
     glsl: `vec2 modulateRepeatX(vec2 _st, vec4 c1, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
     //  float f =  mod(_st.y,2.0);
@@ -2604,15 +2762,17 @@ module.exports = {
   },
   repeatY: {
     type: 'coord',
-    inputs: [{
-      name: 'reps',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      }, {
+        name: 'offset',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 repeatY(vec2 _st, float reps, float offset){
       vec2 st = _st * vec2(1.0, reps);
     //  float f =  mod(_st.y,2.0);
@@ -2622,18 +2782,22 @@ module.exports = {
   },
   modulateRepeatY: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'reps',
-      type: 'float',
-      default: 3.0
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 0.5
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'reps',
+        type: 'float',
+        default: 3.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0.5
+      }
+    ],
     glsl: `vec2 modulateRepeatY(vec2 _st, vec4 c1, float reps, float offset){
       vec2 st = _st * vec2(reps, 1.0);
     //  float f =  mod(_st.y,2.0);
@@ -2643,11 +2807,13 @@ module.exports = {
   },
   kaleid: {
     type: 'coord',
-    inputs: [{
-      name: 'nSides',
-      type: 'float',
-      default: 4.0
-    }],
+    inputs: [
+      {
+        name: 'nSides',
+        type: 'float',
+        default: 4.0
+      }
+    ],
     glsl: `vec2 kaleid(vec2 st, float nSides){
       st -= 0.5;
       float r = length(st);
@@ -2660,14 +2826,17 @@ module.exports = {
   },
   modulateKaleid: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'nSides',
-      type: 'float',
-      default: 4.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'nSides',
+        type: 'float',
+        default: 4.0
+      }
+    ],
     glsl: `vec2 modulateKaleid(vec2 st, vec4 c1, float nSides){
       st -= 0.5;
       float r = length(st);
@@ -2680,23 +2849,28 @@ module.exports = {
   },
   scroll: {
     type: 'coord',
-    inputs: [{
-      name: 'scrollX',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'scrollY',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'speedX',
-      type: 'float',
-      default: 0.0
-    }, {
-      name: 'speedY',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'scrollX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'scrollY',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speedX',
+        type: 'float',
+        default: 0.0
+      },
+      {
+        name: 'speedY',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 scroll(vec2 st, float scrollX, float scrollY, float speedX, float speedY){
       st.x += scrollX + time*speedX;
       st.y += scrollY + time*speedY;
@@ -2705,15 +2879,18 @@ module.exports = {
   },
   scrollX: {
     type: 'coord',
-    inputs: [{
-      name: 'scrollX',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'speed',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'scrollX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 scrollX(vec2 st, float amount, float speed){
       st.x += amount + time*speed;
       return st;
@@ -2721,18 +2898,22 @@ module.exports = {
   },
   modulateScrollX: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'scrollX',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'speed',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'scrollX',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 modulateScrollX(vec2 st, vec4 c1, float amount, float speed){
       st.x += c1.r*amount + time*speed;
       return st;
@@ -2740,15 +2921,18 @@ module.exports = {
   },
   scrollY: {
     type: 'coord',
-    inputs: [{
-      name: 'scrollY',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'speed',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'scrollY',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 scrollY(vec2 st, float amount, float speed){
       st.y += amount + time*speed;
       return st;
@@ -2756,18 +2940,22 @@ module.exports = {
   },
   modulateScrollY: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'scrollY',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'speed',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'scrollY',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'speed',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 modulateScrollY(vec2 st, vec4 c1, float amount, float speed){
       st.y += c1.r*amount + time*speed;
       return st;
@@ -2775,38 +2963,46 @@ module.exports = {
   },
   add: {
     type: 'combine',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'amount',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
             return (c0+c1)*amount + c0*(1.0-amount);
           }`
   },
   sub: {
     type: 'combine',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'amount',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
             return (c0-c1)*amount + c0*(1.0-amount);
           }`
   },
   layer: {
     type: 'combine',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      }
+    ],
     glsl: `vec4 layer(vec4 c0, vec4 c1){
         return vec4(mix(c0.rgb, c1.rgb, c1.a), c0.a+c1.a);
     }
@@ -2814,28 +3010,34 @@ module.exports = {
   },
   blend: {
     type: 'combine',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'amount',
-      type: 'float',
-      default: 0.5
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 0.5
+      }
+    ],
     glsl: `vec4 blend(vec4 c0, vec4 c1, float amount){
       return c0*(1.0-amount)+c1*amount;
     }`
   },
   mult: {
     type: 'combine',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'amount',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     glsl: `vec4 mult(vec4 c0, vec4 c1, float amount){
       return c0*(1.0-amount)+(c0*c1)*amount;
     }`
@@ -2843,10 +3045,12 @@ module.exports = {
 
   diff: {
     type: 'combine',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      }
+    ],
     glsl: `vec4 diff(vec4 c0, vec4 c1){
       return vec4(abs(c0.rgb-c1.rgb), max(c0.a, c1.a));
     }
@@ -2855,14 +3059,17 @@ module.exports = {
 
   modulate: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'amount',
-      type: 'float',
-      default: 0.1
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 0.1
+      }
+    ],
     glsl: `vec2 modulate(vec2 st, vec4 c1, float amount){
           //  return fract(st+(c1.xy-0.5)*amount);
               return st + c1.xy*amount;
@@ -2870,18 +3077,22 @@ module.exports = {
   },
   modulateScale: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'multiple',
-      type: 'float',
-      default: 1.0
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'multiple',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     glsl: `vec2 modulateScale(vec2 st, vec4 c1, float multiple, float offset){
       vec2 xy = st - vec2(0.5);
       xy*=(1.0/vec2(offset + multiple*c1.r, offset + multiple*c1.g));
@@ -2891,18 +3102,22 @@ module.exports = {
   },
   modulatePixelate: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'multiple',
-      type: 'float',
-      default: 10.0
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 3.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'multiple',
+        type: 'float',
+        default: 10.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 3.0
+      }
+    ],
     glsl: `vec2 modulatePixelate(vec2 st, vec4 c1, float multiple, float offset){
       vec2 xy = vec2(offset + c1.x*multiple, offset + c1.y*multiple);
       return (floor(st * xy) + 0.5)/xy;
@@ -2910,18 +3125,22 @@ module.exports = {
   },
   modulateRotate: {
     type: 'combineCoord',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'multiple',
-      type: 'float',
-      default: 1.0
-    }, {
-      name: 'offset',
-      type: 'float',
-      default: 0.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'multiple',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'offset',
+        type: 'float',
+        default: 0.0
+      }
+    ],
     glsl: `vec2 modulateRotate(vec2 st, vec4 c1, float multiple, float offset){
         vec2 xy = st - vec2(0.5);
         float angle = offset + c1.x * multiple;
@@ -2933,36 +3152,43 @@ module.exports = {
   modulateHue: {
     type: 'combineCoord',
     notes: 'changes coordinates based on hue of second input. Based on: https://www.shadertoy.com/view/XtcSWM',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }, {
-      name: 'amount',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      },
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     glsl: `vec2 modulateHue(vec2 st, vec4 c1, float amount){
             return st + (vec2(c1.g - c1.r, c1.b - c1.g) * amount * 1.0/resolution);
           }`
   },
   invert: {
     type: 'color',
-    inputs: [{
-      name: 'amount',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     glsl: `vec4 invert(vec4 c0, float amount){
       return vec4((1.0-c0.rgb)*amount + c0.rgb*(1.0-amount), c0.a);
     }`
   },
   contrast: {
     type: 'color',
-    inputs: [{
-      name: 'amount',
-      type: 'float',
-      default: 1.6
-    }],
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 1.6
+      }
+    ],
     glsl: `vec4 contrast(vec4 c0, float amount) {
       vec4 c = (c0-vec4(0.5))*vec4(amount) + vec4(0.5);
       return vec4(c.rgb, c0.a);
@@ -2971,11 +3197,13 @@ module.exports = {
   },
   brightness: {
     type: 'color',
-    inputs: [{
-      name: 'amount',
-      type: 'float',
-      default: 0.4
-    }],
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 0.4
+      }
+    ],
     glsl: `vec4 brightness(vec4 c0, float amount){
       return vec4(c0.rgb + vec3(amount), c0.a);
     }
@@ -2983,10 +3211,12 @@ module.exports = {
   },
   mask: {
     type: 'combine',
-    inputs: [{
-      name: 'color',
-      type: 'vec4'
-    }],
+    inputs: [
+      {
+        name: 'color',
+        type: 'vec4'
+      }
+    ],
     glsl: `vec4 mask(vec4 c0, vec4 c1){
       float a = _luminance(c1.rgb);
       return vec4(c0.rgb*a, a);
@@ -2994,15 +3224,18 @@ module.exports = {
   },
   luma: {
     type: 'color',
-    inputs: [{
-      name: 'threshold',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'tolerance',
-      type: 'float',
-      default: 0.1
-    }],
+    inputs: [
+      {
+        name: 'threshold',
+        type: 'float',
+        default: 0.5
+      },
+      {
+        name: 'tolerance',
+        type: 'float',
+        default: 0.1
+      }
+    ],
     glsl: `vec4 luma(vec4 c0, float threshold, float tolerance){
       float a = smoothstep(threshold-tolerance, threshold+tolerance, _luminance(c0.rgb));
       return vec4(c0.rgb*a, a);
@@ -3010,38 +3243,45 @@ module.exports = {
   },
   thresh: {
     type: 'color',
-    inputs: [{
-      name: 'threshold',
-      type: 'float',
-      default: 0.5
-    }, {
-      name: 'tolerance',
-      type: 'float',
-      default: 0.04
-    }],
+    inputs: [
+      {
+        name: 'threshold',
+        type: 'float',
+        default: 0.5
+      }, {
+        name: 'tolerance',
+        type: 'float',
+        default: 0.04
+      }
+    ],
     glsl: `vec4 thresh(vec4 c0, float threshold, float tolerance){
       return vec4(vec3(smoothstep(threshold-tolerance, threshold+tolerance, _luminance(c0.rgb))), c0.a);
     }`
   },
   color: {
     type: 'color',
-    inputs: [{
-      name: 'r',
-      type: 'float',
-      default: 1.0
-    }, {
-      name: 'g',
-      type: 'float',
-      default: 1.0
-    }, {
-      name: 'b',
-      type: 'float',
-      default: 1.0
-    }, {
-      name: 'a',
-      type: 'float',
-      default: 1.0
-    }],
+    inputs: [
+      {
+        name: 'r',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'g',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'b',
+        type: 'float',
+        default: 1.0
+      },
+      {
+        name: 'a',
+        type: 'float',
+        default: 1.0
+      }
+    ],
     notes: 'https://www.youtube.com/watch?v=FpOEtm9aX0M',
     glsl: `vec4 color(vec4 c0, float _r, float _g, float _b, float _a){
       vec4 c = vec4(_r, _g, _b, _a);
@@ -3053,11 +3293,13 @@ module.exports = {
   },
   saturate: {
     type: 'color',
-    inputs: [{
-      name: 'amount',
-      type: 'float',
-      default: 2.0
-    }],
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 2.0
+      }
+    ],
     glsl: `vec4 saturate(vec4 c0, float amount){
       const vec3 W = vec3(0.2125, 0.7154, 0.0721);
       vec3 intensity = vec3(dot(c0.rgb, W));
@@ -3066,11 +3308,13 @@ module.exports = {
   },
   hue: {
     type: 'color',
-    inputs: [{
-      name: 'hue',
-      type: 'float',
-      default: 0.4
-    }],
+    inputs: [
+      {
+        name: 'hue',
+        type: 'float',
+        default: 0.4
+      }
+    ],
     glsl: `vec4 hue(vec4 c0, float hue){
       vec3 c = _rgbToHsv(c0.rgb);
       c.r += hue;
@@ -3080,11 +3324,13 @@ module.exports = {
   },
   colorama: {
     type: 'color',
-    inputs: [{
-      name: 'amount',
-      type: 'float',
-      default: 0.005
-    }],
+    inputs: [
+      {
+        name: 'amount',
+        type: 'float',
+        default: 0.005
+      }
+    ],
     glsl: `vec4 colorama(vec4 c0, float amount){
       vec3 c = _rgbToHsv(c0.rgb);
       c += vec3(amount);
@@ -3104,11 +3350,13 @@ module.exports = {
   },
   sum: {
     type: 'color',
-    inputs: [{
-      name: 'scale',
-      type: 'vec4',
-      default: [1, 1, 1, 1]
-    }],
+    inputs: [
+      {
+        name: 'scale',
+        type: 'vec4',
+        default: [1, 1, 1, 1]
+      }
+    ],
     glsl: `float sum(vec4 c0, vec4 s) {
       vec4 v = c0 * s;
       return v.r + v.g + v.b + v.a;
@@ -3120,60 +3368,47 @@ float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is no
   },
   r: {
     type: 'color',
-    inputs: [{ name: 'scale', type: 'float', default: 1 }, { name: 'offset', type: 'float', default: 0 }],
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
     glsl: `vec4 r(vec4 c0, float scale, float offset) {
       return vec4(c0.r * scale + offset);
     }`
   },
   g: {
     type: 'color',
-    inputs: [{ name: 'scale', type: 'float', default: 1 }, { name: 'offset', type: 'float', default: 0 }],
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
     glsl: `vec4 g(vec4 c0, float scale, float offset) {
       return vec4(c0.g * scale + offset);
     }`
   },
   b: {
     type: 'color',
-    inputs: [{ name: 'scale', type: 'float', default: 1 }, { name: 'offset', type: 'float', default: 0 }],
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
     glsl: `vec4 b(vec4 c0, float scale, float offset) {
       return vec4(c0.b * scale + offset);
     }`
   },
   a: {
     type: 'color',
-    inputs: [{ name: 'scale', type: 'float', default: 1 }, { name: 'offset', type: 'float', default: 0 }],
+    inputs: [
+      {name: 'scale', type: 'float', default: 1},
+      {name: 'offset', type: 'float', default: 0}
+    ],
     glsl: `vec4 a(vec4 c0, float scale, float offset) {
       return vec4(c0.a * scale + offset);
     }`
   }
-};
+}
 
-},{}],20:[function(require,module,exports){
-// to add: ripple: https://www.shadertoy.com/view/4djGzz
-// mask
-// convolution
-// basic sdf shapes
-// repeat
-// iq color palletes
-var glsl = require('glslify');
-
-module.exports = {
-  blur: {
-    type: 'renderpass',
-    inputs: [{
-      type: 'float',
-      name: 'directionX',
-      default: 1.0
-    }, {
-      type: 'float',
-      name: 'directionY',
-      default: 0.0
-    }],
-    frag: glsl(["precision mediump float;\n#define GLSLIFY 1\nuniform float time;\nuniform vec2 resolution;\nuniform sampler2D prevBuffer;\n//varying vec2 uv;\n\nvec4 blur9(sampler2D image, vec2 uv, vec2 resolution, vec2 direction) {\n  vec4 color = vec4(0.0);\n  vec2 off1 = vec2(1.3846153846) * direction;\n  vec2 off2 = vec2(3.2307692308) * direction;\n  color += texture2D(image, uv) * 0.2270270270;\n  color += texture2D(image, uv + (off1 / resolution)) * 0.3162162162;\n  color += texture2D(image, uv - (off1 / resolution)) * 0.3162162162;\n  color += texture2D(image, uv + (off2 / resolution)) * 0.0702702703;\n  color += texture2D(image, uv - (off2 / resolution)) * 0.0702702703;\n  return color;\n}\n\nuniform float directionX;\nuniform float directionY;\n\nvoid main () {\n  vec2 st = gl_FragCoord.xy/resolution;\n  gl_FragColor = blur9(prevBuffer, st, resolution, vec2(directionX, directionY));\n}\n"])
-  }
-};
-
-},{"glslify":4}],21:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 // functions that are only used within other functions
 
 module.exports = {
@@ -3263,6 +3498,7 @@ module.exports = {
     `
   },
 
+
   _rgbToHsv: {
     type: 'util',
     glsl: `vec3 _rgbToHsv(vec3 c){
@@ -3283,167 +3519,177 @@ module.exports = {
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
     }`
   }
-};
+}
 
-},{}],22:[function(require,module,exports){
-const Webcam = require('./lib/webcam.js');
-const Screen = require('./lib/screenmedia.js');
+},{}],19:[function(require,module,exports){
+const Webcam = require('./lib/webcam.js')
+const Screen = require('./lib/screenmedia.js')
 
-class HydraSource {
+class HydraSource  {
 
-  constructor(opts) {
-    this.regl = opts.regl;
-    this.src = null;
-    this.dynamic = true;
-    this.width = opts.width;
-    this.height = opts.height;
+  constructor (opts) {
+    this.regl = opts.regl
+    this.src = null
+    this.dynamic = true
+    this.width = opts.width
+    this.height = opts.height
     this.tex = this.regl.texture({
-      shape: [opts.width, opts.height]
-    });
-    this.pb = opts.pb;
+      shape: [1, 1]
+    //  shape: [opts.width, opts.height]
+    })
+    this.pb = opts.pb
   }
 
-  init(opts) {
+  init (opts) {
     if (opts.src) {
-      this.src = opts.src;
-      this.tex = this.regl.texture(this.src);
+      this.src = opts.src
+      this.tex = this.regl.texture(this.src)
     }
-    if (opts.dynamic) this.dynamic = opts.dynamic;
+    if(opts.dynamic) this.dynamic = opts.dynamic
   }
 
-  initCam(index) {
-    const self = this;
-    Webcam(index).then(response => {
-      self.src = response.video;
-      self.tex = self.regl.texture(self.src);
-    });
+  initCam (index) {
+    const self = this
+    Webcam(index).then((response) => {
+      self.src = response.video
+      self.tex = self.regl.texture(self.src)
+    }).catch((err) => console.log('could not get camera', err))
   }
 
-  initStream(streamName) {
-    console.log("initing stream!", streamName);
-    let self = this;
+  initStream (streamName) {
+  //  console.log("initing stream!", streamName)
+    let self = this
     if (streamName && this.pb) {
-      this.pb.initSource(streamName);
+        this.pb.initSource(streamName)
 
-      this.pb.on("got video", function (nick, video) {
-        if (nick === streamName) {
-          self.src = video;
-          self.tex = self.regl.texture(self.src);
-        }
-      });
+        this.pb.on("got video", function(nick, video){
+          if(nick === streamName) {
+            self.src = video
+            self.tex = self.regl.texture(self.src)
+          }
+        })
+
     }
   }
 
-  initScreen() {
-    const self = this;
+  initScreen () {
+    const self = this
     Screen().then(function (response) {
-      self.src = response.video;
-      self.tex = self.regl.texture(self.src);
-      //  console.log("received screen input")
-    });
+       self.src = response.video
+       self.tex = self.regl.texture(self.src)
+     //  console.log("received screen input")
+   }).catch((err) => console.log('could not get screen', err))
   }
 
-  resize(width, height) {
-    this.width = width;
-    this.height = height;
+  resize (width, height) {
+    this.width = width
+    this.height = height
   }
 
-  clear() {
-    this.src = null;
-    this.tex = this.regl.texture({
-      shape: [this.width, this.height]
-    });
-  }
-
-  tick(time) {
-
-    if (this.src !== null && this.dynamic === true) {
-
-      if (this.src.videoWidth && this.src.videoWidth !== this.tex.width) {
-        this.tex.resize(this.src.videoWidth, this.src.videoHeight);
+  clear () {
+    if(this.src && this.src.srcObject) {
+      if (this.src.srcObject.getTracks) {
+        this.src.srcObject.getTracks().forEach((track) => track.stop())
       }
+    }
+    this.src = null
+    this.tex = this.regl.texture({
+      shape: [1, 1]
+    })
+  }
 
-      this.tex.subimage(this.src);
-      //this.tex = this.regl.texture(this.src)
+  tick (time) {
+    //  console.log(this.src, this.tex.width, this.tex.height)
+    if (this.src !== null && this.dynamic === true) {
+        if(this.src.videoWidth && this.src.videoWidth !== this.tex.width) {
+          console.log(this.src.videoWidth, this.src.videoHeight, this.tex.width, this.tex.height)
+          this.tex.resize(this.src.videoWidth, this.src.videoHeight)
+        }
+
+        if(this.src.width && this.src.width !== this.tex.width)   this.tex.resize(this.src.width, this.src.height)
+
+        this.tex.subimage(this.src)
     }
   }
 
-  getTexture() {
-    return this.tex;
+  getTexture () {
+    return this.tex
   }
 }
 
-module.exports = HydraSource;
+module.exports = HydraSource
 
-},{"./lib/screenmedia.js":28,"./lib/webcam.js":30}],23:[function(require,module,exports){
+},{"./lib/screenmedia.js":24,"./lib/webcam.js":26}],20:[function(require,module,exports){
 // WIP utils for working with arrays
 // Possibly should be integrated with lfo extension, etc.
 // to do: transform time rather than array values, similar to working with coordinates in hydra
 
-var easing = require('./easing-functions.js');
+var easing = require('./easing-functions.js')
 
 var map = (num, in_min, in_max, out_min, out_max) => {
   return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-};
+}
 
 module.exports = {
   init: () => {
 
-    Array.prototype.fast = function (speed = 1) {
-      this._speed = speed;
-      return this;
-    };
 
-    Array.prototype.smooth = function (smooth = 1) {
-      this._smooth = smooth;
-      return this;
-    };
+    Array.prototype.fast = function(speed = 1) {
+      this._speed = speed
+      return this
+    }
 
-    Array.prototype.ease = function (ease) {
-      if (ease && easing[ease]) {
-        this._smooth = 1;
-        this._ease = easing[ease];
+    Array.prototype.smooth = function(smooth = 1) {
+      this._smooth = smooth
+      return this
+    }
+
+    Array.prototype.ease = function(ease) {
+      if(ease && easing[ease]) {
+        this._smooth = 1
+        this._ease = easing[ease]
       }
-      return this;
-    };
+      return this
+    }
+
 
     // Array.prototype.bounce = function() {
     //   this.modifiers.bounce = true
     //   return this
     // }
 
-    Array.prototype.fit = function (low = 0, high = 1) {
-      let lowest = Math.min(...this);
-      let highest = Math.max(...this);
-      var newArr = this.map(num => map(num, lowest, highest, low, high));
-      newArr._speed = this._speed;
-      newArr._smooth = this._smooth;
-      newArr._ease = this._ease;
-      return newArr;
-    };
+    Array.prototype.fit = function(low = 0, high =1) {
+      let lowest = Math.min(...this)
+      let highest =  Math.max(...this)
+      var newArr = this.map((num) => map(num, lowest, highest, low, high))
+      newArr._speed = this._speed
+      newArr._smooth = this._smooth
+      newArr._ease = this._ease
+      return newArr
+    }
   },
-  getValue: (arr = []) => ({ time, bpm }) => {
-    let speed = arr._speed ? arr._speed : 1;
-    let smooth = arr._smooth ? arr._smooth : 0;
-    let ease = arr._ease ? arr._ease : easing['linear'];
+  getValue: (arr = []) => ({time, bpm}) =>{
+    let speed = arr._speed ? arr._speed : 1
+    let smooth = arr._smooth ? arr._smooth : 0
+    let ease = arr._ease ? arr._ease : easing['linear']
     // console.log(smooth)
-    let index = time * speed * (bpm / 60);
+    let index = time * speed * (bpm / 60)
 
-    let currValue = arr[Math.floor(index % arr.length)];
-    let nextValue = arr[Math.floor((index + 1) % arr.length)];
+    let currValue = arr[Math.floor(index % (arr.length))]
+    let nextValue = arr[Math.floor((index + 1) % (arr.length))]
 
-    let _t = index % 1 * smooth;
-    let t = ease(_t);
+    let _t = (index%1)*smooth
+    let t = ease(_t)
     //  console.log(arr, Math.floor(index/newArr.length), index/newArr.length)
-    return nextValue * t + currValue * (1 - t);
+    return nextValue*t + currValue*(1-t)
   }
-};
+}
 
-},{"./easing-functions.js":25}],24:[function(require,module,exports){
-const Meyda = require('meyda');
+},{"./easing-functions.js":22}],21:[function(require,module,exports){
+const Meyda = require('meyda')
 
 class Audio {
-  constructor({
+  constructor ({
     numBins = 4,
     cutoff = 2,
     smooth = 0.4,
@@ -3451,12 +3697,12 @@ class Audio {
     scale = 10,
     isDrawing = false
   }) {
-    this.vol = 0;
-    this.scale = scale;
-    this.max = max;
-    this.cutoff = cutoff;
-    this.smooth = smooth;
-    this.setBins(numBins);
+    this.vol = 0
+    this.scale = scale
+    this.max = max
+    this.cutoff = cutoff
+    this.smooth = smooth
+    this.setBins(numBins)
 
     // beat detection from: https://github.com/therewasaguy/p5-music-viz/blob/gh-pages/demos/01d_beat_detect_amplitude/sketch.js
     this.beat = {
@@ -3465,171 +3711,181 @@ class Audio {
       _cutoff: 0, // adaptive based on sound state
       decay: 0.98,
       _framesSinceBeat: 0 // keeps track of frames
-    };
+    }
 
     this.onBeat = () => {
-      console.log("beat");
-    };
+    //  console.log("beat")
+    }
 
-    this.canvas = document.createElement('canvas');
-    this.canvas.width = 100;
-    this.canvas.height = 80;
-    this.canvas.style.width = "100px";
-    this.canvas.style.height = "80px";
-    this.canvas.style.position = 'absolute';
-    this.canvas.style.right = '0px';
-    this.canvas.style.bottom = '0px';
-    document.body.appendChild(this.canvas);
+    this.canvas = document.createElement('canvas')
+    this.canvas.width = 100
+    this.canvas.height = 80
+    this.canvas.style.width = "100px"
+    this.canvas.style.height = "80px"
+    this.canvas.style.position = 'absolute'
+    this.canvas.style.right = '0px'
+    this.canvas.style.bottom = '0px'
+    document.body.appendChild(this.canvas)
 
-    this.isDrawing = isDrawing;
-    this.ctx = this.canvas.getContext('2d');
-    this.ctx.fillStyle = "#DFFFFF";
-    this.ctx.strokeStyle = "#0ff";
-    this.ctx.lineWidth = 0.5;
+    this.isDrawing = isDrawing
+    this.ctx = this.canvas.getContext('2d')
+    this.ctx.fillStyle="#DFFFFF"
+    this.ctx.strokeStyle="#0ff"
+    this.ctx.lineWidth=0.5
 
-    window.navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then(stream => {
-      console.log('got mic stream', stream);
-      this.stream = stream;
-      this.context = new AudioContext();
-      //  this.context = new AudioContext()
-      let audio_stream = this.context.createMediaStreamSource(stream);
+    window.navigator.mediaDevices.getUserMedia({video: false, audio: true})
+      .then((stream) => {
+      //  console.log('got mic stream', stream)
+        this.stream = stream
+        this.context = new AudioContext()
+        //  this.context = new AudioContext()
+        let audio_stream = this.context.createMediaStreamSource(stream)
 
-      console.log(this.context);
-      this.meyda = Meyda.createMeydaAnalyzer({
-        audioContext: this.context,
-        source: audio_stream,
-        featureExtractors: ['loudness']
-      });
-    }).catch(err => console.log('ERROR', err));
+      //  console.log(this.context)
+        this.meyda = Meyda.createMeydaAnalyzer({
+          audioContext: this.context,
+          source: audio_stream,
+          featureExtractors: [
+            'loudness',
+            //  'perceptualSpread',
+            //  'perceptualSharpness',
+            //  'spectralCentroid'
+          ]
+        })
+      })
+      .catch((err) => console.log('ERROR', err))
   }
 
-  detectBeat(level) {
+  detectBeat (level) {
     //console.log(level,   this.beat._cutoff)
     if (level > this.beat._cutoff && level > this.beat.threshold) {
-      this.onBeat();
-      this.beat._cutoff = level * 1.2;
-      this.beat._framesSinceBeat = 0;
+      this.onBeat()
+      this.beat._cutoff = level *1.2
+      this.beat._framesSinceBeat = 0
     } else {
-      if (this.beat._framesSinceBeat <= this.beat.holdFrames) {
-        this.beat._framesSinceBeat++;
+      if (this.beat._framesSinceBeat <= this.beat.holdFrames){
+        this.beat._framesSinceBeat ++;
       } else {
-        this.beat._cutoff *= this.beat.decay;
-        this.beat._cutoff = Math.max(this.beat._cutoff, this.beat.threshold);
+        this.beat._cutoff *= this.beat.decay
+        this.beat._cutoff = Math.max(  this.beat._cutoff, this.beat.threshold);
       }
     }
   }
 
   tick() {
-    if (this.meyda) {
-      var features = this.meyda.get();
-      if (features && features !== null) {
-        this.vol = features.loudness.total;
-        this.detectBeat(this.vol);
-        // reduce loudness array to number of bins
-        const reducer = (accumulator, currentValue) => accumulator + currentValue;
-        let spacing = Math.floor(features.loudness.specific.length / this.bins.length);
-        this.prevBins = this.bins.slice(0);
-        this.bins = this.bins.map((bin, index) => {
-          return features.loudness.specific.slice(index * spacing, (index + 1) * spacing).reduce(reducer);
-        }).map((bin, index) => {
-          // map to specified range
+   if(this.meyda){
+     var features = this.meyda.get()
+     if(features && features !== null){
+       this.vol = features.loudness.total
+       this.detectBeat(this.vol)
+       // reduce loudness array to number of bins
+       const reducer = (accumulator, currentValue) => accumulator + currentValue;
+       let spacing = Math.floor(features.loudness.specific.length/this.bins.length)
+       this.prevBins = this.bins.slice(0)
+       this.bins = this.bins.map((bin, index) => {
+         return features.loudness.specific.slice(index * spacing, (index + 1)*spacing).reduce(reducer)
+       }).map((bin, index) => {
+         // map to specified range
 
-          // return (bin * (1.0 - this.smooth) + this.prevBins[index] * this.smooth)
-          return bin * (1.0 - this.settings[index].smooth) + this.prevBins[index] * this.settings[index].smooth;
-        });
-        // var y = this.canvas.height - scale*this.settings[index].cutoff
-        // this.ctx.beginPath()
-        // this.ctx.moveTo(index*spacing, y)
-        // this.ctx.lineTo((index+1)*spacing, y)
-        // this.ctx.stroke()
-        //
-        // var yMax = this.canvas.height - scale*(this.settings[index].scale + this.settings[index].cutoff)
-        this.fft = this.bins.map((bin, index) =>
+        // return (bin * (1.0 - this.smooth) + this.prevBins[index] * this.smooth)
+          return (bin * (1.0 - this.settings[index].smooth) + this.prevBins[index] * this.settings[index].smooth)
+       })
+       // var y = this.canvas.height - scale*this.settings[index].cutoff
+       // this.ctx.beginPath()
+       // this.ctx.moveTo(index*spacing, y)
+       // this.ctx.lineTo((index+1)*spacing, y)
+       // this.ctx.stroke()
+       //
+       // var yMax = this.canvas.height - scale*(this.settings[index].scale + this.settings[index].cutoff)
+       this.fft = this.bins.map((bin, index) => (
         // Math.max(0, (bin - this.cutoff) / (this.max - this.cutoff))
-        Math.max(0, (bin - this.settings[index].cutoff) / this.settings[index].scale));
-        if (this.isDrawing) this.draw();
-      }
-    }
+         Math.max(0, (bin - this.settings[index].cutoff)/this.settings[index].scale)
+       ))
+       if(this.isDrawing) this.draw()
+     }
+   }
   }
 
-  setCutoff(cutoff) {
-    this.cutoff = cutoff;
-    this.settings = this.settings.map(el => {
-      el.cutoff = cutoff;
-      return el;
-    });
+  setCutoff (cutoff) {
+    this.cutoff = cutoff
+    this.settings = this.settings.map((el) => {
+      el.cutoff = cutoff
+      return el
+    })
   }
 
-  setSmooth(smooth) {
-    this.smooth = smooth;
-    this.settings = this.settings.map(el => {
-      el.smooth = smooth;
-      return el;
-    });
+  setSmooth (smooth) {
+    this.smooth = smooth
+    this.settings = this.settings.map((el) => {
+      el.smooth = smooth
+      return el
+    })
   }
 
-  setBins(numBins) {
-    this.bins = Array(numBins).fill(0);
-    this.prevBins = Array(numBins).fill(0);
-    this.fft = Array(numBins).fill(0);
+  setBins (numBins) {
+    this.bins = Array(numBins).fill(0)
+    this.prevBins = Array(numBins).fill(0)
+    this.fft = Array(numBins).fill(0)
     this.settings = Array(numBins).fill(0).map(() => ({
       cutoff: this.cutoff,
       scale: this.scale,
       smooth: this.smooth
-    }));
+    }))
     // to do: what to do in non-global mode?
     this.bins.forEach((bin, index) => {
-      window['a' + index] = (scale = 1, offset = 0) => () => a.fft[index] * scale + offset;
-    });
-    console.log(this.settings);
+      window['a' + index] = (scale = 1, offset = 0) => () => (a.fft[index] * scale + offset)
+    })
+  //  console.log(this.settings)
   }
 
-  setScale(scale) {
-    this.scale = scale;
-    this.settings = this.settings.map(el => {
-      el.scale = scale;
-      return el;
-    });
+  setScale(scale){
+    this.scale = scale
+    this.settings = this.settings.map((el) => {
+      el.scale = scale
+      return el
+    })
   }
 
   setMax(max) {
-    this.max = max;
-    console.log('set max is deprecated');
+    this.max = max
+    console.log('set max is deprecated')
   }
   hide() {
-    this.isDrawing = false;
-    this.canvas.style.display = 'none';
+    this.isDrawing = false
+    this.canvas.style.display = 'none'
   }
 
   show() {
-    this.isDrawing = true;
-    this.canvas.style.display = 'block';
+    this.isDrawing = true
+    this.canvas.style.display = 'block'
+
   }
 
-  draw() {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    var spacing = this.canvas.width / this.bins.length;
-    var scale = this.canvas.height / (this.max * 2);
-    //  console.log(this.bins)
+  draw () {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+    var spacing = this.canvas.width / this.bins.length
+    var scale = this.canvas.height / (this.max * 2)
+  //  console.log(this.bins)
     this.bins.forEach((bin, index) => {
 
-      var height = bin * scale;
+      var height = bin * scale
 
-      this.ctx.fillRect(index * spacing, this.canvas.height - height, spacing, height);
+     this.ctx.fillRect(index * spacing, this.canvas.height - height, spacing, height)
 
-      //   console.log(this.settings[index])
-      var y = this.canvas.height - scale * this.settings[index].cutoff;
-      this.ctx.beginPath();
-      this.ctx.moveTo(index * spacing, y);
-      this.ctx.lineTo((index + 1) * spacing, y);
-      this.ctx.stroke();
+  //   console.log(this.settings[index])
+     var y = this.canvas.height - scale*this.settings[index].cutoff
+     this.ctx.beginPath()
+     this.ctx.moveTo(index*spacing, y)
+     this.ctx.lineTo((index+1)*spacing, y)
+     this.ctx.stroke()
 
-      var yMax = this.canvas.height - scale * (this.settings[index].scale + this.settings[index].cutoff);
-      this.ctx.beginPath();
-      this.ctx.moveTo(index * spacing, yMax);
-      this.ctx.lineTo((index + 1) * spacing, yMax);
-      this.ctx.stroke();
-    });
+     var yMax = this.canvas.height - scale*(this.settings[index].scale + this.settings[index].cutoff)
+     this.ctx.beginPath()
+     this.ctx.moveTo(index*spacing, yMax)
+     this.ctx.lineTo((index+1)*spacing, yMax)
+     this.ctx.stroke()
+    })
+
 
     /*var y = this.canvas.height - scale*this.cutoff
     this.ctx.beginPath()
@@ -3644,411 +3900,166 @@ class Audio {
   }
 }
 
-module.exports = Audio;
+module.exports = Audio
 
-},{"meyda":6}],25:[function(require,module,exports){
+},{"meyda":5}],22:[function(require,module,exports){
 // from https://gist.github.com/gre/1650294
 
 module.exports = {
   // no easing, no acceleration
-  linear: function (t) {
-    return t;
-  },
+  linear: function (t) { return t },
   // accelerating from zero velocity
-  easeInQuad: function (t) {
-    return t * t;
-  },
+  easeInQuad: function (t) { return t*t },
   // decelerating to zero velocity
-  easeOutQuad: function (t) {
-    return t * (2 - t);
-  },
+  easeOutQuad: function (t) { return t*(2-t) },
   // acceleration until halfway, then deceleration
-  easeInOutQuad: function (t) {
-    return t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-  },
+  easeInOutQuad: function (t) { return t<.5 ? 2*t*t : -1+(4-2*t)*t },
   // accelerating from zero velocity
-  easeInCubic: function (t) {
-    return t * t * t;
-  },
+  easeInCubic: function (t) { return t*t*t },
   // decelerating to zero velocity
-  easeOutCubic: function (t) {
-    return --t * t * t + 1;
-  },
+  easeOutCubic: function (t) { return (--t)*t*t+1 },
   // acceleration until halfway, then deceleration
-  easeInOutCubic: function (t) {
-    return t < .5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
-  },
+  easeInOutCubic: function (t) { return t<.5 ? 4*t*t*t : (t-1)*(2*t-2)*(2*t-2)+1 },
   // accelerating from zero velocity
-  easeInQuart: function (t) {
-    return t * t * t * t;
-  },
+  easeInQuart: function (t) { return t*t*t*t },
   // decelerating to zero velocity
-  easeOutQuart: function (t) {
-    return 1 - --t * t * t * t;
-  },
+  easeOutQuart: function (t) { return 1-(--t)*t*t*t },
   // acceleration until halfway, then deceleration
-  easeInOutQuart: function (t) {
-    return t < .5 ? 8 * t * t * t * t : 1 - 8 * --t * t * t * t;
-  },
+  easeInOutQuart: function (t) { return t<.5 ? 8*t*t*t*t : 1-8*(--t)*t*t*t },
   // accelerating from zero velocity
-  easeInQuint: function (t) {
-    return t * t * t * t * t;
-  },
+  easeInQuint: function (t) { return t*t*t*t*t },
   // decelerating to zero velocity
-  easeOutQuint: function (t) {
-    return 1 + --t * t * t * t * t;
-  },
+  easeOutQuint: function (t) { return 1+(--t)*t*t*t*t },
   // acceleration until halfway, then deceleration
-  easeInOutQuint: function (t) {
-    return t < .5 ? 16 * t * t * t * t * t : 1 + 16 * --t * t * t * t * t;
-  }
-};
+  easeInOutQuint: function (t) { return t<.5 ? 16*t*t*t*t*t : 1+16*(--t)*t*t*t*t }
+}
 
-},{}],26:[function(require,module,exports){
-//var adapter = require('webrtc-adapter');
-// to do: clean up this code
-// cache for constraints and callback
-var cache = {};
-
-module.exports = function (constraints, cb) {
-    var hasConstraints = arguments.length === 2;
-    var callback = hasConstraints ? cb : constraints;
-    var error;
-
-    if (typeof window === 'undefined' || window.location.protocol === 'http:') {
-        error = new Error('NavigatorUserMediaError');
-        error.name = 'HTTPS_REQUIRED';
-        return callback(error);
-    }
-
-    if (window.navigator.userAgent.match('Chrome')) {
-
-        var chromever = parseInt(window.navigator.userAgent.match(/Chrome\/(.*) /)[1], 10);
-        var maxver = 33;
-
-        // check whether running in electron
-        if (window && window.process && window.process.type) {
-            constraints = hasConstraints && constraints || { audio: false, video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        maxWidth: window.screen.width,
-                        maxHeight: window.screen.height,
-                        maxFrameRate: 3
-                    }
-                } };
-
-            console.log("running in electron", constraints);
-            //  constraints.video.mandatory.chromeMediaSourceId = data.sourceId;
-            window.navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
-                callback(null, stream);
-            }).catch(function (err) {
-                callback(err);
-            });
-        } else {
-            var isCef = !window.chrome.webstore;
-            // "known" crash in chrome 34 and 35 on linux
-            if (window.navigator.userAgent.match('Linux')) maxver = 35;
-
-            // check that the extension is installed by looking for a
-            // sessionStorage variable that contains the extension id
-            // this has to be set after installation unless the contest
-            // script does that
-            if (sessionStorage.getScreenMediaJSExtensionId) {
-                chrome.runtime.sendMessage(sessionStorage.getScreenMediaJSExtensionId, { type: 'getScreen', id: 1 }, null, function (data) {
-                    console.log("getting screen", data);
-                    if (!data || data.sourceId === '') {
-                        // user canceled
-                        var error = new Error('NavigatorUserMediaError');
-                        error.name = 'NotAllowedError';
-                        callback(error);
-                    } else {
-                        constraints = hasConstraints && constraints || { audio: false, video: {
-                                mandatory: {
-                                    chromeMediaSource: 'desktop',
-                                    maxWidth: window.screen.width,
-                                    maxHeight: window.screen.height,
-                                    maxFrameRate: 3
-                                }
-                            } };
-
-                        console.log("constriants", constraints);
-                        constraints.video.mandatory.chromeMediaSourceId = data.sourceId;
-                        window.navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
-                            callback(null, stream);
-                        }).catch(function (err) {
-                            callback(err);
-                        });
-                    }
-                });
-            } else if (window.cefGetScreenMedia) {
-                //window.cefGetScreenMedia is experimental - may be removed without notice
-                window.cefGetScreenMedia(function (sourceId) {
-                    if (!sourceId) {
-                        var error = new Error('cefGetScreenMediaError');
-                        error.name = 'CEF_GETSCREENMEDIA_CANCELED';
-                        callback(error);
-                    } else {
-                        constraints = hasConstraints && constraints || { audio: false, video: {
-                                mandatory: {
-                                    chromeMediaSource: 'desktop',
-                                    maxWidth: window.screen.width,
-                                    maxHeight: window.screen.height,
-                                    maxFrameRate: 3
-                                },
-                                optional: [{ googLeakyBucket: true }, { googTemporalLayeredScreencast: true }]
-                            } };
-                        constraints.video.mandatory.chromeMediaSourceId = sourceId;
-                        window.navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
-                            callback(null, stream);
-                        }).catch(function (err) {
-                            callback(err);
-                        });
-                    }
-                });
-            } else if (isCef || chromever >= 26 && chromever <= maxver) {
-                // chrome 26 - chrome 33 way to do it -- requires bad chrome://flags
-                // note: this is basically in maintenance mode and will go away soon
-                constraints = hasConstraints && constraints || {
-                    video: {
-                        mandatory: {
-                            googLeakyBucket: true,
-                            maxWidth: window.screen.width,
-                            maxHeight: window.screen.height,
-                            maxFrameRate: 3,
-                            chromeMediaSource: 'screen'
-                        }
-                    }
-                };
-                window.navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
-                    callback(null, stream);
-                }).catch(function (err) {
-                    callback(err);
-                });
-            } else {
-                // chrome 34+ way requiring an extension
-                var pending = window.setTimeout(function () {
-                    error = new Error('NavigatorUserMediaError');
-                    error.name = 'EXTENSION_UNAVAILABLE';
-                    return callback(error);
-                }, 1000);
-                cache[pending] = [callback, hasConstraints ? constraints : null];
-                window.postMessage({ type: 'getScreen', id: pending }, '*');
-            }
-        }
-    } else if (window.navigator.userAgent.match('Firefox')) {
-        var ffver = parseInt(window.navigator.userAgent.match(/Firefox\/(.*)/)[1], 10);
-        if (ffver >= 33) {
-            constraints = hasConstraints && constraints || {
-                video: {
-                    mozMediaSource: 'window',
-                    mediaSource: 'window'
-                }
-            };
-            window.navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
-                callback(null, stream);
-                var lastTime = stream.currentTime;
-                var polly = window.setInterval(function () {
-                    if (!stream) window.clearInterval(polly);
-                    if (stream.currentTime == lastTime) {
-                        window.clearInterval(polly);
-                        if (stream.onended) {
-                            stream.onended();
-                        }
-                    }
-                    lastTime = stream.currentTime;
-                }, 500);
-            }).catch(function (err) {
-                callback(err);
-            });
-        } else {
-            error = new Error('NavigatorUserMediaError');
-            error.name = 'EXTENSION_UNAVAILABLE'; // does not make much sense but...
-        }
-    }
-};
-
-typeof window !== 'undefined' && window.addEventListener('message', function (event) {
-    if (event.origin != window.location.origin) {
-        return;
-    }
-    if (event.data.type == 'gotScreen' && cache[event.data.id]) {
-        alert("got screen!");
-        var data = cache[event.data.id];
-        var constraints = data[1];
-        var callback = data[0];
-        delete cache[event.data.id];
-
-        if (event.data.sourceId === '') {
-            // user canceled
-            var error = new Error('NavigatorUserMediaError');
-            error.name = 'NotAllowedError';
-            callback(error);
-        } else {
-            constraints = constraints || { audio: false, video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        maxWidth: window.screen.width,
-                        maxHeight: window.screen.height,
-                        maxFrameRate: 3
-                    },
-                    optional: [{ googLeakyBucket: true }, { googTemporalLayeredScreencast: true }]
-                } };
-            constraints.video.mandatory.chromeMediaSourceId = event.data.sourceId;
-            window.navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
-                callback(null, stream);
-            }).catch(function (err) {
-                callback(err);
-            });
-        }
-    } else if (event.data.type == 'getScreenPending') {
-        window.clearTimeout(event.data.id);
-    }
-});
-
-},{}],27:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 // attempt custom evaluation sandbox for hydra functions
 // for now, just avoids polluting the global namespace
 // should probably be replaced with an abstract syntax tree
 
-module.exports = parent => {
-  var initialCode = ``;
+module.exports = (parent) => {
+  var initialCode = ``
 
-  var sandbox = createSandbox(initialCode);
+  var sandbox = createSandbox(initialCode)
 
   var addToContext = (name, object) => {
     initialCode += `
       var ${name} = ${object}
-    `;
-    sandbox = createSandbox(initialCode);
-  };
+    `
+    sandbox = createSandbox(initialCode)
+  }
+
 
   return {
     addToContext: addToContext,
-    eval: code => sandbox.eval(code)
-  };
+    eval: (code) => sandbox.eval(code)
+  }
 
-  function createSandbox(initial) {
-    eval(initial);
+  function createSandbox (initial) {
+    eval(initial)
     // optional params
-    var localEval = function (code) {
-      eval(code);
-    };
+    var localEval = function (code)  {
+      eval(code)
+    }
 
     // API/data for end-user
     return {
       eval: localEval
-    };
+    }
   }
-};
+}
 
-},{}],28:[function(require,module,exports){
-const getScreenMedia = require('./getscreenmedia.js');
+},{}],24:[function(require,module,exports){
 
 module.exports = function (options) {
-  //const regl = options.regl
+  return new Promise(function(resolve, reject) {
+    //  async function startCapture(displayMediaOptions) {
+    navigator.mediaDevices.getDisplayMedia(options).then((stream) => {
+      const video = document.createElement('video')
+      video.srcObject = stream
+      video.addEventListener('loadedmetadata', () => {
+        video.play()
+        resolve({video: video})
+      })
+    }).catch((err) => reject(err))
+  })
+}
 
-  // mandatory: {
-  //     chromeMediaSource: 'desktop',
-  //     maxWidth: 640,
-  //     maxHeight: 480
-  // }
-  return new Promise(function (resolve, reject) {
-    getScreenMedia({ audio: false, video: {
-        mandatory: {
-          chromeMediaSource: 'desktop'
-        }
-      } }, function (err, stream) {
-      if (err) {
-        console.log('error getting screen media', err);
-        reject(err);
-      } else {
-        console.log("got stream", stream);
-        const video = document.createElement('video');
-        //video.src = window.URL.createObjectURL(stream)
-        video.srcObject = stream;
-        // document.body.appendChild(video)
-        video.addEventListener('loadedmetadata', () => {
-          video.play();
-          // const webcam = regl.texture(video)
-          //regl.frame(() => webcam.subimage(video))
-          resolve({ video: video });
-        });
-        //resolve()
-      }
-    });
-  });
-};
-
-},{"./getscreenmedia.js":26}],29:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 class VideoRecorder {
   constructor(stream) {
-    this.mediaSource = new MediaSource();
-    this.stream = stream;
+    this.mediaSource = new MediaSource()
+    this.stream = stream
 
     // testing using a recording as input
-    this.output = document.createElement('video');
-    this.output.autoplay = true;
-    this.output.loop = true;
+    this.output = document.createElement('video')
+    this.output.autoplay = true
+    this.output.loop = true
 
-    let self = this;
+    let self = this
     this.mediaSource.addEventListener('sourceopen', () => {
       console.log('MediaSource opened');
       self.sourceBuffer = self.mediaSource.addSourceBuffer('video/webm; codecs="vp8"');
       console.log('Source buffer: ', sourceBuffer);
-    });
+    })
   }
 
   start() {
-    //  let options = {mimeType: 'video/webm'};
+  //  let options = {mimeType: 'video/webm'};
 
-    //   let options = {mimeType: 'video/webm;codecs=h264'};
-    let options = { mimeType: 'video/webm;codecs=vp9' };
+//   let options = {mimeType: 'video/webm;codecs=h264'};
+   let options = {mimeType: 'video/webm;codecs=vp9'};
 
-    this.recordedBlobs = [];
+    this.recordedBlobs = []
     try {
-      this.mediaRecorder = new MediaRecorder(this.stream, options);
+     this.mediaRecorder = new MediaRecorder(this.stream, options)
     } catch (e0) {
-      console.log('Unable to create MediaRecorder with options Object: ', e0);
-      try {
-        options = { mimeType: 'video/webm,codecs=vp9' };
-        this.mediaRecorder = new MediaRecorder(this.stream, options);
-      } catch (e1) {
-        console.log('Unable to create MediaRecorder with options Object: ', e1);
-        try {
-          options = 'video/vp8'; // Chrome 47
-          this.mediaRecorder = new MediaRecorder(this.stream, options);
-        } catch (e2) {
-          alert('MediaRecorder is not supported by this browser.\n\n' + 'Try Firefox 29 or later, or Chrome 47 or later, ' + 'with Enable experimental Web Platform features enabled from chrome://flags.');
-          console.error('Exception while creating MediaRecorder:', e2);
-          return;
-        }
-      }
-    }
-    console.log('Created MediaRecorder', this.mediaRecorder, 'with options', options);
-    this.mediaRecorder.onstop = this._handleStop.bind(this);
-    this.mediaRecorder.ondataavailable = this._handleDataAvailable.bind(this);
-    this.mediaRecorder.start(100); // collect 100ms of data
-    console.log('MediaRecorder started', this.mediaRecorder);
-  }
+     console.log('Unable to create MediaRecorder with options Object: ', e0)
+     try {
+       options = {mimeType: 'video/webm,codecs=vp9'}
+       this.mediaRecorder = new MediaRecorder(this.stream, options)
+     } catch (e1) {
+       console.log('Unable to create MediaRecorder with options Object: ', e1)
+       try {
+         options = 'video/vp8' // Chrome 47
+         this.mediaRecorder = new MediaRecorder(this.stream, options)
+       } catch (e2) {
+         alert('MediaRecorder is not supported by this browser.\n\n' +
+           'Try Firefox 29 or later, or Chrome 47 or later, ' +
+           'with Enable experimental Web Platform features enabled from chrome://flags.')
+         console.error('Exception while creating MediaRecorder:', e2)
+         return
+       }
+     }
+   }
+   console.log('Created MediaRecorder', this.mediaRecorder, 'with options', options);
+   this.mediaRecorder.onstop = this._handleStop.bind(this)
+   this.mediaRecorder.ondataavailable = this._handleDataAvailable.bind(this)
+   this.mediaRecorder.start(100) // collect 100ms of data
+   console.log('MediaRecorder started', this.mediaRecorder)
+ }
 
-  stop() {
-    this.mediaRecorder.stop();
-  }
+  
+   stop(){
+     this.mediaRecorder.stop()
+   }
 
-  _handleStop() {
-    //const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'})
-    // const blob = new Blob(this.recordedBlobs, {type: 'video/webm;codecs=h264'})
-    const blob = new Blob(this.recordedBlobs, { type: this.mediaRecorder.mimeType });
-    const url = window.URL.createObjectURL(blob);
-    this.output.src = url;
+ _handleStop() {
+   //const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'})
+   // const blob = new Blob(this.recordedBlobs, {type: 'video/webm;codecs=h264'})
+  const blob = new Blob(this.recordedBlobs, {type: this.mediaRecorder.mimeType})
+   const url = window.URL.createObjectURL(blob)
+   this.output.src = url
 
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    let d = new Date();
-    a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.webm`;
-    document.body.appendChild(a);
-    a.click();
+    const a = document.createElement('a')
+    a.style.display = 'none'
+    a.href = url
+    let d = new Date()
+    a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.webm`
+    document.body.appendChild(a)
+    a.click()
     setTimeout(() => {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
@@ -4062,83 +4073,93 @@ class VideoRecorder {
   }
 }
 
-module.exports = VideoRecorder;
+module.exports = VideoRecorder
 
-},{}],30:[function(require,module,exports){
-const enumerateDevices = require('enumerate-devices');
+},{}],26:[function(require,module,exports){
+//const enumerateDevices = require('enumerate-devices')
 
 module.exports = function (deviceId) {
-  return enumerateDevices().then(devices => devices.filter(devices => devices.kind === 'videoinput')).then(cameras => {
-    let constraints = { audio: false, video: true };
-    if (cameras[deviceId]) {
-      constraints['video'] = {
-        deviceId: { exact: cameras[deviceId].deviceId }
-      };
-    }
-    console.log(cameras);
-    return window.navigator.mediaDevices.getUserMedia(constraints);
-  }).then(stream => {
-    const video = document.createElement('video');
-    //  video.src = window.URL.createObjectURL(stream)
-    video.srcObject = stream;
-    return new Promise((resolve, reject) => {
-      video.addEventListener('loadedmetadata', () => {
-        video.play().then(() => resolve({ video: video }));
-      });
-    });
-  }).catch(console.log.bind(console));
-};
+  return navigator.mediaDevices.enumerateDevices()
+    .then(devices => devices.filter(devices => devices.kind === 'videoinput'))
+    .then(cameras => {
+      let constraints = { audio: false, video: true}
+      if (cameras[deviceId]) {
+        constraints['video'] = {
+          deviceId: { exact: cameras[deviceId].deviceId }
+        }
+      }
+    //  console.log(cameras)
+      return window.navigator.mediaDevices.getUserMedia(constraints)
+    })
+    .then(stream => {
+      const video = document.createElement('video')
+      //  video.src = window.URL.createObjectURL(stream)
+      video.srcObject = stream
+      return new Promise((resolve, reject) => {
+        video.addEventListener('loadedmetadata', () => {
+          video.play().then(() => resolve({video: video}))
+        })
+      })
+    })
+    .catch(console.log.bind(console))
+}
 
-},{"enumerate-devices":3}],31:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 //const transforms = require('./glsl-transforms.js')
 
 var Output = function (opts) {
-  this.regl = opts.regl;
-  this.precision = opts.precision;
-  this.positionBuffer = this.regl.buffer([[-2, 0], [0, -2], [2, 2]]);
+  this.regl = opts.regl
+  this.precision = opts.precision
+  this.positionBuffer = this.regl.buffer([
+    [-2, 0],
+    [0, -2],
+    [2, 2]
+  ])
 
-  this.draw = () => {};
-  this.clear();
-  this.pingPongIndex = 0;
+  this.draw = () => {}
+  this.clear()
+  this.pingPongIndex = 0
 
   // for each output, create two fbos for pingponging
-  this.fbos = Array(2).fill().map(() => this.regl.framebuffer({
+  this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
     color: this.regl.texture({
+      mag: 'nearest',
       width: opts.width,
       height: opts.height,
       format: 'rgba'
     }),
     depthStencil: false
-  }));
+  }))
 
   // array containing render passes
-  //  this.passes = []
-};
+//  this.passes = []
+}
 
-Output.prototype.resize = function (width, height) {
-  this.fbos.forEach(fbo => {
-    fbo.resize(width, height);
-  });
-};
+Output.prototype.resize = function(width, height) {
+  this.fbos.forEach((fbo) => {
+    fbo.resize(width, height)
+  })
+}
+
 
 Output.prototype.getCurrent = function () {
-  return this.fbos[this.pingPongIndex];
-};
+  return this.fbos[this.pingPongIndex]
+}
 
 Output.prototype.getTexture = function () {
-  var index = this.pingPongIndex ? 0 : 1;
-  return this.fbos[index];
-};
+   var index = this.pingPongIndex ? 0 : 1
+  return this.fbos[index]
+}
 
 Output.prototype.clear = function () {
-  this.transformIndex = 0;
+  this.transformIndex = 0
   this.fragHeader = `
   precision ${this.precision} float;
 
   uniform float time;
   varying vec2 uv;
-  `;
-  this.fragBody = ``;
+  `
+  this.fragBody = ``
 
   this.vert = `
   precision ${this.precision} float;
@@ -4148,15 +4169,15 @@ Output.prototype.clear = function () {
   void main () {
     uv = position;
     gl_Position = vec4(2.0 * position - 1.0, 0, 1);
-  }`;
+  }`
 
   this.attributes = {
     position: this.positionBuffer
-  };
+  }
   this.uniforms = {
     time: this.regl.prop('time'),
     resolution: this.regl.prop('resolution')
-  };
+  }
 
   this.frag = `
        ${this.fragHeader}
@@ -4167,21 +4188,22 @@ Output.prototype.clear = function () {
         ${this.fragBody}
         gl_FragColor = c;
       }
-  `;
-  return this;
-};
+  `
+  return this
+}
+
 
 Output.prototype.render = function (passes) {
-  let pass = passes[0];
-  console.log('pass', pass, this.pingPongIndex);
-  var self = this;
-  var uniforms = Object.assign(pass.uniforms, { prevBuffer: () => {
-      //var index = this.pingPongIndex ? 0 : 1
-      //   var index = self.pingPong[(passIndex+1)%2]
-      console.log('ping pong', self.pingPongIndex);
-      return self.fbos[self.pingPongIndex];
-    }
-  });
+  let pass = passes[0]
+  //console.log('pass', pass, this.pingPongIndex)
+  var self = this
+      var uniforms = Object.assign(pass.uniforms, { prevBuffer:  () =>  {
+             //var index = this.pingPongIndex ? 0 : 1
+          //   var index = self.pingPong[(passIndex+1)%2]
+          //  console.log('ping pong', self.pingPongIndex)
+            return self.fbos[self.pingPongIndex]
+          }
+        })
 
   self.draw = self.regl({
     frag: pass.frag,
@@ -4190,17 +4212,18 @@ Output.prototype.render = function (passes) {
     uniforms: uniforms,
     count: 3,
     framebuffer: () => {
-      self.pingPongIndex = self.pingPongIndex ? 0 : 1;
-      return self.fbos[self.pingPongIndex];
+      self.pingPongIndex = self.pingPongIndex ? 0 : 1
+      return self.fbos[self.pingPongIndex]
     }
-  });
-};
+  })
+}
+
 
 Output.prototype.tick = function (props) {
-  this.draw(props);
-};
+  this.draw(props)
+}
 
-module.exports = Output;
+module.exports = Output
 
-},{}]},{},[1])(1)
+},{}]},{},[3])(3)
 });
