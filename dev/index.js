@@ -11,6 +11,7 @@ function init () {
 //  exampleScreen()
 
 exampleCustomCanvas()
+exampleSmoothing()
   ///var generator = new shader()
 
 
@@ -113,6 +114,27 @@ function exampleCustomCanvas() {
    ctx.stroke();
 
    s0.init({src: canvas})
+}
+
+
+function exampleSmoothing() {
+  var shapes = [
+   shape(4)
+     .scale(1,0.5,[0.5, 1,2])
+     .scrollX(0.3),
+   shape(4)
+     .scale(1,0.5,[0.5, 1,2].smooth(0.5))
+     .scrollX(0.0),
+   shape(4)
+     .scale(1,0.5,[0.5, 1,2].smooth())
+     .scrollX(-0.3),
+ ]
+
+ solid()
+   .add(shapes[0])
+   .add(shapes[1])
+   .add(shapes[2])
+   .out(o0)
 }
 
 window.onload = init

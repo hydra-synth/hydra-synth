@@ -11,7 +11,6 @@ var map = (num, in_min, in_max, out_min, out_max) => {
 module.exports = {
   init: () => {
 
-
     Array.prototype.fast = function(speed = 1) {
       this._speed = speed
       return this
@@ -22,14 +21,22 @@ module.exports = {
       return this
     }
 
-    Array.prototype.ease = function(ease) {
-      if(ease && easing[ease]) {
+    Array.prototype.ease = function(ease = 'linear') {
+      if (typeof ease == 'function') {
+        this._smooth = 1
+        this._ease = ease
+      }
+      else if (easing[ease]){
         this._smooth = 1
         this._ease = easing[ease]
       }
       return this
     }
 
+    Array.prototype.offset = function(offset = 0.5) {
+      this._offset = offset%1.0
+      return this
+    }
 
     // Array.prototype.bounce = function() {
     //   this.modifiers.bounce = true
@@ -46,19 +53,22 @@ module.exports = {
       return newArr
     }
   },
+
   getValue: (arr = []) => ({time, bpm}) =>{
     let speed = arr._speed ? arr._speed : 1
     let smooth = arr._smooth ? arr._smooth : 0
-    let ease = arr._ease ? arr._ease : easing['linear']
-    // console.log(smooth)
-    let index = time * speed * (bpm / 60)
+    let index = time * speed * (bpm / 60) + (arr._offset || 0)
 
-    let currValue = arr[Math.floor(index % (arr.length))]
-    let nextValue = arr[Math.floor((index + 1) % (arr.length))]
-
-    let _t = (index%1)*smooth
-    let t = ease(_t)
-    //  console.log(arr, Math.floor(index/newArr.length), index/newArr.length)
-    return nextValue*t + currValue*(1-t)
+    if (smooth!==0) {
+      let ease = arr._ease ? arr._ease : easing['linear']
+      let _index = index - (smooth / 2)
+      let currValue = arr[Math.floor(_index % (arr.length))]
+      let nextValue = arr[Math.floor((_index + 1) % (arr.length))]
+      let t = Math.min((_index%1)/smooth,1)
+      return ease(t) * (nextValue - currValue) + currValue
+    }
+    else {
+      return arr[Math.floor(index % (arr.length))]
+    }
   }
 }

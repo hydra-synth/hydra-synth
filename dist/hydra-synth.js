@@ -1789,7 +1789,7 @@ class EvalSandbox {
   set(property, value) {
     if(this.makeGlobal) {
       window[property] = value
-      parent[property] = value
+      this.parent[property] = value
     }
   }
 

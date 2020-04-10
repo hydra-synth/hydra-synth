@@ -27,6 +27,8 @@ class HydraRenderer {
     extendTransforms = {} // add your own functions on init
   } = {}) {
 
+    ArrayUtils.init()
+
     this.pb = pb
     this.width = width
     this.height = height

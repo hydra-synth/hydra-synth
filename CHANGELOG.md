@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.7] - 2020-04-10
+ - added smooth(), ease(), and fit() to array utils
+## [1.1.6] - 2020-04-03
+### Fixed
+ - error in eval-sandbox
+
 ## [1.1.5] - 2020-04-03
 ### Added
  - fps to set target rendering speed `fps=30`, not setting a value or `fps=undefined` will render as fast as possible
@@ -8,7 +14,7 @@
  - update function called each time a new frame is rendered. can be used like
  ```update = (dt) => {
       // something i want to do
-    }``` 
+    }```
 
 ### Fixed
  - invalid function does not crash editor
@@ -42,7 +48,6 @@
 
 
 to do:
-- set framerate
 - ShaderGenerator [WIP], runs serverside
 - check for errors on eval
 - add outputs (o0, etc) and sources to shader generator
