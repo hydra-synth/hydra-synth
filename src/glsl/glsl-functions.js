@@ -1,3 +1,73 @@
+/*
+Format for adding functions to hydra. For each entry in this file, hydra automatically generates a glsl function and javascript function with the same name. You can also ass functions dynamically using setFunction(object).
+
+{
+  name: 'osc', // name that will be used to access function in js as well as in glsl
+  type: 'src', // can be 'src', 'color', 'combine', 'combineCoords'. see below for more info
+  inputs: [
+    {
+      name: 'freq',
+      type: 'float',
+      default: 0.2
+    },
+    {
+      name: 'sync',
+      type: 'float',
+      default: 0.1
+    },
+    {
+      name: 'offset',
+      type: 'float',
+      default: 0.0
+    }
+  ],
+    glsl: `
+      vec2 st = _st;
+      float r = sin((st.x-offset*2/freq+time*sync)*freq)*0.5  + 0.5;
+      float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
+      float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
+      return vec4(r, g, b, 1.0);
+   `
+}
+
+// The above code generates the glsl function:
+`vec4 osc(vec2 _st, float freq, float sync, float offset){
+ vec2 st = _st;
+ float r = sin((st.x-offset*2/freq+time*sync)*freq)*0.5  + 0.5;
+ float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
+ float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
+ return vec4(r, g, b, 1.0);
+}`
+
+
+Types and default arguments for hydra functions.
+The value in the 'type' field lets the parser know which type the function will be returned as well as default arguments.
+
+const types = {
+  'src': {
+    returnType: 'vec4',
+    args: ['vec2 _st']
+  },
+  'coord': {
+    returnType: 'vec2',
+    args: ['vec2 _st']
+  },
+  'color': {
+    returnType: 'vec4',
+    args: ['vec4 _c0']
+  },
+  'combine': {
+    returnType: 'vec4',
+    args: ['vec4 _c0', 'vec4 _c1']
+  },
+  'combineCoord': {
+    returnType: 'vec2',
+    args: ['vec2 _st', 'vec4 _c0']
+  }
+}
+
+*/
+
 module.exports = [
   {
   name: 'noise',
