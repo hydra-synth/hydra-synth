@@ -4,17 +4,17 @@ const loop = require('raf-loop')
 //const shader = require('./../index.js').shaderGenerator
 
 function init () {
-  exampleNonGlobal()
+///  exampleNonGlobal()
 
 //  exampleExtendTransforms()
-//  var hydra = new Hydra()
-//   window.hydra = hydra
+ var hydra = new Hydra()
+  window.hydra = hydra
 //
 //   exampleAddFunction(hydra)
 // //  exampleScreen()
 //
 // exampleCustomCanvas()
-// exampleSmoothing()
+ exampleSmoothing()
   ///var generator = new shader()
 
 

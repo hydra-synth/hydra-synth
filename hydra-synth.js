@@ -54,10 +54,7 @@ class HydraRenderer {
       render: this._render.bind(this),
       setResolution: this.setResolution.bind(this),
       update: (dt) => {},// user defined update function
-      hush: this.hush.bind(this),
-      screencap: () => {
-        this.saveFrame = true
-      }.bind(this)
+      hush: this.hush.bind(this)
     }
 
     this.timeSinceLastUpdate = 0
@@ -90,9 +87,9 @@ class HydraRenderer {
     this._initSources(numSources)
     this._generateGlslTransforms()
 
-    // // this.synth.screencap = () => {
-    //   this.saveFrame = true
-    // }
+    this.synth.screencap = () => {
+      this.saveFrame = true
+    }
 
     if (enableStreamCapture) {
       this.captureStream = this.canvas.captureStream(25)
