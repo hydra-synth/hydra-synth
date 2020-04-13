@@ -10,7 +10,7 @@ var Output = function (opts) {
   ])
 
   this.draw = () => {}
-  this.clear()
+  this.init()
   this.pingPongIndex = 0
 
   // for each output, create two fbos for pingponging
@@ -45,7 +45,7 @@ Output.prototype.getTexture = function () {
   return this.fbos[index]
 }
 
-Output.prototype.clear = function () {
+Output.prototype.init = function () {
 //  console.log('clearing')
   this.transformIndex = 0
   this.fragHeader = `

@@ -116,7 +116,7 @@ class HydraRenderer {
       source.clear()
     })
     this.o.forEach((output) => {
-      this.synth.solid().out(output)
+      this.synth.solid(1, 1, 1, 0).out(output)
     })
   }
 
