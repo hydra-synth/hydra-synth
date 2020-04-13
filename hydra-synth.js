@@ -30,10 +30,14 @@ class HydraRenderer {
     ArrayUtils.init()
 
     this.pb = pb
+
     this.width = width
     this.height = height
     this.renderAll = false
     this.detectAudio = detectAudio
+
+    this._initCanvas(canvas)
+
 
     // object that contains all properties that will be made available on the global context and during local evaluation
     this.synth = {
@@ -50,7 +54,10 @@ class HydraRenderer {
       render: this._render.bind(this),
       setResolution: this.setResolution.bind(this),
       update: (dt) => {},// user defined update function
-      hush: this.hush.bind(this)
+      hush: this.hush.bind(this),
+      screencap: () => {
+        this.saveFrame = true
+      }.bind(this)
     }
 
     this.timeSinceLastUpdate = 0
@@ -78,15 +85,14 @@ class HydraRenderer {
 
     this.generator = undefined
 
-    this._initCanvas(canvas)
     this._initRegl()
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
 
-    this.synth.screencap = () => {
-      this.saveFrame = true
-    }
+    // // this.synth.screencap = () => {
+    //   this.saveFrame = true
+    // }
 
     if (enableStreamCapture) {
       this.captureStream = this.canvas.captureStream(25)

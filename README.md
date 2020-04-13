@@ -29,7 +29,7 @@ window.onload = function () {
 
   // by default, hydra makes everything global.
   // see options to change parameters
-  hydra.osc().out()
+  osc().out()
 }
 ```
 
@@ -44,8 +44,6 @@ If `opts` is specified, the default options (shown below) will be overridden.
 ```
 {
   canvas: null, // canvas element to render to. If none is supplied, a canvas will be created and appended to the screen
-
-  pb: null, // an instance of rtc-patch-bay to use for networking
 
   autoLoop: true, // if true, will automatically loop using requestAnimationFrame.If set to false, you must implement your own loop function using the tick() method (below)
 
@@ -155,10 +153,11 @@ s0.clear()
 
 
 #### Non-global mode [in progress]
-If makeGlobal is set to false, buffers and functions can be accessed via the hydra instance. Note that sources and buffers are contained in an array and accessed by index. E.g.:
+If makeGlobal is set to false, buffers and functions can be accessed via the synth property of the hydra instance. Note that sources and buffers are contained in an array and accessed by index. E.g.:
 ```
-hydra.s[0].initCam()
-hydra.osc().out(hydra.o[0])
+let synth = hydra.synth
+synth.osc().out()
+synth.s0.initCam()
 ```
 
 #### Custom render loop

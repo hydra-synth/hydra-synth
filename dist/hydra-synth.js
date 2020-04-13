@@ -739,6 +739,8 @@ class HydraRenderer {
     extendTransforms = {} // add your own functions on init
   } = {}) {
 
+    ArrayUtils.init()
+
     this.pb = pb
     this.width = width
     this.height = height
@@ -758,7 +760,7 @@ class HydraRenderer {
       speed: 1,
       mouse: Mouse,
       render: this._render.bind(this),
-      resize: this.resize.bind(this),
+      setResolution: this.setResolution.bind(this),
       update: (dt) => {},// user defined update function
       hush: this.hush.bind(this)
     }
@@ -766,7 +768,7 @@ class HydraRenderer {
     this.timeSinceLastUpdate = 0
     this._time = 0 // for internal use, only to use for deciding when to render frames
 
-    window.synth = this.synth
+  //  window.synth = this.synth
 
     // only allow valid precision options
     let precisionOptions = ['lowp','mediump','highp']
@@ -826,11 +828,11 @@ class HydraRenderer {
       source.clear()
     })
     this.o.forEach((output) => {
-      this.synth.solid().out(output)
+      this.synth.solid(1, 1, 1, 0).out(output)
     })
   }
 
-  resize(width, height) {
+  setResolution(width, height) {
   //  console.log(width, height)
     this.canvas.width = width
     this.canvas.height = height
@@ -842,6 +844,7 @@ class HydraRenderer {
     this.s.forEach((source) => {
       source.resize(width, height)
     })
+     console.log(this.canvas.width)
   }
 
   canvasToImage (callback) {
@@ -1095,7 +1098,7 @@ class HydraRenderer {
       for (let i = 0; i < this.s.length; i++) {
         this.s[i].tick(this.synth.time)
       }
-
+    //  console.log(this.canvas.width, this.canvas.height)
       for (let i = 0; i < this.o.length; i++) {
         this.o[i].tick({
           time: this.synth.time,
@@ -1789,8 +1792,8 @@ class EvalSandbox {
   set(property, value) {
     if(this.makeGlobal) {
       window[property] = value
-      this.parent[property] = value
     }
+    this.parent[property] = value
   }
 
   tick() {
@@ -1799,6 +1802,8 @@ class EvalSandbox {
         this.parent[property] = window[property]
       })
       //  this.parent.speed = window.speed
+    } else {
+
     }
   }
 
@@ -1810,21 +1815,14 @@ class EvalSandbox {
 module.exports = EvalSandbox
 
 },{"./lib/array-utils.js":20,"./lib/sandbox.js":23}],14:[function(require,module,exports){
-const glslTransforms = require('./glsl/composable-glsl-functions.js')
+const glslTransforms = require('./glsl/glsl-functions.js')
 const GlslSource = require('./glsl-source.js')
-
-//const renderpassFunctions = require('./glsl/renderpass-functions.js')
-
-Array.prototype.fast = function (speed) {
-  this.speed = speed
-  return this
-}
 
 class GeneratorFactory {
   constructor ({
       defaultUniforms,
       defaultOutput,
-      extendTransforms = (x => x),
+      extendTransforms = [],
       changeListener = (() => {})
     } = {}
     ) {
@@ -1847,39 +1845,41 @@ class GeneratorFactory {
       }
     })()
 
-    let functions = {}
-    const addTransforms = (transforms) =>
-      Object.entries(transforms).forEach(([method, transform]) => {
-        functions[method] = transform
-      })
+    let functions = glslTransforms
+    // const addTransforms = (transforms) =>
+    //   Object.entries(transforms).forEach(([method, transform]) => {
+    //     functions[method] = transform
+    //   })
 
-    addTransforms(glslTransforms)
-    //addTransforms(renderpassFunctions)
-
-    if (typeof this.extendTransforms === 'function') {
-      functions = this.extendTransforms(functions)
-    } else if (Array.isArray(this.extendTransforms)) {
-      addTransforms(this.extendTransforms.reduce((h, transform) => {
-        h[transform.name] = transform
-        return h
-      }, {}))
+    // const addTransforms =
+    //
+    // addTransforms(glslTransforms)
+    // //addTransforms(renderpassFunctions)
+    //
+    // if (typeof this.extendTransforms === 'function') {
+    //   functions = this.extendTransforms(functions)
+    // } else
+    if (Array.isArray(this.extendTransforms)) {
+      functions.concat(this.extendTransforms)
     } else if (typeof this.extendTransforms === 'object') {
-      addTransforms(this.extendTransforms)
+      functions.push(this.extendTransforms)
     }
 
-    Object.entries(functions).forEach(([method, transform]) => {
-      if (typeof transform.glsl_return_type === 'undefined' && transform.glsl) {
-        transform.glsl_return_type = transform.glsl.replace(new RegExp(`^(?:[\\s\\S]*\\W)?(\\S+)\\s+${method}\\s*[(][\\s\\S]*`, 'ugm'), '$1')
-      }
+  //  console.log(functions)
+    //
+    // Object.entries(functions).forEach(([method, transform]) => {
+    //   if (typeof transform.glsl_return_type === 'undefined' && transform.glsl) {
+    //     transform.glsl_return_type = transform.glsl.replace(new RegExp(`^(?:[\\s\\S]*\\W)?(\\S+)\\s+${method}\\s*[(][\\s\\S]*`, 'ugm'), '$1')
+    //   }
+    //
+    //   functions[method] = this._addMethod(method, transform)
+    // })
 
-      functions[method] = this._addMethod(method, transform)
-    })
-
-    return functions
+    return functions.map((transform) => this.setFunction(transform))
  }
 
  _addMethod (method, transform) {
-   console.log('adding', method, transform)
+//   console.log('adding', method, transform)
     this.glslTransforms[method] = transform
     if (transform.type === 'src') {
       const func = (...args) => new this.sourceClass({
@@ -1904,8 +1904,8 @@ class GeneratorFactory {
 
   setFunction(obj) {
     var processedGlsl = processGlsl(obj)
-    console.log(processedGlsl)
-    this._addMethod(obj.name, processedGlsl)
+  //  console.log(processedGlsl)
+    if(processedGlsl) this._addMethod(obj.name, processedGlsl)
   }
 }
 
@@ -1928,9 +1928,9 @@ const typeLookup = {
     returnType: 'vec4',
     args: ['vec4 _c0', 'vec4 _c1']
   },
-  'combineCoords': {
+  'combineCoord': {
     returnType: 'vec2',
-    args: ['vec2 _st', 'vec4 c0']
+    args: ['vec2 _st', 'vec4 _c0']
   }
 }
 // expects glsl of format
@@ -1974,33 +1974,44 @@ const typeLookup = {
 
 function processGlsl(obj) {
   let t = typeLookup[obj.type]
+  if(t) {
   let baseArgs = t.args.map((arg) => arg).join(", ")
   // @todo: make sure this works for all input types, add validation
   let customArgs = obj.inputs.map((input) => `${input.type} ${input.name}`).join(', ')
   let args = `${baseArgs}${customArgs.length > 0 ? ', '+ customArgs: ''}`
-  console.log('args are ', args)
-  if(t) {
+//  console.log('args are ', args)
+
     let glslFunction =
 `
   ${t.returnType} ${obj.name}(${args}) {
       ${obj.glsl}
   }
 `
-    console.log('function', glslFunction)
+  //  console.log('function', glslFunction)
+    // {
+    //   name: 'color',
+    //   type: 'vec4'
+    // },
+
+  // add extra input to beginning for backward combatibility @todo update compiler so this is no longer necessary
+    if(obj.type === 'combine' || obj.type === 'combineCoord') obj.inputs.unshift({
+        name: 'color',
+        type: 'vec4'
+      })
     return Object.assign({}, obj, { glsl: glslFunction})
   } else {
-    console.error(`type ${obj.type} not recognized`)
+    console.warn(`type ${obj.type} not recognized`)
   }
 
 }
 
 module.exports = GeneratorFactory
 
-},{"./glsl-source.js":15,"./glsl/composable-glsl-functions.js":17}],15:[function(require,module,exports){
+},{"./glsl-source.js":15,"./glsl/glsl-functions.js":17}],15:[function(require,module,exports){
 const generateGlsl = require('./glsl-utils.js').generateGlsl
 const formatArguments = require('./glsl-utils.js').formatArguments
 
-const glslTransforms = require('./glsl/composable-glsl-functions.js')
+// const glslTransforms = require('./glsl/composable-glsl-functions.js')
 const utilityGlsl = require('./glsl/utility-functions.js')
 
 var GlslSource = function (obj) {
@@ -2038,17 +2049,18 @@ GlslSource.prototype.glsl = function () {
 //  console.log('output', output)
   this.transforms.forEach((transform) => {
     if(transform.transform.type === 'renderpass'){
-      if (transforms.length > 0) passes.push(this.compile(transforms, output))
-      transforms = []
-      var uniforms = {}
-      const inputs = formatArguments(transform, -1)
-      inputs.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
-
-      passes.push({
-        frag: transform.transform.frag,
-        uniforms: Object.assign({}, self.defaultUniforms, uniforms)
-      })
-      transforms.push({name: 'prev', transform:  glslTransforms['prev'], synth: this.synth})
+      // if (transforms.length > 0) passes.push(this.compile(transforms, output))
+      // transforms = []
+      // var uniforms = {}
+      // const inputs = formatArguments(transform, -1)
+      // inputs.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
+      //
+      // passes.push({
+      //   frag: transform.transform.frag,
+      //   uniforms: Object.assign({}, self.defaultUniforms, uniforms)
+      // })
+      // transforms.push({name: 'prev', transform:  glslTransforms['prev'], synth: this.synth})
+      console.warn('no support for renderpass')
     } else {
       transforms.push(transform)
     }
@@ -2111,7 +2123,7 @@ GlslSource.prototype.compile = function (transforms) {
 
 module.exports = GlslSource
 
-},{"./glsl-utils.js":16,"./glsl/composable-glsl-functions.js":17,"./glsl/utility-functions.js":18}],16:[function(require,module,exports){
+},{"./glsl-utils.js":16,"./glsl/utility-functions.js":18}],16:[function(require,module,exports){
 // converts a tree of javascript functions to a shader
 
 // Add extra functionality to Array.prototype for generating sequences in time
@@ -2176,6 +2188,8 @@ function generateGlsl (transforms, shaderParams) {
         (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
         (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
       fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`
+
+
     }
   })
 
@@ -2246,6 +2260,7 @@ function formatArguments (transform, startIndex) {
     //  generateGlsl: null // function for creating glsl
     }
 
+    if(typedArg.type === 'float') typedArg.value = ensure_decimal_dot(input.default)
     if (input.type.startsWith('vec')) {
       try {
         typedArg.vecLen = Number.parseInt(input.type.substr(3))
@@ -2310,7 +2325,7 @@ function formatArguments (transform, startIndex) {
     } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
       typedArg.isUniform = false
       typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
-    } else if (input.type === 'texture') {
+    } else if (input.type === 'sampler2D') {
       // typedArg.tex = typedArg.value
       var x = typedArg.value
       typedArg.value = () => (x.getTexture())
@@ -2337,1076 +2352,1035 @@ function formatArguments (transform, startIndex) {
 }
 
 },{"./lib/array-utils.js":20}],17:[function(require,module,exports){
-module.exports = {
-  noise: {
-    type: 'src',
-    inputs: [
-      {
-        type: 'float',
-        name: 'scale',
-        default: 10
-      },
-      {
-        type: 'float',
-        name: 'offset',
-        default : 0.1
-      }
-    ],
-    glsl: `vec4 noise(vec2 st, float scale, float offset){
-      return vec4(vec3(_noise(vec3(st*scale, offset*time))), 1.0);
-    }`
-  },
-  voronoi: {
-    type: 'src',
-    inputs: [
-      {
-        type: 'float',
-        name: 'scale',
-        default: 5
-      },
-      {
-        type: 'float',
-        name: 'speed',
-        default : 0.3
-      },
-      {
-        type: 'float',
-        name: 'blending',
-        default : 0.3
-      }
-    ],
-    notes: 'from https://thebookofshaders.com/edit.php#12/vorono-01.frag, https://www.shadertoy.com/view/ldB3zc',
-    glsl: `vec4 voronoi(vec2 st, float scale, float speed, float blending) {
-      vec3 color = vec3(.0);
+module.exports = [
+  {
+  name: 'noise',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 10,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0.1,
+    }
+  ],
+  glsl:
+`   return vec4(vec3(_noise(vec3(_st*scale, offset*time))), 1.0);`
+},
+{
+  name: 'voronoi',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 5,
+    },
+{
+      type: 'float',
+      name: 'speed',
+      default: 0.3,
+    },
+{
+      type: 'float',
+      name: 'blending',
+      default: 0.3,
+    }
+  ],
+  glsl:
+`   vec3 color = vec3(.0);
    // Scale
-   st *= scale;
+   _st *= scale;
    // Tile the space
-   vec2 i_st = floor(st);
-   vec2 f_st = fract(st);
+   vec2 i_st = floor(_st);
+   vec2 f_st = fract(_st);
    float m_dist = 10.;  // minimun distance
    vec2 m_point;        // minimum point
    for (int j=-1; j<=1; j++ ) {
-       for (int i=-1; i<=1; i++ ) {
-           vec2 neighbor = vec2(float(i),float(j));
-           vec2 p = i_st + neighbor;
-           vec2 point = fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
-           point = 0.5 + 0.5*sin(time*speed + 6.2831*point);
-           vec2 diff = neighbor + point - f_st;
-           float dist = length(diff);
-           if( dist < m_dist ) {
-               m_dist = dist;
-               m_point = point;
-           }
-       }
+   for (int i=-1; i<=1; i++ ) {
+   vec2 neighbor = vec2(float(i),float(j));
+   vec2 p = i_st + neighbor;
+   vec2 point = fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
+   point = 0.5 + 0.5*sin(time*speed + 6.2831*point);
+   vec2 diff = neighbor + point - f_st;
+   float dist = length(diff);
+   if( dist < m_dist ) {
+   m_dist = dist;
+   m_point = point;
+   }
+   }
    }
    // Assign a color using the closest point position
    color += dot(m_point,vec2(.3,.6));
- color *= 1.0 - blending*m_dist;
-   return vec4(color, 1.0);
-    }`
-  },
-  osc: {
-    type: 'src',
-    inputs: [
-      {
-        name: 'frequency',
-        type: 'float',
-        default: 60.0
-      },
-      {
-        name: 'sync',
-        type: 'float',
-        default: 0.1
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec4 osc(vec2 _st, float freq, float sync, float offset){
-            vec2 st = _st;
-            float r = sin((st.x-offset/freq+time*sync)*freq)*0.5  + 0.5;
-            float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
-            float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
-            return vec4(r, g, b, 1.0);
-          }`
-  },
-  shape: {
-    type: 'src',
-    inputs: [
-      {
-        name: 'sides',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'radius',
-        type: 'float',
-        default: 0.3
-      },
-      {
-        name: 'smoothing',
-        type: 'float',
-        default: 0.01
-      }
-    ],
-    glsl: `vec4 shape(vec2 _st, float sides, float radius, float smoothing){
-      vec2 st = _st * 2. - 1.;
-      // Angle and radius from the current pixel
-      float a = atan(st.x,st.y)+3.1416;
-      float r = (2.*3.1416)/sides;
-      float d = cos(floor(.5+a/r)*r-a)*length(st);
-      return vec4(vec3(1.0-smoothstep(radius,radius + smoothing,d)), 1.0);
-    }`
-  },
-  gradient: {
-    type: 'src',
-    inputs: [
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec4 gradient(vec2 _st, float speed) {
-      return vec4(_st, sin(time*speed), 1.0);
+   color *= 1.0 - blending*m_dist;
+   return vec4(color, 1.0);`
+},
+{
+  name: 'osc',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'frequency',
+      default: 60,
+    },
+{
+      type: 'float',
+      name: 'sync',
+      default: 0.1,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
     }
-    `
-  },
-  src: {
-    type: 'src',
-    inputs: [
-      {
-        name: 'tex',
-        type: 'texture'
-      }
-    ],
-    glsl: `vec4 src(vec2 _st, sampler2D _tex){
-    //  vec2 uv = gl_FragCoord.xy/vec2(1280., 720.);
-      return texture2D(_tex, fract(_st));
-    }`
-  },
-  solid: {
-    type: 'src',
-    inputs: [
-      {
-        name: 'r',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'g',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'b',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'a',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    notes: '',
-    glsl: `vec4 solid(vec2 uv, float _r, float _g, float _b, float _a){
-      return vec4(_r, _g, _b, _a);
-    }`
-  },
-  rotate: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'angle',
-        type: 'float',
-        default: 10.0
-      }, {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 rotate(vec2 st, float _angle, float speed){
-              vec2 xy = st - vec2(0.5);
-              float angle = _angle + speed *time;
-              xy = mat2(cos(angle),-sin(angle), sin(angle),cos(angle))*xy;
-              xy += 0.5;
-              return xy;
-          }`
-  },
-  scale: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.5
-      },
-      {
-        name: 'xMult',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'yMult',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'offsetX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'offsetY',
-        type: 'float',
-        default: 0.5
-      }
-    ],
-    glsl: `vec2 scale(vec2 st, float amount, float xMult, float yMult, float offsetX, float offsetY){
-      vec2 xy = st - vec2(offsetX, offsetY);
-      xy*=(1.0/vec2(amount*xMult, amount*yMult));
-      xy+=vec2(offsetX, offsetY);
-      return xy;
+  ],
+  glsl:
+`   vec2 st = _st;
+   float r = sin((st.x-offset/frequency+time*sync)*frequency)*0.5  + 0.5;
+   float g = sin((st.x+time*sync)*frequency)*0.5 + 0.5;
+   float b = sin((st.x+offset/frequency+time*sync)*frequency)*0.5  + 0.5;
+   return vec4(r, g, b, 1.0);`
+},
+{
+  name: 'shape',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'sides',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'radius',
+      default: 0.3,
+    },
+{
+      type: 'float',
+      name: 'smoothing',
+      default: 0.01,
     }
-    `
-  },
-  pixelate: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'pixelX',
-        type: 'float',
-        default: 20
-      }, {
-        name: 'pixelY',
-        type: 'float',
-        default: 20
-      }
-    ],
-    glsl: `vec2 pixelate(vec2 st, float pixelX, float pixelY){
-      vec2 xy = vec2(pixelX, pixelY);
-      return (floor(st * xy) + 0.5)/xy;
-    }`
-  },
-  posterize: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'bins',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'gamma',
-        type: 'float',
-        default: 0.6
-      }
-    ],
-    glsl: `vec4 posterize(vec4 c, float bins, float gamma){
-      vec4 c2 = pow(c, vec4(gamma));
-      c2 *= vec4(bins);
-      c2 = floor(c2);
-      c2/= vec4(bins);
-      c2 = pow(c2, vec4(1.0/gamma));
-      return vec4(c2.xyz, c.a);
-    }`
-  },
-  shift: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'r',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'g',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'b',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'a',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec4 shift(vec4 c, float r, float g, float b, float a){
-      vec4 c2 = vec4(c);
-      c2.r = fract(c2.r + r);
-      c2.g = fract(c2.g + g);
-      c2.b = fract(c2.b + b);
-      c2.a = fract(c2.a + a);
-      return vec4(c2.rgba);
+  ],
+  glsl:
+`   vec2 st = _st * 2. - 1.;
+   // Angle and radius from the current pixel
+   float a = atan(st.x,st.y)+3.1416;
+   float r = (2.*3.1416)/sides;
+   float d = cos(floor(.5+a/r)*r-a)*length(st);
+   return vec4(vec3(1.0-smoothstep(radius,radius + smoothing,d)), 1.0);`
+},
+{
+  name: 'gradient',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'speed',
+      default: 0,
     }
-    `
-  },
-  repeat: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'repeatX',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'repeatY',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'offsetX',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'offsetY',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 repeat(vec2 _st, float repeatX, float repeatY, float offsetX, float offsetY){
-        vec2 st = _st * vec2(repeatX, repeatY);
-        st.x += step(1., mod(st.y,2.0)) * offsetX;
-        st.y += step(1., mod(st.x,2.0)) * offsetY;
-        return fract(st);
-    }`
-  },
-  modulateRepeat: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'repeatX',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'repeatY',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'offsetX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'offsetY',
-        type: 'float',
-        default: 0.5
-      }
-    ],
-    glsl: `vec2 modulateRepeat(vec2 _st, vec4 c1, float repeatX, float repeatY, float offsetX, float offsetY){
-        vec2 st = _st * vec2(repeatX, repeatY);
-        st.x += step(1., mod(st.y,2.0)) + c1.r * offsetX;
-        st.y += step(1., mod(st.x,2.0)) + c1.g * offsetY;
-        return fract(st);
-    }`
-  },
-  repeatX: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      }, {
-          name: 'offset',
-          type: 'float',
-          default: 0.0
-        }
-    ],
-    glsl: `vec2 repeatX(vec2 _st, float reps, float offset){
-      vec2 st = _st * vec2(reps, 1.0);
-    //  float f =  mod(_st.y,2.0);
-      st.y += step(1., mod(st.x,2.0))* offset;
-      return fract(st);
-    }`
-  },
-  modulateRepeatX: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      },
-      {
-          name: 'offset',
-          type: 'float',
-          default: 0.5
-      }
-    ],
-    glsl: `vec2 modulateRepeatX(vec2 _st, vec4 c1, float reps, float offset){
-      vec2 st = _st * vec2(reps, 1.0);
-    //  float f =  mod(_st.y,2.0);
-      st.y += step(1., mod(st.x,2.0)) + c1.r * offset;
-      return fract(st);
-    }`
-  },
-  repeatY: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      }, {
-        name: 'offset',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 repeatY(vec2 _st, float reps, float offset){
-      vec2 st = _st * vec2(1.0, reps);
-    //  float f =  mod(_st.y,2.0);
-      st.x += step(1., mod(st.y,2.0))* offset;
-      return fract(st);
-    }`
-  },
-  modulateRepeatY: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'reps',
-        type: 'float',
-        default: 3.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 0.5
-      }
-    ],
-    glsl: `vec2 modulateRepeatY(vec2 _st, vec4 c1, float reps, float offset){
-      vec2 st = _st * vec2(reps, 1.0);
-    //  float f =  mod(_st.y,2.0);
-      st.x += step(1., mod(st.y,2.0)) + c1.r * offset;
-      return fract(st);
-    }`
-  },
-  kaleid: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'nSides',
-        type: 'float',
-        default: 4.0
-      }
-    ],
-    glsl: `vec2 kaleid(vec2 st, float nSides){
-      st -= 0.5;
-      float r = length(st);
-      float a = atan(st.y, st.x);
-      float pi = 2.*3.1416;
-      a = mod(a,pi/nSides);
-      a = abs(a-pi/nSides/2.);
-      return r*vec2(cos(a), sin(a));
-    }`
-  },
-  modulateKaleid: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'nSides',
-        type: 'float',
-        default: 4.0
-      }
-    ],
-    glsl: `vec2 modulateKaleid(vec2 st, vec4 c1, float nSides){
-      st -= 0.5;
-      float r = length(st);
-      float a = atan(st.y, st.x);
-      float pi = 2.*3.1416;
-      a = mod(a,pi/nSides);
-      a = abs(a-pi/nSides/2.);
-      return (c1.r+r)*vec2(cos(a), sin(a));
-    }`
-  },
-  scroll: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'scrollX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'scrollY',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speedX',
-        type: 'float',
-        default: 0.0
-      },
-      {
-        name: 'speedY',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 scroll(vec2 st, float scrollX, float scrollY, float speedX, float speedY){
-      st.x += scrollX + time*speedX;
-      st.y += scrollY + time*speedY;
-      return st;
-    }`
-  },
-  scrollX: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'scrollX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 scrollX(vec2 st, float amount, float speed){
-      st.x += amount + time*speed;
-      return st;
-    }`
-  },
-  modulateScrollX: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'scrollX',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 modulateScrollX(vec2 st, vec4 c1, float amount, float speed){
-      st.x += c1.r*amount + time*speed;
-      return st;
-    }`
-  },
-  scrollY: {
-    type: 'coord',
-    inputs: [
-      {
-        name: 'scrollY',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 scrollY(vec2 st, float amount, float speed){
-      st.y += amount + time*speed;
-      return st;
-    }`
-  },
-  modulateScrollY: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'scrollY',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'speed',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 modulateScrollY(vec2 st, vec4 c1, float amount, float speed){
-      st.y += c1.r*amount + time*speed;
-      return st;
-    }`
-  },
-  add: {
-    type: 'combine',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
-            return (c0+c1)*amount + c0*(1.0-amount);
-          }`
-  },
-  sub: {
-    type: 'combine',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    glsl: `vec4 add(vec4 c0, vec4 c1, float amount){
-            return (c0-c1)*amount + c0*(1.0-amount);
-          }`
-  },
-  layer: {
-    type: 'combine',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      }
-    ],
-    glsl: `vec4 layer(vec4 c0, vec4 c1){
-        return vec4(mix(c0.rgb, c1.rgb, c1.a), c0.a+c1.a);
+  ],
+  glsl:
+`   return vec4(_st, sin(time*speed), 1.0);`
+},
+{
+  name: 'src',
+  type: 'src',
+  inputs: [
+    {
+      type: 'sampler2D',
+      name: 'tex',
+      default: NaN,
     }
-    `
-  },
-  blend: {
-    type: 'combine',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.5
-      }
-    ],
-    glsl: `vec4 blend(vec4 c0, vec4 c1, float amount){
-      return c0*(1.0-amount)+c1*amount;
-    }`
-  },
-  mult: {
-    type: 'combine',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    glsl: `vec4 mult(vec4 c0, vec4 c1, float amount){
-      return c0*(1.0-amount)+(c0*c1)*amount;
-    }`
-  },
+  ],
+  glsl:
+`   //  vec2 uv = gl_FragCoord.xy/vec2(1280., 720.);
+   return texture2D(tex, fract(_st));`
+},
+{
+  name: 'solid',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'r',
+      default: 0,
+    },
+{
+      type: 'float',
+      name: 'g',
+      default: 0,
+    },
+{
+      type: 'float',
+      name: 'b',
+      default: 0,
+    },
+{
+      type: 'float',
+      name: 'a',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return vec4(r, g, b, a);`
+},
+{
+  name: 'rotate',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'angle',
+      default: 10,
+    },
+{
+      type: 'float',
+      name: 'speed',
+      default: 0,
+    }
+  ],
+  glsl:
+`   vec2 xy = _st - vec2(0.5);
+   float ang = angle + speed *time;
+   xy = mat2(cos(angle),-sin(ang), sin(ang),cos(ang))*xy;
+   xy += 0.5;
+   return xy;`
+},
+{
+  name: 'scale',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1.5,
+    },
+{
+      type: 'float',
+      name: 'xMult',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'yMult',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'offsetX',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'offsetY',
+      default: 0.5,
+    }
+  ],
+  glsl:
+`   vec2 xy = _st - vec2(offsetX, offsetY);
+   xy*=(1.0/vec2(amount*xMult, amount*yMult));
+   xy+=vec2(offsetX, offsetY);
+   return xy;
+   `
+},
+{
+  name: 'pixelate',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'pixelX',
+      default: 20,
+    },
+{
+      type: 'float',
+      name: 'pixelY',
+      default: 20,
+    }
+  ],
+  glsl:
+`   vec2 xy = vec2(pixelX, pixelY);
+   return (floor(_st * xy) + 0.5)/xy;`
+},
+{
+  name: 'posterize',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'bins',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'gamma',
+      default: 0.6,
+    }
+  ],
+  glsl:
+`   vec4 c2 = pow(_c0, vec4(gamma));
+   c2 *= vec4(bins);
+   c2 = floor(c2);
+   c2/= vec4(bins);
+   c2 = pow(c2, vec4(1.0/gamma));
+   return vec4(c2.xyz, _c0.a);`
+},
+{
+  name: 'shift',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'r',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'g',
+      default: 0,
+    },
+{
+      type: 'float',
+      name: 'b',
+      default: 0,
+    },
+{
+      type: 'float',
+      name: 'a',
+      default: 0,
+    }
+  ],
+  glsl:
+`   vec4 c2 = vec4(_c0);
+   c2.r = fract(c2.r + r);
+   c2.g = fract(c2.g + g);
+   c2.b = fract(c2.b + b);
+   c2.a = fract(c2.a + a);
+   return vec4(c2.rgba);`
+},
+{
+  name: 'repeat',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'repeatX',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'repeatY',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'offsetX',
+      default: 0,
+    },
+{
+      type: 'float',
+      name: 'offsetY',
+      default: 0,
+    }
+  ],
+  glsl:
+`   vec2 st = _st * vec2(repeatX, repeatY);
+   st.x += step(1., mod(st.y,2.0)) * offsetX;
+   st.y += step(1., mod(st.x,2.0)) * offsetY;
+   return fract(st);`
+},
+{
+  name: 'modulateRepeat',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'repeatX',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'repeatY',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'offsetX',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'offsetY',
+      default: 0.5,
+    }
+  ],
+  glsl:
+`   vec2 st = _st * vec2(repeatX, repeatY);
+   st.x += step(1., mod(st.y,2.0)) + _c0.r * offsetX;
+   st.y += step(1., mod(st.x,2.0)) + _c0.g * offsetY;
+   return fract(st);`
+},
+{
+  name: 'repeatX',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'reps',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   vec2 st = _st * vec2(reps, 1.0);
+   //  float f =  mod(_st.y,2.0);
+   st.y += step(1., mod(st.x,2.0))* offset;
+   return fract(st);`
+},
+{
+  name: 'modulateRepeatX',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'reps',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0.5,
+    }
+  ],
+  glsl:
+`   vec2 st = _st * vec2(reps, 1.0);
+   //  float f =  mod(_st.y,2.0);
+   st.y += step(1., mod(st.x,2.0)) + _c0.r * offset;
+   return fract(st);`
+},
+{
+  name: 'repeatY',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'reps',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   vec2 st = _st * vec2(1.0, reps);
+   //  float f =  mod(_st.y,2.0);
+   st.x += step(1., mod(st.y,2.0))* offset;
+   return fract(st);`
+},
+{
+  name: 'modulateRepeatY',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'reps',
+      default: 3,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0.5,
+    }
+  ],
+  glsl:
+`   vec2 st = _st * vec2(reps, 1.0);
+   //  float f =  mod(_st.y,2.0);
+   st.x += step(1., mod(st.y,2.0)) + _c0.r * offset;
+   return fract(st);`
+},
+{
+  name: 'kaleid',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'nSides',
+      default: 4,
+    }
+  ],
+  glsl:
+`   vec2 st = _st;
+   st -= 0.5;
+   float r = length(st);
+   float a = atan(st.y, st.x);
+   float pi = 2.*3.1416;
+   a = mod(a,pi/nSides);
+   a = abs(a-pi/nSides/2.);
+   return r*vec2(cos(a), sin(a));`
+},
+{
+  name: 'modulateKaleid',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'nSides',
+      default: 4,
+    }
+  ],
+  glsl:
+`   vec2 st = _st - 0.5;
+   float r = length(st);
+   float a = atan(st.y, st.x);
+   float pi = 2.*3.1416;
+   a = mod(a,pi/nSides);
+   a = abs(a-pi/nSides/2.);
+   return (_c0.r+r)*vec2(cos(a), sin(a));`
+},
+{
+  name: 'scroll',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scrollX',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'scrollY',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'speedX',
+      default: 0,
+    },
+{
+      type: 'float',
+      name: 'speedY',
+      default: 0,
+    }
+  ],
+  glsl:
+`
+   _st.x += scrollX + time*speedX;
+   _st.y += scrollY + time*speedY;
+   return _st;`
+},
+{
+  name: 'scrollX',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scrollX',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'speed',
+      default: 0,
+    }
+  ],
+  glsl:
+`   _st.x += scrollX + time*speed;
+   return _st;`
+},
+{
+  name: 'modulateScrollX',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scrollX',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'speed',
+      default: 0,
+    }
+  ],
+  glsl:
+`   _st.x += _c0.r*amount + time*speed;
+   return _st;`
+},
+{
+  name: 'scrollY',
+  type: 'coord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scrollY',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'speed',
+      default: 0,
+    }
+  ],
+  glsl:
+`   _st.y += scrollY + time*speed;
+   return _st;`
+},
+{
+  name: 'modulateScrollY',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scrollY',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'speed',
+      default: 0,
+    }
+  ],
+  glsl:
+`   _st.y += _c0.r*scrollY + time*speed;
+   return _st;`
+},
+{
+  name: 'add',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return (_c0+_c1)*amount + _c0*(1.0-amount);`
+},
+{
+  name: 'sub',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return (_c0-_c1)*amount + _c0*(1.0-amount);`
+},
+{
+  name: 'layer',
+  type: 'combine',
+  inputs: [
 
-  diff: {
-    type: 'combine',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      }
-    ],
-    glsl: `vec4 diff(vec4 c0, vec4 c1){
-      return vec4(abs(c0.rgb-c1.rgb), max(c0.a, c1.a));
+  ],
+  glsl:
+`   return vec4(mix(_c0.rgb, _c1.rgb, _c1.a), _c0.a+_c1.a);`
+},
+{
+  name: 'blend',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 0.5,
     }
-    `
-  },
+  ],
+  glsl:
+`   return _c0*(1.0-amount)+_c1*amount;`
+},
+{
+  name: 'mult',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return _c0*(1.0-amount)+(_c0*_c1)*amount;`
+},
+{
+  name: 'diff',
+  type: 'combine',
+  inputs: [
 
-  modulate: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.1
-      }
-    ],
-    glsl: `vec2 modulate(vec2 st, vec4 c1, float amount){
-          //  return fract(st+(c1.xy-0.5)*amount);
-              return st + c1.xy*amount;
-          }`
-  },
-  modulateScale: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'multiple',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    glsl: `vec2 modulateScale(vec2 st, vec4 c1, float multiple, float offset){
-      vec2 xy = st - vec2(0.5);
-      xy*=(1.0/vec2(offset + multiple*c1.r, offset + multiple*c1.g));
-      xy+=vec2(0.5);
-      return xy;
-    }`
-  },
-  modulatePixelate: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'multiple',
-        type: 'float',
-        default: 10.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 3.0
-      }
-    ],
-    glsl: `vec2 modulatePixelate(vec2 st, vec4 c1, float multiple, float offset){
-      vec2 xy = vec2(offset + c1.x*multiple, offset + c1.y*multiple);
-      return (floor(st * xy) + 0.5)/xy;
-    }`
-  },
-  modulateRotate: {
-    type: 'combineCoord',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'multiple',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 0.0
-      }
-    ],
-    glsl: `vec2 modulateRotate(vec2 st, vec4 c1, float multiple, float offset){
-        vec2 xy = st - vec2(0.5);
-        float angle = offset + c1.x * multiple;
-        xy = mat2(cos(angle),-sin(angle), sin(angle),cos(angle))*xy;
-        xy += 0.5;
-        return xy;
-    }`
-  },
-  modulateHue: {
-    type: 'combineCoord',
-    notes: 'changes coordinates based on hue of second input. Based on: https://www.shadertoy.com/view/XtcSWM',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      },
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    glsl: `vec2 modulateHue(vec2 st, vec4 c1, float amount){
-            return st + (vec2(c1.g - c1.r, c1.b - c1.g) * amount * 1.0/resolution);
-          }`
-  },
-  invert: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    glsl: `vec4 invert(vec4 c0, float amount){
-      return vec4((1.0-c0.rgb)*amount + c0.rgb*(1.0-amount), c0.a);
-    }`
-  },
-  contrast: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 1.6
-      }
-    ],
-    glsl: `vec4 contrast(vec4 c0, float amount) {
-      vec4 c = (c0-vec4(0.5))*vec4(amount) + vec4(0.5);
-      return vec4(c.rgb, c0.a);
+  ],
+  glsl:
+`   return vec4(abs(_c0.rgb-_c1.rgb), max(_c0.a, _c1.a));`
+},
+{
+  name: 'modulate',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 0.1,
     }
-    `
-  },
-  brightness: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.4
-      }
-    ],
-    glsl: `vec4 brightness(vec4 c0, float amount){
-      return vec4(c0.rgb + vec3(amount), c0.a);
+  ],
+  glsl:
+`   //  return fract(st+(_c0.xy-0.5)*amount);
+   return _st + _c0.xy*amount;`
+},
+{
+  name: 'modulateScale',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'multiple',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 1,
     }
-    `
-  },
-  mask: {
-    type: 'combine',
-    inputs: [
-      {
-        name: 'color',
-        type: 'vec4'
-      }
-    ],
-    glsl: `vec4 mask(vec4 c0, vec4 c1){
-      float a = _luminance(c1.rgb);
-      return vec4(c0.rgb*a, a);
-    }`
-  },
-  luma: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'threshold',
-        type: 'float',
-        default: 0.5
-      },
-      {
-        name: 'tolerance',
-        type: 'float',
-        default: 0.1
-      }
-    ],
-    glsl: `vec4 luma(vec4 c0, float threshold, float tolerance){
-      float a = smoothstep(threshold-tolerance, threshold+tolerance, _luminance(c0.rgb));
-      return vec4(c0.rgb*a, a);
-    }`
-  },
-  thresh: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'threshold',
-        type: 'float',
-        default: 0.5
-      }, {
-        name: 'tolerance',
-        type: 'float',
-        default: 0.04
-      }
-    ],
-    glsl: `vec4 thresh(vec4 c0, float threshold, float tolerance){
-      return vec4(vec3(smoothstep(threshold-tolerance, threshold+tolerance, _luminance(c0.rgb))), c0.a);
-    }`
-  },
-  color: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'r',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'g',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'b',
-        type: 'float',
-        default: 1.0
-      },
-      {
-        name: 'a',
-        type: 'float',
-        default: 1.0
-      }
-    ],
-    notes: 'https://www.youtube.com/watch?v=FpOEtm9aX0M',
-    glsl: `vec4 color(vec4 c0, float _r, float _g, float _b, float _a){
-      vec4 c = vec4(_r, _g, _b, _a);
-      vec4 pos = step(0.0, c); // detect whether negative
-      // if > 0, return r * c0
-      // if < 0 return (1.0-r) * c0
-      return vec4(mix((1.0-c0)*abs(c), c*c0, pos));
-    }`
-  },
-  saturate: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 2.0
-      }
-    ],
-    glsl: `vec4 saturate(vec4 c0, float amount){
-      const vec3 W = vec3(0.2125, 0.7154, 0.0721);
-      vec3 intensity = vec3(dot(c0.rgb, W));
-      return vec4(mix(intensity, c0.rgb, amount), c0.a);
-    }`
-  },
-  hue: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'hue',
-        type: 'float',
-        default: 0.4
-      }
-    ],
-    glsl: `vec4 hue(vec4 c0, float hue){
-      vec3 c = _rgbToHsv(c0.rgb);
-      c.r += hue;
-    //  c.r = fract(c.r);
-      return vec4(_hsvToRgb(c), c0.a);
-    }`
-  },
-  colorama: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'amount',
-        type: 'float',
-        default: 0.005
-      }
-    ],
-    glsl: `vec4 colorama(vec4 c0, float amount){
-      vec3 c = _rgbToHsv(c0.rgb);
-      c += vec3(amount);
-      c = _hsvToRgb(c);
-      c = fract(c);
-      return vec4(c, c0.a);
-    }`
-  },
-  prev: {
-    type: 'src',
-    notes: 'renders previous buffer',
-    inputs: [],
-    glsl: `vec4 prev(vec2 _st) {
-      return texture2D(prevBuffer, fract(_st));
+  ],
+  glsl:
+`   vec2 xy = _st - vec2(0.5);
+   xy*=(1.0/vec2(offset + multiple*_c0.r, offset + multiple*_c0.g));
+   xy+=vec2(0.5);
+   return xy;`
+},
+{
+  name: 'modulatePixelate',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'multiple',
+      default: 10,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 3,
     }
-    `
-  },
-  sum: {
-    type: 'color',
-    inputs: [
-      {
-        name: 'scale',
-        type: 'vec4',
-        default: [1, 1, 1, 1]
-      }
-    ],
-    glsl: `float sum(vec4 c0, vec4 s) {
-      vec4 v = c0 * s;
-      return v.r + v.g + v.b + v.a;
+  ],
+  glsl:
+`   vec2 xy = vec2(offset + _c0.x*multiple, offset + _c0.y*multiple);
+   return (floor(_st * xy) + 0.5)/xy;`
+},
+{
+  name: 'modulateRotate',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'multiple',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
     }
-float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is not overloaded
-  vec2 v = _st.xy * s.xy;
-  return v.x + v.y;
-}`
-  },
-  r: {
-    type: 'color',
-    inputs: [
-      {name: 'scale', type: 'float', default: 1},
-      {name: 'offset', type: 'float', default: 0}
-    ],
-    glsl: `vec4 r(vec4 c0, float scale, float offset) {
-      return vec4(c0.r * scale + offset);
-    }`
-  },
-  g: {
-    type: 'color',
-    inputs: [
-      {name: 'scale', type: 'float', default: 1},
-      {name: 'offset', type: 'float', default: 0}
-    ],
-    glsl: `vec4 g(vec4 c0, float scale, float offset) {
-      return vec4(c0.g * scale + offset);
-    }`
-  },
-  b: {
-    type: 'color',
-    inputs: [
-      {name: 'scale', type: 'float', default: 1},
-      {name: 'offset', type: 'float', default: 0}
-    ],
-    glsl: `vec4 b(vec4 c0, float scale, float offset) {
-      return vec4(c0.b * scale + offset);
-    }`
-  },
-  a: {
-    type: 'color',
-    inputs: [
-      {name: 'scale', type: 'float', default: 1},
-      {name: 'offset', type: 'float', default: 0}
-    ],
-    glsl: `vec4 a(vec4 c0, float scale, float offset) {
-      return vec4(c0.a * scale + offset);
-    }`
-  }
+  ],
+  glsl:
+`   vec2 xy = _st - vec2(0.5);
+   float angle = offset + _c0.x * multiple;
+   xy = mat2(cos(angle),-sin(angle), sin(angle),cos(angle))*xy;
+   xy += 0.5;
+   return xy;`
+},
+{
+  name: 'modulateHue',
+  type: 'combineCoord',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return _st + (vec2(_c0.g - _c0.r, _c0.b - _c0.g) * amount * 1.0/resolution);`
+},
+{
+  name: 'invert',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return vec4((1.0-_c0.rgb)*amount + _c0.rgb*(1.0-amount), _c0.a);`
+},
+{
+  name: 'contrast',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1.6,
+    }
+  ],
+  glsl:
+`   vec4 c = (_c0-vec4(0.5))*vec4(amount) + vec4(0.5);
+   return vec4(c.rgb, _c0.a);`
+},
+{
+  name: 'brightness',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 0.4,
+    }
+  ],
+  glsl:
+`   return vec4(_c0.rgb + vec3(amount), _c0.a);`
+},
+{
+  name: 'mask',
+  type: 'combine',
+  inputs: [
+
+  ],
+  glsl:
+`   float a = _luminance(_c1.rgb);
+   return vec4(_c0.rgb*a, a);`
+},
+{
+  name: 'luma',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'threshold',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'tolerance',
+      default: 0.1,
+    }
+  ],
+  glsl:
+`   float a = smoothstep(threshold-tolerance, threshold+tolerance, _luminance(_c0.rgb));
+   return vec4(_c0.rgb*a, a);`
+},
+{
+  name: 'thresh',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'threshold',
+      default: 0.5,
+    },
+{
+      type: 'float',
+      name: 'tolerance',
+      default: 0.04,
+    }
+  ],
+  glsl:
+`   return vec4(vec3(smoothstep(threshold-tolerance, threshold+tolerance, _luminance(_c0.rgb))), _c0.a);`
+},
+{
+  name: 'color',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'r',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'g',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'b',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'a',
+      default: 1,
+    }
+  ],
+  glsl:
+`   vec4 c = vec4(r, g, b, a);
+   vec4 pos = step(0.0, c); // detect whether negative
+   // if > 0, return r * _c0
+   // if < 0 return (1.0-r) * _c0
+   return vec4(mix((1.0-_c0)*abs(c), c*_c0, pos));`
+},
+{
+  name: 'saturate',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 2,
+    }
+  ],
+  glsl:
+`   const vec3 W = vec3(0.2125, 0.7154, 0.0721);
+   vec3 intensity = vec3(dot(_c0.rgb, W));
+   return vec4(mix(intensity, _c0.rgb, amount), _c0.a);`
+},
+{
+  name: 'hue',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'hue',
+      default: 0.4,
+    }
+  ],
+  glsl:
+`   vec3 c = _rgbToHsv(_c0.rgb);
+   c.r += hue;
+   //  c.r = fract(c.r);
+   return vec4(_hsvToRgb(c), _c0.a);`
+},
+{
+  name: 'colorama',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 0.005,
+    }
+  ],
+  glsl:
+`   vec3 c = _rgbToHsv(_c0.rgb);
+   c += vec3(amount);
+   c = _hsvToRgb(c);
+   c = fract(c);
+   return vec4(c, _c0.a);`
+},
+{
+  name: 'prev',
+  type: 'src',
+  inputs: [
+
+  ],
+  glsl:
+`   return texture2D(prevBuffer, fract(_st));`
+},
+{
+  name: 'sum',
+  type: 'color',
+  inputs: [
+    {
+      type: 'vec4',
+      name: 'scale',
+      default: 1,
+    }
+  ],
+  glsl:
+`   vec4 v = _c0 * s;
+   return v.r + v.g + v.b + v.a;
+   }
+   float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is not overloaded
+   vec2 v = _st.xy * s.xy;
+   return v.x + v.y;`
+},
+{
+  name: 'r',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   return vec4(_c0.r * scale + offset);`
+},
+{
+  name: 'g',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   return vec4(_c0.g * scale + offset);`
+},
+{
+  name: 'b',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   return vec4(_c0.b * scale + offset);`
+},
+{
+  name: 'a',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+{
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   return vec4(_c0.a * scale + offset);`
 }
+]
 
 },{}],18:[function(require,module,exports){
 // functions that are only used within other functions
@@ -3633,7 +3607,6 @@ var map = (num, in_min, in_max, out_min, out_max) => {
 module.exports = {
   init: () => {
 
-
     Array.prototype.fast = function(speed = 1) {
       this._speed = speed
       return this
@@ -3644,14 +3617,22 @@ module.exports = {
       return this
     }
 
-    Array.prototype.ease = function(ease) {
-      if(ease && easing[ease]) {
+    Array.prototype.ease = function(ease = 'linear') {
+      if (typeof ease == 'function') {
+        this._smooth = 1
+        this._ease = ease
+      }
+      else if (easing[ease]){
         this._smooth = 1
         this._ease = easing[ease]
       }
       return this
     }
 
+    Array.prototype.offset = function(offset = 0.5) {
+      this._offset = offset%1.0
+      return this
+    }
 
     // Array.prototype.bounce = function() {
     //   this.modifiers.bounce = true
@@ -3668,20 +3649,23 @@ module.exports = {
       return newArr
     }
   },
+
   getValue: (arr = []) => ({time, bpm}) =>{
     let speed = arr._speed ? arr._speed : 1
     let smooth = arr._smooth ? arr._smooth : 0
-    let ease = arr._ease ? arr._ease : easing['linear']
-    // console.log(smooth)
-    let index = time * speed * (bpm / 60)
+    let index = time * speed * (bpm / 60) + (arr._offset || 0)
 
-    let currValue = arr[Math.floor(index % (arr.length))]
-    let nextValue = arr[Math.floor((index + 1) % (arr.length))]
-
-    let _t = (index%1)*smooth
-    let t = ease(_t)
-    //  console.log(arr, Math.floor(index/newArr.length), index/newArr.length)
-    return nextValue*t + currValue*(1-t)
+    if (smooth!==0) {
+      let ease = arr._ease ? arr._ease : easing['linear']
+      let _index = index - (smooth / 2)
+      let currValue = arr[Math.floor(_index % (arr.length))]
+      let nextValue = arr[Math.floor((_index + 1) % (arr.length))]
+      let t = Math.min((_index%1)/smooth,1)
+      return ease(t) * (nextValue - currValue) + currValue
+    }
+    else {
+      return arr[Math.floor(index % (arr.length))]
+    }
   }
 }
 
@@ -3931,7 +3915,9 @@ module.exports = {
   // decelerating to zero velocity
   easeOutQuint: function (t) { return 1+(--t)*t*t*t*t },
   // acceleration until halfway, then deceleration
-  easeInOutQuint: function (t) { return t<.5 ? 16*t*t*t*t*t : 1+16*(--t)*t*t*t*t }
+  easeInOutQuint: function (t) { return t<.5 ? 16*t*t*t*t*t : 1+16*(--t)*t*t*t*t },
+  // sin shape
+  sin: function (t) { return (1 + Math.sin(Math.PI*t-Math.PI/2))/2 }
 }
 
 },{}],23:[function(require,module,exports){
@@ -4117,7 +4103,7 @@ var Output = function (opts) {
   ])
 
   this.draw = () => {}
-  this.clear()
+  this.init()
   this.pingPongIndex = 0
 
   // for each output, create two fbos for pingponging
@@ -4139,6 +4125,7 @@ Output.prototype.resize = function(width, height) {
   this.fbos.forEach((fbo) => {
     fbo.resize(width, height)
   })
+//  console.log(this)
 }
 
 
@@ -4151,7 +4138,8 @@ Output.prototype.getTexture = function () {
   return this.fbos[index]
 }
 
-Output.prototype.clear = function () {
+Output.prototype.init = function () {
+//  console.log('clearing')
   this.transformIndex = 0
   this.fragHeader = `
   precision ${this.precision} float;
@@ -4220,6 +4208,7 @@ Output.prototype.render = function (passes) {
 
 
 Output.prototype.tick = function (props) {
+//  console.log(props)
   this.draw(props)
 }
 
