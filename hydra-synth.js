@@ -48,7 +48,7 @@ class HydraRenderer {
       speed: 1,
       mouse: Mouse,
       render: this._render.bind(this),
-      resize: this.resize.bind(this),
+      setResolution: this.setResolution.bind(this),
       update: (dt) => {},// user defined update function
       hush: this.hush.bind(this)
     }
@@ -56,7 +56,7 @@ class HydraRenderer {
     this.timeSinceLastUpdate = 0
     this._time = 0 // for internal use, only to use for deciding when to render frames
 
-    window.synth = this.synth
+  //  window.synth = this.synth
 
     // only allow valid precision options
     let precisionOptions = ['lowp','mediump','highp']
@@ -120,7 +120,7 @@ class HydraRenderer {
     })
   }
 
-  resize(width, height) {
+  setResolution(width, height) {
   //  console.log(width, height)
     this.canvas.width = width
     this.canvas.height = height
@@ -132,6 +132,7 @@ class HydraRenderer {
     this.s.forEach((source) => {
       source.resize(width, height)
     })
+     console.log(this.canvas.width)
   }
 
   canvasToImage (callback) {
@@ -385,7 +386,7 @@ class HydraRenderer {
       for (let i = 0; i < this.s.length; i++) {
         this.s[i].tick(this.synth.time)
       }
-
+    //  console.log(this.canvas.width, this.canvas.height)
       for (let i = 0; i < this.o.length; i++) {
         this.o[i].tick({
           time: this.synth.time,

@@ -23,8 +23,8 @@ class EvalSandbox {
   set(property, value) {
     if(this.makeGlobal) {
       window[property] = value
-      this.parent[property] = value
     }
+    this.parent[property] = value
   }
 
   tick() {
@@ -33,6 +33,8 @@ class EvalSandbox {
         this.parent[property] = window[property]
       })
       //  this.parent.speed = window.speed
+    } else {
+
     }
   }
 

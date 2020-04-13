@@ -62,6 +62,8 @@ function generateGlsl (transforms, shaderParams) {
         (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
         (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
       fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`
+
+
     }
   })
 
@@ -132,6 +134,7 @@ function formatArguments (transform, startIndex) {
     //  generateGlsl: null // function for creating glsl
     }
 
+    if(typedArg.type === 'float') typedArg.value = ensure_decimal_dot(input.default)
     if (input.type.startsWith('vec')) {
       try {
         typedArg.vecLen = Number.parseInt(input.type.substr(3))
@@ -196,7 +199,7 @@ function formatArguments (transform, startIndex) {
     } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
       typedArg.isUniform = false
       typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
-    } else if (input.type === 'texture') {
+    } else if (input.type === 'sampler2D') {
       // typedArg.tex = typedArg.value
       var x = typedArg.value
       typedArg.value = () => (x.getTexture())

@@ -1,7 +1,19 @@
 # Changelog
 
+## [1.1.8] - 2020-04-13
+### Changed
+- updated format for glsl-functions
+
 ## [1.1.7] - 2020-04-10
+### Added
  - added smooth(), ease(), and fit() to array utils
+
+### Changed
+ - changed resize() to setResolution()
+
+### Bugs / to do
+ - setResolution() not scaling correctly. check whether textures are being resized
+
 ## [1.1.6] - 2020-04-03
 ### Fixed
  - error in eval-sandbox
@@ -12,9 +24,11 @@
  - when canvas is stretched, uses pixelated rendering rather than blurry
  - stats.fps shows current fps (read-only)
  - update function called each time a new frame is rendered. can be used like
- ```update = (dt) => {
+ ```
+update = (dt) => {
       // something i want to do
-    }```
+}
+```
 
 ### Fixed
  - invalid function does not crash editor

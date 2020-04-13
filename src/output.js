@@ -32,6 +32,7 @@ Output.prototype.resize = function(width, height) {
   this.fbos.forEach((fbo) => {
     fbo.resize(width, height)
   })
+//  console.log(this)
 }
 
 
@@ -45,6 +46,7 @@ Output.prototype.getTexture = function () {
 }
 
 Output.prototype.clear = function () {
+//  console.log('clearing')
   this.transformIndex = 0
   this.fragHeader = `
   precision ${this.precision} float;
@@ -113,6 +115,7 @@ Output.prototype.render = function (passes) {
 
 
 Output.prototype.tick = function (props) {
+//  console.log(props)
   this.draw(props)
 }
 

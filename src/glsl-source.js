@@ -1,7 +1,7 @@
 const generateGlsl = require('./glsl-utils.js').generateGlsl
 const formatArguments = require('./glsl-utils.js').formatArguments
 
-const glslTransforms = require('./glsl/composable-glsl-functions.js')
+// const glslTransforms = require('./glsl/composable-glsl-functions.js')
 const utilityGlsl = require('./glsl/utility-functions.js')
 
 var GlslSource = function (obj) {
@@ -39,17 +39,18 @@ GlslSource.prototype.glsl = function () {
 //  console.log('output', output)
   this.transforms.forEach((transform) => {
     if(transform.transform.type === 'renderpass'){
-      if (transforms.length > 0) passes.push(this.compile(transforms, output))
-      transforms = []
-      var uniforms = {}
-      const inputs = formatArguments(transform, -1)
-      inputs.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
-
-      passes.push({
-        frag: transform.transform.frag,
-        uniforms: Object.assign({}, self.defaultUniforms, uniforms)
-      })
-      transforms.push({name: 'prev', transform:  glslTransforms['prev'], synth: this.synth})
+      // if (transforms.length > 0) passes.push(this.compile(transforms, output))
+      // transforms = []
+      // var uniforms = {}
+      // const inputs = formatArguments(transform, -1)
+      // inputs.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
+      //
+      // passes.push({
+      //   frag: transform.transform.frag,
+      //   uniforms: Object.assign({}, self.defaultUniforms, uniforms)
+      // })
+      // transforms.push({name: 'prev', transform:  glslTransforms['prev'], synth: this.synth})
+      console.warn('no support for renderpass')
     } else {
       transforms.push(transform)
     }
