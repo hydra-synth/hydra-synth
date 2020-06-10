@@ -1,8 +1,9 @@
 //const transforms = require('./glsl-transforms.js')
 
-var Output = function (opts) {
-  this.regl = opts.regl
-  this.precision = opts.precision
+var Output = function ({ regl, precision, label = "", width, height}) {
+  this.regl = regl
+  this.precision = precision
+  this.label = label
   this.positionBuffer = this.regl.buffer([
     [-2, 0],
     [0, -2],
@@ -17,8 +18,8 @@ var Output = function (opts) {
   this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
     color: this.regl.texture({
       mag: 'nearest',
-      width: opts.width,
-      height: opts.height,
+      width: width,
+      height: height,
       format: 'rgba'
     }),
     depthStencil: false

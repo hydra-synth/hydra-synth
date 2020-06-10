@@ -2,17 +2,18 @@ const Webcam = require('./lib/webcam.js')
 const Screen = require('./lib/screenmedia.js')
 
 class HydraSource {
-  constructor (opts) {
-    this.regl = opts.regl
+  constructor ({ regl, width, height, pb, label = ""}) {
+    this.label = label
+    this.regl = regl
     this.src = null
     this.dynamic = true
-    this.width = opts.width
-    this.height = opts.height
+    this.width = width
+    this.height = height
     this.tex = this.regl.texture({
-      //  shape: [opts.width, opts.height]
+      //  shape: [width, height]
       shape: [ 1, 1 ]
     })
-    this.pb = opts.pb
+    this.pb = pb
   }
 
   init (opts) {

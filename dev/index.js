@@ -16,7 +16,7 @@ function init () {
 
   // shape().modulateScrollX(osc()).out()
 
-  exampleImage()
+  exampleGetGLSL()
   // window.update = (dt) => draw.draw(time)
 
   // shape(3, f0(), 0.5).out()
@@ -158,6 +158,10 @@ function exampleAddFunction(hydra) {
 function exampleScreen() {
   s0.initScreen()
   //src(s0).out()
+}
+
+function exampleGetGLSL() {
+  src(s0).blend(o0).glsl()
 }
 
 function exampleCustomCanvas() {

@@ -316,7 +316,8 @@ class HydraRenderer {
         regl: this.regl,
         width: this.width,
         height: this.height,
-        precision: this.precision
+        precision: this.precision,
+        label: `o${index}`
       })
     //  o.render()
       o.id = index
@@ -331,12 +332,12 @@ class HydraRenderer {
   _initSources (numSources) {
     this.s = []
     for(var i = 0; i < numSources; i++) {
-      this.createSource()
+      this.createSource(i)
     }
   }
 
-  createSource () {
-    let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height})
+  createSource (i) {
+    let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height, label: `s${i}`})
     this.synth['s' + this.s.length] = s
     this.s.push(s)
     return s

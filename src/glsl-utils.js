@@ -120,8 +120,9 @@ const ensure_decimal_dot = (val) => {
   return val
 }
 
+// @todo: edit typed arg to use 'label' field as name
 function formatArguments (transform, startIndex) {
-//  console.log('processing args', transform, startIndex)
+  console.log('processing args', transform, startIndex)
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
   return defaultArgs.map( (input, index) => {
@@ -129,7 +130,7 @@ function formatArguments (transform, startIndex) {
       value: input.default,
       type: input.type, //
       isUniform: false,
-      name: input.name,
+      name: input.name + startIndex,
       vecLen: 0
     //  generateGlsl: null // function for creating glsl
     }
@@ -146,6 +147,10 @@ function formatArguments (transform, startIndex) {
     // if user has input something for this argument
     if(userArgs.length > index) {
       typedArg.value = userArgs[index]
+      console.log(userArgs[index])
+
+
+      if(typedArg.value.label) typedArg.name = typedArg.value.label
       // do something if a composite or transform
 
       if (typeof userArgs[index] === 'function') {
@@ -175,13 +180,11 @@ function formatArguments (transform, startIndex) {
       }
     }
 
+
     if(startIndex< 0){
     } else {
     if (typedArg.value && typedArg.value.transforms) {
       const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
-
-
-
       if (final_transform.transform.glsl_return_type !== input.type) {
         const defaults = DEFAULT_CONVERSIONS[input.type]
         if (typeof defaults !== 'undefined') {
@@ -213,13 +216,18 @@ function formatArguments (transform, startIndex) {
       }
     }
 
-    // add tp uniform array if is a function that will pass in a different value on each render frame,
+    // add to uniform array if is a function that will pass in a different value on each render frame,
     // or a texture/ external source
 
-      if(typedArg.isUniform) {
-         typedArg.name += startIndex
-      //  shaderParams.uniforms.push(typedArg)
-      }
+      // if(typedArg.isUniform) {
+      //   console.log(typedArg)
+      //    if(typedArg.value.label){
+      //      typedArg.name = typedArg.value.label
+      //    } else {
+      //       typedArg.name += startIndex
+      //    }
+      // //  shaderParams.uniforms.push(typedArg)
+      // }
 }
     return typedArg
   })
