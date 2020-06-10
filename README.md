@@ -4,7 +4,7 @@ Video synth engine for [hydra](https://github.com/ojack/hydra).
 
 Currently experimental / in-progress.
 
-This is the main logic of hydra packaged as a javascript module, intended for use within javascript projects. If you are looking to get started with hydra quickly, visit the [web editor](https://hydra-editor.glitch.me) or the [main repo](https://github.com/ojack/hydra). To use hydra within atom, follow the instructions at https://github.com/ojack/hydra-examples.
+This is the main logic of hydra packaged as a javascript module, intended for use within javascript projects. If you are looking to get started with hydra quickly, visit the [web editor](https://hydra.ojack.xyz) or the [main repo](https://github.com/ojack/hydra). To use hydra within atom, follow the instructions at https://github.com/ojack/hydra-examples.
 
 ### To install:
 
@@ -88,6 +88,19 @@ webcam kaleidoscope:
 ```
 s0.initCam() //initialize a webcam in source buffer s0
 src(s0).kaleid(4).out() //render the webcam to a kaleidoscope
+```
+
+use a video as a source:
+```
+s0.initVideo("https://media.giphy.com/media/eLjKthx6c1ZvJ3lJeJ/giphy.mp4")
+src(s0).out()
+```
+
+
+use an image as a source:
+```
+s0.initImage("https://upload.wikimedia.org/wikipedia/commons/2/25/Hydra-Foto.jpg")
+src(s0).out()
 ```
 
 By default, the environment contains four separate output buffers that can each render different graphics.  The outputs are accessed by the variables o0, o1, o2, and o3.

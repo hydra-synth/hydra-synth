@@ -1,5 +1,11 @@
 # Changelog
+## [1.3.0] - 2020-06-10
+### Changed
+- wrapping for scroll, scrollX, modulateScroll functions
 
+### Added
+- initVideo(url)
+- initImage(url)
 
 ## [1.1.8] - 2020-04-13
 ### Changed

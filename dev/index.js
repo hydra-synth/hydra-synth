@@ -14,8 +14,9 @@ function init () {
 
   shape().scrollY(0, 0.2, 0.1, 0.1).out()
 
-  shape().modulateScrollX(osc()).out()
+  // shape().modulateScrollX(osc()).out()
 
+  exampleImage()
   // window.update = (dt) => draw.draw(time)
 
   // shape(3, f0(), 0.5).out()
@@ -70,6 +71,11 @@ function exampleEasingFunctions() {
   //  // shape([4, 3, 2].smooth()).out()
 }
 
+function exampleVideo() {
+  s0.initVideo("https://media.giphy.com/media/eLjKthx6c1ZvJ3lJeJ/giphy.mp4")
+  src(s0).out()
+}
+
 function exampleNonGlobal() {
     var hydra = new Hydra({ makeGlobal: false })
     hydra.synth.fps = 10
@@ -108,6 +114,11 @@ function exampleExtendTransforms() {
     })
     myOsc(10, 0.2, 0.8).out()
 
+}
+
+function exampleImage() {
+  s0.initImage("https://upload.wikimedia.org/wikipedia/commons/2/25/Hydra-Foto.jpg")
+ src(s0).out()
 }
 
 function exampleAddFunction(hydra) {
