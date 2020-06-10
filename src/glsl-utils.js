@@ -21,6 +21,11 @@ module.exports = {
 
     var gen = generateGlsl(transforms, shaderParams)('st')
     shaderParams.fragColor = gen
+    // remove uniforms with duplicate names
+    let uniforms = {}
+    shaderParams.uniforms.forEach((uniform) => uniforms[uniform.name] = uniform)
+    shaderParams.uniforms = Object.values(uniforms)
+    console.log('shader params', shaderParams)
     return shaderParams
   },
   formatArguments: formatArguments
