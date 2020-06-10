@@ -7,14 +7,24 @@ function init () {
 ///  exampleNonGlobal()
 
 //  exampleExtendTransforms()
+
+
  var hydra = new Hydra()
   window.hydra = hydra
+
+  shape().scrollY(0, 0.2, 0.1, 0.1).out()
+
+  shape().modulateScrollX(osc()).out()
+
+  // window.update = (dt) => draw.draw(time)
+
+  // shape(3, f0(), 0.5).out()
 //
 //   exampleAddFunction(hydra)
 // //  exampleScreen()
 //
 // exampleCustomCanvas()
- exampleSmoothing()
+// exampleSmoothing()
   ///var generator = new shader()
 
 

@@ -1,5 +1,5 @@
 /*
-Format for adding functions to hydra. For each entry in this file, hydra automatically generates a glsl function and javascript function with the same name. You can also add functions dynamically using setFunction(object).
+Format for adding functions to hydra. For each entry in this file, hydra automatically generates a glsl function and javascript function with the same name. You can also ass functions dynamically using setFunction(object).
 
 {
   name: 'osc', // name that will be used to access function in js as well as in glsl
@@ -593,7 +593,7 @@ module.exports = [
 `
    _st.x += scrollX + time*speedX;
    _st.y += scrollY + time*speedY;
-   return _st;`
+   return fract(_st);`
 },
 {
   name: 'scrollX',
@@ -612,7 +612,7 @@ module.exports = [
   ],
   glsl:
 `   _st.x += scrollX + time*speed;
-   return _st;`
+   return fract(_st);`
 },
 {
   name: 'modulateScrollX',
@@ -631,7 +631,7 @@ module.exports = [
   ],
   glsl:
 `   _st.x += _c0.r*amount + time*speed;
-   return _st;`
+   return fract(_st);`
 },
 {
   name: 'scrollY',
@@ -650,7 +650,7 @@ module.exports = [
   ],
   glsl:
 `   _st.y += scrollY + time*speed;
-   return _st;`
+   return fract(_st);`
 },
 {
   name: 'modulateScrollY',
@@ -669,7 +669,7 @@ module.exports = [
   ],
   glsl:
 `   _st.y += _c0.r*scrollY + time*speed;
-   return _st;`
+   return fract(_st);`
 },
 {
   name: 'add',
