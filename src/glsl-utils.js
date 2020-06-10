@@ -25,7 +25,6 @@ module.exports = {
     let uniforms = {}
     shaderParams.uniforms.forEach((uniform) => uniforms[uniform.name] = uniform)
     shaderParams.uniforms = Object.values(uniforms)
-    console.log('shader params', shaderParams)
     return shaderParams
   },
   formatArguments: formatArguments
@@ -152,13 +151,15 @@ function formatArguments (transform, startIndex) {
     // if user has input something for this argument
     if(userArgs.length > index) {
       typedArg.value = userArgs[index]
-      console.log(userArgs[index])
+      // console.log(userArgs[index], userArgs[index].constructor.toString() )
 
-
-      if(typedArg.value.label) typedArg.name = typedArg.value.label
-      // do something if a composite or transform
+      if(userArgs[index].label) typedArg.name = userArgs[index].label
 
       if (typeof userArgs[index] === 'function') {
+        console.log('name is', userArgs[index].name)
+
+        // if function is not anonymous, set uniform name to variable name
+        if(userArgs[index].name && userArgs[index].name.length > 0 && userArgs[index].name !== "anonymous") typedArg.name = userArgs[index].name
         if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
           typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
         } else {
@@ -182,11 +183,30 @@ function formatArguments (transform, startIndex) {
           typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
           typedArg.isUniform = true
         }
+        // if passed in variable is an object that is not of type HydraSource or HydraOutput, it is an object with a custom name.
+        // Format for passed in objects: {
+        //   label: ""// required, must be unique,
+        //   value: // optional, static value or function to use
+        // }
       }
     }
 
+    // Note: for now, using function names as uniform names
+    // if passed in variable is an object that is not of type HydraSource or HydraOutput, it is an object with a custom name.
+    // Format for passed in objects: {
+    //   label: ""// required, must be unique,
+    //   value: // optional, static value or function to use
+    // }
+    // if (typeof userArgs[index] === 'object' && !userArgs[index].getTexture) {
+    //   if(userArgs[index].value){
+    //     if(typeof userArgs[index].value === 'function')
+    //   } = userArgs[index].value ? userArgs[index].value : () => input.default
+    //   typedArg.isUniform = true
+    // }
+  //  if(typedArg.value.label) typedArg.name = typedArg.value.label
+    // do something if a composite or transform
 
-    if(startIndex< 0){
+    if(startIndex < 0){
     } else {
     if (typedArg.value && typedArg.value.transforms) {
       const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
