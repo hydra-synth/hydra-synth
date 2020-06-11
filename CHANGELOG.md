@@ -1,4 +1,9 @@
 # Changelog
+
+## [1.3.1] - 2020-06-11
+- changed names of uniforms
+- uniform names are configurable using named functions
+
 ## [1.3.0] - 2020-06-10
 ### Changed
 - wrapping for scroll, scrollX, modulateScroll functions

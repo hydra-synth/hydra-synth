@@ -1,6 +1,16 @@
-var hydraShader = require('./../shader-generator.js')
+const HydraShaders = require('./../shader-generator.js')
+const shader = new HydraShaders()
 
-var shaderGenerator = new hydraShader()
+let x = shader.eval('osc().out()')
+console.log(x.frag, x.uniforms)
 
-var myShader = shaderGenerator.eval('osc(() => 4).out()')
-console.log(myShader)
+let y = shader.eval(`
+    let myFunc = () => 4
+    osc(myFunc).out()
+`)
+console.log(y.frag, y.uniforms)
+//
+// let z = shader.eval(`
+//     src(s0).out()
+// `)
+// console.log(z.frag, z.uniforms)

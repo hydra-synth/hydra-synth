@@ -155,11 +155,31 @@ function formatArguments (transform, startIndex) {
 
       if(userArgs[index].label) typedArg.name = userArgs[index].label
 
+      // Note: for now, using function names as uniform names
+      // if passed in variable is an object that is not of type HydraSource or HydraOutput, it is an object with a custom name.
+      // Format for passed in objects: {
+      //   label: ""// required, must be unique,
+      //   value: // optional, static value or function to use
+      // }
+      if (typeof userArgs[index] === 'object' && !userArgs[index].getTexture) {
+        typedArg.isUniform = true
+        if(userArgs[index].value){
+          if(typeof userArgs[index].value === 'function'){
+              typedArg.value = userArgs[index].value
+          } else {
+              typedArg.value = () => userArgs[index].value
+          }
+        } else {
+          typedArg.value = () => input.default
+        }
+          console.log('OBJECT', userArgs[index], typedArg)
+      }
+
       if (typeof userArgs[index] === 'function') {
         console.log('name is', userArgs[index].name)
 
         // if function is not anonymous, set uniform name to variable name
-        if(userArgs[index].name && userArgs[index].name.length > 0 && userArgs[index].name !== "anonymous") typedArg.name = userArgs[index].name
+        // if(userArgs[index].name && userArgs[index].name.length > 0 && userArgs[index].name !== "anonymous") typedArg.name = userArgs[index].name
         if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
           typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
         } else {
@@ -191,18 +211,7 @@ function formatArguments (transform, startIndex) {
       }
     }
 
-    // Note: for now, using function names as uniform names
-    // if passed in variable is an object that is not of type HydraSource or HydraOutput, it is an object with a custom name.
-    // Format for passed in objects: {
-    //   label: ""// required, must be unique,
-    //   value: // optional, static value or function to use
-    // }
-    // if (typeof userArgs[index] === 'object' && !userArgs[index].getTexture) {
-    //   if(userArgs[index].value){
-    //     if(typeof userArgs[index].value === 'function')
-    //   } = userArgs[index].value ? userArgs[index].value : () => input.default
-    //   typedArg.isUniform = true
-    // }
+  console.log('typedArg', typedArg)
   //  if(typedArg.value.label) typedArg.name = typedArg.value.label
     // do something if a composite or transform
 
@@ -227,13 +236,14 @@ function formatArguments (transform, startIndex) {
     } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
       typedArg.isUniform = false
       typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
-    } else if (input.type === 'sampler2D') {
+    } else if (typedArg.type === 'sampler2D') {
       // typedArg.tex = typedArg.value
       var x = typedArg.value
       typedArg.value = () => (x.getTexture())
       typedArg.isUniform = true
     } else {
       // if passing in a texture reference, when function asks for vec4, convert to vec4
+      console.log(typedArg, userArgs[index])
       if (typedArg.value.getTexture && input.type === 'vec4') {
         var x1 = typedArg.value
         typedArg.value = src(x1)

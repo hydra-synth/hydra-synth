@@ -1,22 +1,37 @@
 const Hydra = require('./../index.js')
 const loop = require('raf-loop')
 
-//const shader = require('./../index.js').shaderGenerator
+const HydraShaders = require('./../shader-generator.js')
 
 function init () {
 ///  exampleNonGlobal()
 
 //  exampleExtendTransforms()
+  // const shader = new HydraShaders()
 
-
+  // let x = shader.eval('osc().out()')
+  // console.log(x.frag, x.uniforms)
+  //
+  // let y = shader.eval(`
+  //     let myFunc = () => 4
+  //     osc(myFunc).out()
+  // `)
+  // console.log(y.frag, y.uniforms)
+  //
+  // let z = shader.eval(`
+  //     src(s0).out()
+  // `)
+  // console.log(z.frag, z.uniforms)
  var hydra = new Hydra()
-  window.hydra = hydra
+//  window.hydra = hydra
 
   shape().scrollY(0, 0.2, 0.1, 0.1).out()
 
+
+
   // shape().modulateScrollX(osc()).out()
 
-  exampleGetGLSL()
+//  exampleGetGLSL()
   // window.update = (dt) => draw.draw(time)
 
   // shape(3, f0(), 0.5).out()
