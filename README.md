@@ -182,7 +182,7 @@ All of the available functions for transforming coordinates and color, as well a
 #### Desktop capture
 To use screen capture or a browser tab as an input texture, you must first install the chrome extension for screensharing, and restart chrome. Desktop capture can be useful for inputing graphics from another application, or a video or website in another browser tab. It can also be used to create interesting feedback effects.
 
-To install, go to http://chrome://extensions/
+To install, go to [chrome://extensions/](chrome://extensions/)
 Click "Load unpacked extension", and select the "extensions" folder in "screen-capture-extension" in this repo. Restart chrome. The extension should work from now on without needing to reinstall.
 
 select a screen tab to use as input texture:
@@ -193,5 +193,5 @@ s0.initScreen()
 render screen tab:
 ```
 s0.initScreen()
-o0.src(s0)
+src(s0).out(o0)
 ```
