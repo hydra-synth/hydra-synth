@@ -263,7 +263,7 @@ module.exports = [
   glsl:
 `   vec2 xy = _st - vec2(0.5);
    float ang = angle + speed *time;
-   xy = mat2(cos(angle),-sin(ang), sin(ang),cos(ang))*xy;
+   xy = mat2(cos(ang),-sin(ang), sin(ang),cos(ang))*xy;
    xy += 0.5;
    return xy;`
 },
