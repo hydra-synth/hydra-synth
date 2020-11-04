@@ -9,6 +9,7 @@ var GlslSource = function (obj) {
   this.transforms.push(obj)
   this.defaultOutput = obj.defaultOutput
   this.synth = obj.synth
+  this.type = 'GlslSource'
   this.defaultUniforms = obj.defaultUniforms
   return this
 }

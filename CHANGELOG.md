@@ -1,8 +1,12 @@
 # Changelog
+## [1.3.2] - 2020-06-11
+### Fixed
+- error with 'combine' functions
+- 'undefined' warning at beginning
 
 ## [1.3.1] - 2020-06-11
 - changed names of uniforms
-- uniform names are configurable using named functions
+- uniform names are configurable using named functions (WIP)
 
 ## [1.3.0] - 2020-06-10
 ### Changed
