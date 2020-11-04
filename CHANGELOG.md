@@ -1,4 +1,5 @@
 # Changelog
+<<<<<<< HEAD
 
 ## [1.3.1] - 2020-06-11
 - changed names of uniforms
@@ -11,6 +12,12 @@
 ### Added
 - initVideo(url)
 - initImage(url)
+=======
+## [1.2.2] - 2020-11-04
+### Fixed
+- Typo on rotate function
+- update for setResolution()
+>>>>>>> 58888d7229397569c8150f4f63bdca651ea79d20
 
 ## [1.1.8] - 2020-04-13
 ### Changed

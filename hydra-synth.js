@@ -135,6 +135,7 @@ class HydraRenderer {
     this.s.forEach((source) => {
       source.resize(width, height)
     })
+    this.regl._refresh()
      console.log(this.canvas.width)
   }
 
