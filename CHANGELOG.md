@@ -1,12 +1,13 @@
 # Changelog
-## [1.3.2] - 2020-06-11
-### Fixed
-- error with 'combine' functions
-- 'undefined' warning at beginning
 
-## [1.3.1] - 2020-06-11
-- changed names of uniforms
-- uniform names are configurable using named functions (WIP)
+## [1.3.2] - 2020-11-04
+### Fixed
+- Typo on rotate function
+- update for setResolution()
+- warning of undefined type
+
+### Changed
+- video default to muted
 
 ## [1.3.0] - 2020-06-10
 ### Changed
@@ -15,11 +16,6 @@
 ### Added
 - initVideo(url)
 - initImage(url)
-
-## [1.2.2] - 2020-11-04
-### Fixed
-- Typo on rotate function
-- update for setResolution()
 
 ## [1.1.8] - 2020-04-13
 ### Changed

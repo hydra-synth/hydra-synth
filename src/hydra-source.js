@@ -41,6 +41,7 @@ class HydraSource {
     vid.crossOrigin = 'anonymous'
     vid.autoplay = true
     vid.loop = true
+    vid.muted = true // mute in order to load without user interaction
     vid.addEventListener('canplay', () => {
       this.src = vid
       vid.play()
