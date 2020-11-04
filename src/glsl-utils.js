@@ -126,7 +126,7 @@ const ensure_decimal_dot = (val) => {
 
 // @todo: edit typed arg to use 'label' field as name
 function formatArguments (transform, startIndex) {
-  console.log('processing args', transform, startIndex)
+//  console.log('processing args', transform, startIndex)
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
   return defaultArgs.map( (input, index) => {
@@ -172,11 +172,11 @@ function formatArguments (transform, startIndex) {
         } else {
           typedArg.value = () => input.default
         }
-          console.log('OBJECT', userArgs[index], typedArg)
+        //  console.log('OBJECT', userArgs[index], typedArg)
       }
 
       if (typeof userArgs[index] === 'function') {
-        console.log('name is', userArgs[index].name)
+      //  console.log('name is', userArgs[index].name)
 
         // if function is not anonymous, set uniform name to variable name
         // if(userArgs[index].name && userArgs[index].name.length > 0 && userArgs[index].name !== "anonymous") typedArg.name = userArgs[index].name
@@ -211,7 +211,7 @@ function formatArguments (transform, startIndex) {
       }
     }
 
-  console.log('typedArg', typedArg)
+//  console.log('typedArg', typedArg)
   //  if(typedArg.value.label) typedArg.name = typedArg.value.label
     // do something if a composite or transform
 
@@ -243,7 +243,7 @@ function formatArguments (transform, startIndex) {
       typedArg.isUniform = true
     } else {
       // if passing in a texture reference, when function asks for vec4, convert to vec4
-      console.log(typedArg, userArgs[index])
+    //  console.log(typedArg, userArgs[index])
       if (typedArg.value.getTexture && input.type === 'vec4') {
         var x1 = typedArg.value
         typedArg.value = src(x1)

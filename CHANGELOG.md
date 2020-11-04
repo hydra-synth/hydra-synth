@@ -12,6 +12,11 @@
 - initVideo(url)
 - initImage(url)
 
+## [1.2.2] - 2020-11-04
+### Fixed
+- Typo on rotate function
+- update for setResolution()
+
 ## [1.1.8] - 2020-04-13
 ### Changed
 - updated format for glsl-functions
