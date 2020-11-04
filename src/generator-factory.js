@@ -29,40 +29,18 @@ class GeneratorFactory {
     })()
 
     let functions = glslTransforms
-    // const addTransforms = (transforms) =>
-    //   Object.entries(transforms).forEach(([method, transform]) => {
-    //     functions[method] = transform
-    //   })
 
-    // const addTransforms =
-    //
-    // addTransforms(glslTransforms)
-    // //addTransforms(renderpassFunctions)
-    //
-    // if (typeof this.extendTransforms === 'function') {
-    //   functions = this.extendTransforms(functions)
-    // } else
+    // add user definied transforms
     if (Array.isArray(this.extendTransforms)) {
       functions.concat(this.extendTransforms)
-    } else if (typeof this.extendTransforms === 'object') {
+    } else if (typeof this.extendTransforms === 'object' && this.extendTransforms.type) {
       functions.push(this.extendTransforms)
     }
-
-  //  console.log(functions)
-    //
-    // Object.entries(functions).forEach(([method, transform]) => {
-    //   if (typeof transform.glsl_return_type === 'undefined' && transform.glsl) {
-    //     transform.glsl_return_type = transform.glsl.replace(new RegExp(`^(?:[\\s\\S]*\\W)?(\\S+)\\s+${method}\\s*[(][\\s\\S]*`, 'ugm'), '$1')
-    //   }
-    //
-    //   functions[method] = this._addMethod(method, transform)
-    // })
 
     return functions.map((transform) => this.setFunction(transform))
  }
 
  _addMethod (method, transform) {
-//   console.log('adding', method, transform)
     this.glslTransforms[method] = transform
     if (transform.type === 'src') {
       const func = (...args) => new this.sourceClass({
@@ -87,12 +65,9 @@ class GeneratorFactory {
 
   setFunction(obj) {
     var processedGlsl = processGlsl(obj)
-  //  console.log(processedGlsl)
     if(processedGlsl) this._addMethod(obj.name, processedGlsl)
   }
 }
-
-
 
 const typeLookup = {
   'src': {
@@ -170,11 +145,6 @@ function processGlsl(obj) {
       ${obj.glsl}
   }
 `
-  //  console.log('function', glslFunction)
-    // {
-    //   name: 'color',
-    //   type: 'vec4'
-    // },
 
   // add extra input to beginning for backward combatibility @todo update compiler so this is no longer necessary
     if(obj.type === 'combine' || obj.type === 'combineCoord') obj.inputs.unshift({
@@ -183,7 +153,7 @@ function processGlsl(obj) {
       })
     return Object.assign({}, obj, { glsl: glslFunction})
   } else {
-    console.warn(`type ${obj.type} not recognized`)
+    console.warn(`type ${obj.type} not recognized`, obj)
   }
 
 }

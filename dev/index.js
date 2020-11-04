@@ -27,7 +27,7 @@ function init () {
 
   shape().scrollY(0, 0.2, 0.1, 0.1).out()
 
-
+  exampleVideo()
 
   // shape().modulateScrollX(osc()).out()
 
@@ -72,6 +72,11 @@ function init () {
  //  }).start()
 
 //osc(5).out()
+}
+
+function exampleVideo() {
+  s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4")
+  src(s0).out()
 }
 
 function exampleEasingFunctions() {

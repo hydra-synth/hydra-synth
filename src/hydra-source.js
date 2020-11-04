@@ -44,7 +44,6 @@ class HydraSource {
     vid.addEventListener('canplay', () => {
       this.src = vid
       vid.play()
-      document.body.appendChild(vid)
       this.tex = this.regl.texture(this.src)
       this.dynamic = true
     })

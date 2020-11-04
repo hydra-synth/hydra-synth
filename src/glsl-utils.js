@@ -39,11 +39,12 @@ function generateGlsl (transforms, shaderParams) {
   // var glslFunctions = []
   transforms.forEach((transform) => {
     var inputs = formatArguments(transform, shaderParams.uniforms.length)
+  //  console.log('inputs', inputs, transform)
     inputs.forEach((input) => {
       if(input.isUniform) shaderParams.uniforms.push(input)
     })
 
-   // add new glsl function to running list of functions
+    // add new glsl function to running list of functions
     if(!contains(transform, shaderParams.glslFunctions)) shaderParams.glslFunctions.push(transform)
 
     // current function for generating frag color shader code
@@ -57,20 +58,21 @@ function generateGlsl (transforms, shaderParams) {
     } else if (transform.transform.type === 'combine') {
       // combining two generated shader strings (i.e. for blend, mult, add funtions)
       var f1 = inputs[0].value && inputs[0].value.transforms ?
-        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
-        (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
+      (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+      (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
       fragColor = (uv) => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`
     } else if (transform.transform.type === 'combineCoord') {
       // combining two generated shader strings (i.e. for modulate functions)
       var f1 = inputs[0].value && inputs[0].value.transforms ?
-        (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
-        (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
+      (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+      (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
       fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`
 
 
     }
   })
-
+//  console.log(fragColor)
+  //  break;
   return fragColor
 }
 
@@ -124,9 +126,8 @@ const ensure_decimal_dot = (val) => {
   return val
 }
 
-// @todo: edit typed arg to use 'label' field as name
 function formatArguments (transform, startIndex) {
-  console.log('processing args', transform, startIndex)
+  //  console.log('processing args', transform, startIndex)
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
   return defaultArgs.map( (input, index) => {
@@ -134,9 +135,9 @@ function formatArguments (transform, startIndex) {
       value: input.default,
       type: input.type, //
       isUniform: false,
-      name: input.name + startIndex,
+      name: input.name,
       vecLen: 0
-    //  generateGlsl: null // function for creating glsl
+      //  generateGlsl: null // function for creating glsl
     }
 
     if(typedArg.type === 'float') typedArg.value = ensure_decimal_dot(input.default)
@@ -151,46 +152,20 @@ function formatArguments (transform, startIndex) {
     // if user has input something for this argument
     if(userArgs.length > index) {
       typedArg.value = userArgs[index]
-      // console.log(userArgs[index], userArgs[index].constructor.toString() )
-
-      if(userArgs[index].label) typedArg.name = userArgs[index].label
-
-      // Note: for now, using function names as uniform names
-      // if passed in variable is an object that is not of type HydraSource or HydraOutput, it is an object with a custom name.
-      // Format for passed in objects: {
-      //   label: ""// required, must be unique,
-      //   value: // optional, static value or function to use
-      // }
-      if (typeof userArgs[index] === 'object' && !userArgs[index].getTexture) {
-        typedArg.isUniform = true
-        if(userArgs[index].value){
-          if(typeof userArgs[index].value === 'function'){
-              typedArg.value = userArgs[index].value
-          } else {
-              typedArg.value = () => userArgs[index].value
-          }
-        } else {
-          typedArg.value = () => input.default
-        }
-          console.log('OBJECT', userArgs[index], typedArg)
-      }
+      // do something if a composite or transform
 
       if (typeof userArgs[index] === 'function') {
-        console.log('name is', userArgs[index].name)
-
-        // if function is not anonymous, set uniform name to variable name
-        // if(userArgs[index].name && userArgs[index].name.length > 0 && userArgs[index].name !== "anonymous") typedArg.name = userArgs[index].name
         if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
           typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
         } else {
           typedArg.value = (context, props, batchId) => {
-           try {
-             return userArgs[index](props)
-           } catch (e) {
-             console.log('ERROR', e)
-             return input.default
-           }
-         }
+            try {
+              return userArgs[index](props)
+            } catch (e) {
+              console.log('ERROR', e)
+              return input.default
+            }
+          }
         }
 
         typedArg.isUniform = true
@@ -199,71 +174,57 @@ function formatArguments (transform, startIndex) {
           typedArg.isUniform = true
           typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)
         } else {
-      //  console.log("is Array")
+          //  console.log("is Array")
           typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
           typedArg.isUniform = true
         }
-        // if passed in variable is an object that is not of type HydraSource or HydraOutput, it is an object with a custom name.
-        // Format for passed in objects: {
-        //   label: ""// required, must be unique,
-        //   value: // optional, static value or function to use
-        // }
       }
     }
 
-  console.log('typedArg', typedArg)
-  //  if(typedArg.value.label) typedArg.name = typedArg.value.label
-    // do something if a composite or transform
-
-    if(startIndex < 0){
+    if(startIndex< 0){
     } else {
-    if (typedArg.value && typedArg.value.transforms) {
-      const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
-      if (final_transform.transform.glsl_return_type !== input.type) {
-        const defaults = DEFAULT_CONVERSIONS[input.type]
-        if (typeof defaults !== 'undefined') {
-          const default_def = defaults[final_transform.transform.glsl_return_type]
-          if (typeof default_def !== 'undefined') {
-            const {name, args} = default_def
-            typedArg.value = typedArg.value[name](...args)
+      if (typedArg.value && typedArg.value.transforms) {
+        const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
+
+        if (final_transform.transform.glsl_return_type !== input.type) {
+          const defaults = DEFAULT_CONVERSIONS[input.type]
+          if (typeof defaults !== 'undefined') {
+            const default_def = defaults[final_transform.transform.glsl_return_type]
+            if (typeof default_def !== 'undefined') {
+              const {name, args} = default_def
+              typedArg.value = typedArg.value[name](...args)
+            }
           }
+        }
+
+        typedArg.isUniform = false
+      } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
+        typedArg.value = ensure_decimal_dot(typedArg.value)
+      } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
+        typedArg.isUniform = false
+        typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
+      } else if (input.type === 'sampler2D') {
+        // typedArg.tex = typedArg.value
+        var x = typedArg.value
+        typedArg.value = () => (x.getTexture())
+        typedArg.isUniform = true
+      } else {
+        // if passing in a texture reference, when function asks for vec4, convert to vec4
+        if (typedArg.value.getTexture && input.type === 'vec4') {
+          var x1 = typedArg.value
+          typedArg.value = src(x1)
+          typedArg.isUniform = false
         }
       }
 
-      typedArg.isUniform = false
-    } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
-      typedArg.value = ensure_decimal_dot(typedArg.value)
-    } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
-      typedArg.isUniform = false
-      typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
-    } else if (typedArg.type === 'sampler2D') {
-      // typedArg.tex = typedArg.value
-      var x = typedArg.value
-      typedArg.value = () => (x.getTexture())
-      typedArg.isUniform = true
-    } else {
-      // if passing in a texture reference, when function asks for vec4, convert to vec4
-      console.log(typedArg, userArgs[index])
-      if (typedArg.value.getTexture && input.type === 'vec4') {
-        var x1 = typedArg.value
-        typedArg.value = src(x1)
-        typedArg.isUniform = false
+      // add tp uniform array if is a function that will pass in a different value on each render frame,
+      // or a texture/ external source
+
+      if(typedArg.isUniform) {
+        typedArg.name += startIndex
+        //  shaderParams.uniforms.push(typedArg)
       }
     }
-
-    // add to uniform array if is a function that will pass in a different value on each render frame,
-    // or a texture/ external source
-
-      // if(typedArg.isUniform) {
-      //   console.log(typedArg)
-      //    if(typedArg.value.label){
-      //      typedArg.name = typedArg.value.label
-      //    } else {
-      //       typedArg.name += startIndex
-      //    }
-      // //  shaderParams.uniforms.push(typedArg)
-      // }
-}
     return typedArg
   })
 }
