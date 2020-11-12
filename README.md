@@ -51,6 +51,8 @@ If `opts` is specified, the default options (shown below) will be overridden.
 
   numSources: 4, // number of source buffers to create initially
 
+  detectAudio = true,
+
   numOutputs: 4, // number of output buffers to use. Note: untested with numbers other than 4. render() method might behave unpredictably
 
   extendTransforms: [] // An array of transforms to be added to the synth, or an object representing a single transform

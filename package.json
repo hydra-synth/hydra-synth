@@ -6,6 +6,7 @@
   "scripts": {
     "test": "mocha",
     "dev": "budo ./dev/index.js --ssl --open --live --port 8000 --",
+    "dev-insecure": "budo ./dev/index.js --open --live --port 8000 --",
     "build-hydra": "browserify hydra-synth.js --standalone Hydra > dist/hydra-synth.js",
     "build-shader-generator": "browserify shader-generator.js --standalone HydraShaders > dist/hydra-shaders.js",
     "build": "npm run build-hydra && npm run build-shader-generator",
