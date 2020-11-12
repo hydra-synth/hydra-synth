@@ -22,7 +22,7 @@ function init () {
   //     src(s0).out()
   // `)
   // console.log(z.frag, z.uniforms)
- var hydra = new Hydra()
+ var hydra = new Hydra({detectAudio:false})
 //  window.hydra = hydra
 
   shape().scrollY(0, 0.2, 0.1, 0.1).out()
@@ -92,7 +92,7 @@ function exampleEasingFunctions() {
 }
 
 function exampleVideo() {
-  s0.initVideo("https://media.giphy.com/media/eLjKthx6c1ZvJ3lJeJ/giphy.mp4")
+  s0.initVideo("https://media.giphy.com/media/AS9LIFttYzkc0/giphy.mp4")
   src(s0).out()
 }
 

@@ -94,7 +94,7 @@ src(s0).kaleid(4).out() //render the webcam to a kaleidoscope
 
 use a video as a source:
 ```
-s0.initVideo("https://media.giphy.com/media/eLjKthx6c1ZvJ3lJeJ/giphy.mp4")
+s0.initVideo("https://media.giphy.com/media/AS9LIFttYzkc0/giphy.mp4")
 src(s0).out()
 ```
 

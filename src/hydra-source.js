@@ -42,7 +42,7 @@ class HydraSource {
     vid.autoplay = true
     vid.loop = true
     vid.muted = true // mute in order to load without user interaction
-    vid.addEventListener('canplay', () => {
+    const onload = vid.addEventListener('loadeddata', () => {
       this.src = vid
       vid.play()
       this.tex = this.regl.texture(this.src)
