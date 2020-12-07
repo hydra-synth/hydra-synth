@@ -436,9 +436,9 @@ module.exports = [
     }
   ],
   glsl:
-`   vec2 st = _st * vec2(repeatX, repeatY);
-   st.x += step(1., mod(st.y,2.0)) + _c0.r * offsetX;
-   st.y += step(1., mod(st.x,2.0)) + _c0.g * offsetY;
+`   vec2 st = _st * (vec2(repeatX, repeatY) * _c0.rg + vec2(offsetX, offsetY));
+   st.x += step(1., mod(st.y,2.0));
+   st.y += step(1., mod(st.x,2.0));
    return fract(st);`
 },
 {
@@ -478,9 +478,9 @@ module.exports = [
     }
   ],
   glsl:
-`   vec2 st = _st * vec2(reps, 1.0);
+`   vec2 st = _st * vec2(reps * _c0.r + offset, 1.0);
    //  float f =  mod(_st.y,2.0);
-   st.y += step(1., mod(st.x,2.0)) + _c0.r * offset;
+   st.y += step(1., mod(st.x,2.0));
    return fract(st);`
 },
 {
@@ -520,9 +520,9 @@ module.exports = [
     }
   ],
   glsl:
-`   vec2 st = _st * vec2(reps, 1.0);
+`   vec2 st = _st * vec2(1.0, reps * _c0.r + offset);
    //  float f =  mod(_st.y,2.0);
-   st.x += step(1., mod(st.y,2.0)) + _c0.r * offset;
+   st.x += step(1., mod(st.y,2.0));
    return fract(st);`
 },
 {
