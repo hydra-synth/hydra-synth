@@ -630,7 +630,7 @@ module.exports = [
     }
   ],
   glsl:
-`   _st.x += _c0.r*amount + time*speed;
+`   _st.x += _c0.r*scrollX + time*speed;
    return fract(_st);`
 },
 {
