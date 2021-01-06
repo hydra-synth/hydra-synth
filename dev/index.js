@@ -27,7 +27,7 @@ function init () {
 
   shape().scrollY(0, 0.2, 0.1, 0.1).out()
 
-  exampleVideo()
+  exampleSmoothstep()
 
   // shape().modulateScrollX(osc()).out()
 
@@ -89,6 +89,14 @@ function exampleEasingFunctions() {
   //  //
   //  // // array smoothing
   //  // shape([4, 3, 2].smooth()).out()
+}
+
+// fixing smoothstep issue so that 0 is not passed as a parameter
+function exampleSmoothstep() {
+  shape(4, 0.3, 0.01).out()
+  shape(4, 0.5, 0).out()
+  osc(89, 0.01, 1.8).luma(0.5, 0).out()
+  osc(89, 0.01, 1.8).thresh(0.5, 0).out()
 }
 
 function exampleVideo() {

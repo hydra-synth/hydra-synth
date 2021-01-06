@@ -1,4 +1,6 @@
 # Changelog
+## [1.3.5] - 2020-11-06
+- Fixed divide by 0 on smoothstep
 
 ## [1.3.2] - 2020-11-04
 ### Fixed

@@ -188,7 +188,7 @@ module.exports = [
    float a = atan(st.x,st.y)+3.1416;
    float r = (2.*3.1416)/sides;
    float d = cos(floor(.5+a/r)*r-a)*length(st);
-   return vec4(vec3(1.0-smoothstep(radius,radius + smoothing,d)), 1.0);`
+   return vec4(vec3(1.0-smoothstep(radius,radius + smoothing + 0.0000001,d)), 1.0);`
 },
 {
   name: 'gradient',
@@ -896,7 +896,7 @@ module.exports = [
     }
   ],
   glsl:
-`   float a = smoothstep(threshold-tolerance, threshold+tolerance, _luminance(_c0.rgb));
+`   float a = smoothstep(threshold-(tolerance+0.0000001), threshold+(tolerance+0.0000001), _luminance(_c0.rgb));
    return vec4(_c0.rgb*a, a);`
 },
 {
@@ -915,7 +915,7 @@ module.exports = [
     }
   ],
   glsl:
-`   return vec4(vec3(smoothstep(threshold-tolerance, threshold+tolerance, _luminance(_c0.rgb))), _c0.a);`
+`   return vec4(vec3(smoothstep(threshold-(tolerance+0.0000001), threshold+(tolerance+0.0000001), _luminance(_c0.rgb))), _c0.a);`
 },
 {
   name: 'color',
