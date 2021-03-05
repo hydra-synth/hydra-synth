@@ -92,9 +92,14 @@ class HydraRenderer {
     }
 
     if (enableStreamCapture) {
-      this.captureStream = this.canvas.captureStream(25)
-      // to do: enable capture stream of specific sources and outputs
-      this.synth.vidRecorder = new VidRecorder(this.captureStream)
+      try {
+        this.captureStream = this.canvas.captureStream(25)
+        // to do: enable capture stream of specific sources and outputs
+        this.synth.vidRecorder = new VidRecorder(this.captureStream)
+      } catch (e) {
+        console.warn('[hydra-synth warning]\nnew MediaSource() is not currently supported on iOS.')
+        console.error(e)
+      }
     }
 
     if(detectAudio) this._initAudio()
