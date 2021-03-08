@@ -7,8 +7,8 @@
     "test": "mocha",
     "dev": "budo ./dev/index.js --ssl --open --live --port 8000 --",
     "dev-insecure": "budo ./dev/index.js --open --live --port 8000 --",
-    "build-hydra": "browserify hydra-synth.js --standalone Hydra > dist/hydra-synth.js",
-    "build-shader-generator": "browserify shader-generator.js --standalone HydraShaders > dist/hydra-shaders.js",
+    "build-hydra": "browserify hydra-synth.js --standalone Hydra | tee dist/hydra-synth.js",
+    "build-shader-generator": "browserify shader-generator.js --standalone HydraShaders | tee dist/hydra-shaders.js",
     "build": "npm run build-hydra && npm run build-shader-generator",
     "coverage": "nyc npm run test"
   },
@@ -32,7 +32,6 @@
   "homepage": "https://github.com/ojack/hydra-synth#readme",
   "dependencies": {
     "meyda": "^4.1.3",
-    "mouse-change": "^1.4.0",
     "raf-loop": "^1.1.3",
     "regl": "^1.3.9",
     "web-audio-analyser": "^2.0.1"
