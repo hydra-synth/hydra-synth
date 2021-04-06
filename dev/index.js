@@ -22,12 +22,19 @@ function init () {
   //     src(s0).out()
   // `)
   // console.log(z.frag, z.uniforms)
- var hydra = new Hydra({detectAudio:false})
+ var hydra = new Hydra({detectAudio:false, precision: "highp"})
 //  window.hydra = hydra
 
-  shape().scrollY(0, 0.2, 0.1, 0.1).out()
+  shape().scrollY(0, 0.2, 0.1, 0.1)
 
-  exampleSmoothstep()
+  // gradient(0.4).out()
+  voronoi().out()
+
+  const debugLog = document.createElement('pre')
+   const frag = noise().glsl()[0].frag
+   debugLog.innerText = frag
+  document.body.appendChild(debugLog)
+  //exampleSmoothstep()
 
   // shape().modulateScrollX(osc()).out()
 

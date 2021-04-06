@@ -57,7 +57,7 @@ If `opts` is specified, the default options (shown below) will be overridden.
 
   extendTransforms: [] // An array of transforms to be added to the synth, or an object representing a single transform
 
-  precision: 'mediump' // precision of shaders, can also be 'highp'
+  precision: 'mediump' // force precision of shaders, can also be 'highp' (recommended for ios). When no precision is specified, will use highp for ios, and mediump for everything else.
 }
 
 ```

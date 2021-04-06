@@ -55,6 +55,7 @@ Output.prototype.init = function () {
   uniform float time;
   varying vec2 uv;
   `
+
   this.fragBody = ``
 
   this.vert = `

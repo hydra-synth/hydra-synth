@@ -1,4 +1,11 @@
 # Changelog
+## [1.3.7] - 2021-04-06
+### Fixed
+- bug in precision for shaders
+
+### Changed
+- when no precision is specified, uses "highp" on ios, and "mediump" on everything else
+
 ## [1.3.5] - 2020-11-06
 - Fixed divide by 0 on smoothstep
 
