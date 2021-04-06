@@ -24,7 +24,7 @@ class HydraRenderer {
     detectAudio = true,
     enableStreamCapture = true,
     canvas,
-    precision = 'mediump',
+    precision,
     extendTransforms = {} // add your own functions on init
   } = {}) {
 
@@ -61,17 +61,23 @@ class HydraRenderer {
     this.timeSinceLastUpdate = 0
     this._time = 0 // for internal use, only to use for deciding when to render frames
 
-  //  window.synth = this.synth
-
     // only allow valid precision options
     let precisionOptions = ['lowp','mediump','highp']
-    let precisionValid = precisionOptions.includes(precision.toLowerCase())
-
-    this.precision = precisionValid ? precision.toLowerCase() : 'mediump'
-
-    if(!precisionValid){
-      console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
+    if(precision && precisionOptions.includes(precision.toLowerCase())) {
+      this.precision = precision.toLowerCase()
+      //
+      // if(!precisionValid){
+      //   console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
+      // }
+    } else {
+      let isIOS =
+    (/iPad|iPhone|iPod/.test(navigator.platform) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) &&
+    !window.MSStream;
+      this.precision = isIOS ? 'highp' : 'mediump'
     }
+
+
 
     this.extendTransforms = extendTransforms
 
@@ -93,9 +99,14 @@ class HydraRenderer {
     }
 
     if (enableStreamCapture) {
-      this.captureStream = this.canvas.captureStream(25)
-      // to do: enable capture stream of specific sources and outputs
-      this.synth.vidRecorder = new VidRecorder(this.captureStream)
+      try {
+        this.captureStream = this.canvas.captureStream(25)
+        // to do: enable capture stream of specific sources and outputs
+        this.synth.vidRecorder = new VidRecorder(this.captureStream)
+      } catch (e) {
+        console.warn('[hydra-synth warning]\nnew MediaSource() is not currently supported on iOS.')
+        console.error(e)
+      }
     }
 
     if(detectAudio) this._initAudio()
@@ -1337,13 +1348,12 @@ GlslSource.prototype.glsl = function () {
 }
 
 GlslSource.prototype.compile = function (transforms) {
-
   var shaderInfo = generateGlsl(transforms)
   var uniforms = {}
   shaderInfo.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
 
   var frag = `
-  precision mediump float;
+  precision ${this.defaultOutput.precision} float;
   ${Object.values(shaderInfo.uniforms).map((uniform) => {
     let type = uniform.type
     switch (uniform.type) {
@@ -3525,6 +3535,7 @@ Output.prototype.init = function () {
   uniform float time;
   varying vec2 uv;
   `
+
   this.fragBody = ``
 
   this.vert = `
