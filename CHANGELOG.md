@@ -1,4 +1,7 @@
 # Changelog
+## [1.3.8] - 2021-04-12
+- uses absolute position for mouse
+
 ## [1.3.7] - 2021-04-06
 ### Fixed
 - bug in precision for shaders
