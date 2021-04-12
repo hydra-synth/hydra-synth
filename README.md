@@ -10,6 +10,11 @@ This is the main logic of hydra packaged as a javascript module, intended for us
 Include the bundled version of this library in your html file:
 ```html
 <script src="https://unpkg.com/hydra-synth"></script>
+<script>
+      // create a new hydra-synth instance
+      var hydra = new Hydra({ detectAudio: false })
+      osc(4, 0.1, 1.2).out()
+</script>
 ```
 
 You can see and remix a live example here: https://glitch.com/edit/#!/hydra-webpage
@@ -23,19 +28,12 @@ npm install --save hydra-synth
 Include in your app:
 ```javascript
 const Hydra = require('hydra-synth')
+
+const hydra = new Hydra({ detectAudio: false })
+osc(4, 0.1, 1.2).out()
 ```
 
-
-#### To use:
-```javascript
-  const hydra = new Hydra({ detectAudio: false })
-
-  // by default, hydra makes everything global.
-  // see options to change parameters
-  osc().out()
-```
-
-The rest of this README is about configuring hydra-synth as a module. For broader hydra documentation and usage, see [getting started](https://github.com/ojack/hydra#basic-functions), [interactive function documentation](https://ojack.xyz/hydra-functions/), and [Hydra Book (by Naoto Hieda)](https://hydra-book.naotohieda.com/#/).
+The rest of this README is about configuring hydra-synth. For broader hydra documentation and usage, see [getting started](https://github.com/ojack/hydra#basic-functions), [interactive function documentation](https://ojack.xyz/hydra-functions/), and [Hydra Book (by Naoto Hieda)](https://hydra-book.naotohieda.com/#/).
 
 #### API:
 ```javascript
