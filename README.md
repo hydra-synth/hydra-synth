@@ -6,6 +6,8 @@ Currently experimental / in-progress.
 
 This is the main logic of hydra packaged as a javascript module, intended for use within javascript projects. If you are looking to get started with hydra quickly, visit the [web editor](https://hydra.ojack.xyz) or the [main repo](https://github.com/ojack/hydra). To use hydra within atom, follow the instructions at https://github.com/ojack/hydra-examples.
 
+![image of hydra in webpage](/assets/hydra-webpage.png?raw=true)
+
 ### To include in a webpage (bundled version):
 Include the bundled version of this library in your html file:
 ```html
