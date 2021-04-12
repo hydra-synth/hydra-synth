@@ -22,13 +22,22 @@ function init () {
   //     src(s0).out()
   // `)
   // console.log(z.frag, z.uniforms)
- var hydra = new Hydra({detectAudio:false, precision: "highp"})
+  const canvas = document.createElement('canvas')
+  canvas.style.backgroundColor = "#000"
+  canvas.width = 800
+  canvas.height = 200
+  document.body.appendChild(canvas)
+
+  // canvas.style.width = '100%'
+  // canvas.style.height = '100%'
+//  exampleCustomCanvas()
+ var hydra = new Hydra({detectAudio:false, canvas: canvas})
 //  window.hydra = hydra
 
-  shape().scrollY(0, 0.2, 0.1, 0.1)
+  shape().scroll(() => mouse.x/width, () => mouse.y/height).out()
 
   // gradient(0.4).out()
-  voronoi().out()
+//  voronoi().out()
 
   const debugLog = document.createElement('pre')
    const frag = noise().glsl()[0].frag
