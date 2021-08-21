@@ -21,10 +21,11 @@ module.exports = (parent) => {
   }
 
   function createSandbox (initial) {
-    eval(initial)
+    var globalEval = eval
+    globalEval(initial)
     // optional params
     var localEval = function (code)  {
-      eval(code)
+      globalEval(code)
     }
 
     // API/data for end-user
