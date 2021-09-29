@@ -1,22 +1,24 @@
 class Midi {
-    
-    constructor() {
-        this.reset();
+    constructor () {
+        this.ccArray = Array(128).fill(0.5);
+        this.started = false;
     }
 
     start() {
-        if (!this.started) {
-            console.log('Connecting to WebMIDI.');
+        if (!this.started && !this.shuttingDown) {
             this.started = true;
-            navigator.requestMIDIAccess().then(midiAccess => {
+            navigator.requestMIDIAccess({sysex : false, software : false}).then(midiAccess => {
                 console.log('Connected to WebMIDI.');
                 this.midi = midiAccess;
+                this.midi.shuttingDown = false;
                 this.midi.onstatechange = this.stateChange;
                 this.midi.mapInputs = this.mapInputs;
                 this.midi.ccArray = this.ccArray;
-                this.midi.mapInputs();
+                for (let input of this.midi.inputs.values()) {
+                    input.open();
+                }
             }, () => {
-                console.log('Failed to connect to WebMIDI');
+                console.log('Failed to connect to WebMIDI, WebMIDI is not supported on all browsers yet: https://developer.mozilla.org/en-US/docs/Web/API/MIDIAccess');
             });
         }
     }
@@ -30,31 +32,37 @@ class Midi {
         this.midi = null;
     }
 
-    mapInputs()
-    {
-        Array.from(this.inputs).forEach(input => {
-            input[1].onmidimessage = (message) => {
-                var dataArray = message.data;
-                var index = dataArray[1];
-                //console.log('Midi received on cc#' + index + ' value:' + dataArray[2]);    // uncomment to monitor incoming Midi
-                var value = (dataArray[2] + 1) / 128.0;  // normalize CC values to 0.0 - 1.0
+    mapInputs() {
+        for (let input of this.inputs.values()) {
+            input.onmidimessage = (message) => {
+                const data = message.data; // Uint8Array in the case of cc, cc id is data[1] and cc value is data[2]
+                const index = data[1];
+                const value = data[2] / 127.0;  // CC values are from 0 to 127, normalised here to 0.0 - 1.0
+                //console.log(`Midi received on cc# ${index} raw value: ${data[2]}, normalised value: ${value}`);    // uncomment to monitor incoming Midi
                 this.ccArray[index] = value;
             }
-        })
+        }
     }
 
     stateChange(message) {
-        console.log(`MIDI device: ${message.port.name} state: ${message.port.state}`);
-        if (message.port.state === 'connected') {
+        console.log(`stateChange MIDI device: '${message.port.name}', state: '${message.port.state}', connection: '${message.port.connection}'`);
+        if (this.shuttingDown) {
+            return;
+        }
+        else if (message.port.connection === 'open') {
             this.mapInputs();
+        }
+        else if (message.port.connection === 'closed') {
+            message.port.open();
         }
     };
 
     get cc() {
         // we connect lazily to WebMidi
         this.start();
-        // AKAI is cc1 - cc8
         //console.log('Index:' + index + ' Value:' + this.cc[index]);
         return this.ccArray;
     }
 }
+
+module.exports = Midi
