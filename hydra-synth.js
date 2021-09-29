@@ -8,6 +8,7 @@ const ArrayUtils = require('./src/lib/array-utils.js')
 const Sandbox = require('./src/eval-sandbox.js')
 
 const Generator = require('./src/generator-factory.js')
+const Midi = require('./src/lib/midi.js')
 
 // to do: add ability to pass in certain uniforms and transforms
 class HydraRenderer {
@@ -21,6 +22,7 @@ class HydraRenderer {
     makeGlobal = true,
     autoLoop = true,
     detectAudio = true,
+    useMidi = false,
     enableStreamCapture = true,
     canvas,
     precision = 'mediump',
@@ -98,6 +100,8 @@ class HydraRenderer {
     }
 
     if(detectAudio) this._initAudio()
+
+    if(useMidi) this._initMidi();
 
     if(autoLoop) loop(this.tick.bind(this)).start()
 
@@ -180,6 +184,11 @@ class HydraRenderer {
       //   }
       // }
     })
+  }
+
+  _initMidi () {
+    this.synth.m = new Midi();
+    this.m = this.synth.m;
   }
 
   // create main output canvas and add to screen
