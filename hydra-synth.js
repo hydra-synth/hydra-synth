@@ -22,7 +22,7 @@ class HydraRenderer {
     makeGlobal = true,
     autoLoop = true,
     detectAudio = true,
-    useMidi = false,
+    useMidi = true,
     enableStreamCapture = true,
     canvas,
     precision = 'mediump',
