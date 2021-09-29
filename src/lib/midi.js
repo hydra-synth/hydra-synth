@@ -47,7 +47,6 @@ class Midi {
         if (!this.started) {
             this.start();
         }
-        //console.log('Index:' + index + ' Value:' + this.cc[index]);
         return this.ccArray;
     }
 }
