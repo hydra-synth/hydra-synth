@@ -187,7 +187,7 @@ class HydraRenderer {
   }
 
   _initMidi () {
-    this.m = new Midi();
+    this.synth.m = new Midi();
     this.synth.cc = this.m.cc;
   }
 

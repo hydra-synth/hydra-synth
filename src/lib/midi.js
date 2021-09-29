@@ -2,6 +2,7 @@ class Midi {
     constructor () {
         this.ccArray = Array(128).fill(0.5);
         this.started = false;
+        this.cc = this.cc.bind(this);
     }
 
     start() {
