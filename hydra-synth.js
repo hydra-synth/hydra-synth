@@ -187,8 +187,8 @@ class HydraRenderer {
   }
 
   _initMidi () {
-    this.synth.m = new Midi();
-    this.m = this.synth.m;
+    this.m = new Midi();
+    this.synth.cc = this.m.cc;
   }
 
   // create main output canvas and add to screen

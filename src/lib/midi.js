@@ -42,12 +42,22 @@ class Midi {
         }
     };
 
-    get cc() {
-        // we connect lazily to WebMidi
+    // get cc value scaled between range limit1 and limit2
+    cc(index, limit1 = 1.0, limit2 = null) {
+        // we connect to WebMidi lazily 
         if (!this.started) {
             this.start();
         }
-        return this.ccArray;
+
+        if (limit2 === null) {
+            // If only limit1 is set assume range 0.0 -> limit1
+            limit2 = limit1;
+            limit1 = 0.0;
+        }
+        // otherwise assume range limit1 -> limit2
+        
+        const scale = (index, min, max) => (this.ccArray[index] * (max - min) + min);
+        return scale.bind(null, index, limit1, limit2);
     }
 }
 
