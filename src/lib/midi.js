@@ -5,31 +5,19 @@ class Midi {
     }
 
     start() {
-        if (!this.started && !this.shuttingDown) {
-            this.started = true;
-            navigator.requestMIDIAccess({sysex : false, software : false}).then(midiAccess => {
-                console.log('Connected to WebMIDI.');
-                this.midi = midiAccess;
-                this.midi.shuttingDown = false;
-                this.midi.onstatechange = this.stateChange;
-                this.midi.mapInputs = this.mapInputs;
-                this.midi.ccArray = this.ccArray;
-                for (let input of this.midi.inputs.values()) {
-                    input.open();
-                }
-            }, () => {
-                console.log('Failed to connect to WebMIDI, WebMIDI is not supported on all browsers yet: https://developer.mozilla.org/en-US/docs/Web/API/MIDIAccess');
-            });
-        }
-    }
-
-    reset() {
-        this.ccArray = Array(128).fill(0.5);
-        this.started = false;
-        if (this.midi != null) {
-            this.midi.onstatechange = null;
-        }
-        this.midi = null;
+        this.started = true;
+        navigator.requestMIDIAccess({sysex : false, software : false}).then(midiAccess => {
+            console.log('Connected to WebMIDI.');
+            this.midi = midiAccess;
+            this.midi.onstatechange = this.stateChange;
+            this.midi.mapInputs = this.mapInputs;
+            this.midi.ccArray = this.ccArray;
+            for (let input of this.midi.inputs.values()) {
+                input.open();
+            }
+        }, () => {
+            console.log('Failed to connect to WebMIDI, WebMIDI is not supported on all browsers yet: https://developer.mozilla.org/en-US/docs/Web/API/MIDIAccess');
+        });
     }
 
     mapInputs() {
@@ -46,10 +34,7 @@ class Midi {
 
     stateChange(message) {
         console.log(`stateChange MIDI device: '${message.port.name}', state: '${message.port.state}', connection: '${message.port.connection}'`);
-        if (this.shuttingDown) {
-            return;
-        }
-        else if (message.port.connection === 'open') {
+        if (message.port.connection === 'open') {
             this.mapInputs();
         }
         else if (message.port.connection === 'closed') {
@@ -59,7 +44,9 @@ class Midi {
 
     get cc() {
         // we connect lazily to WebMidi
-        this.start();
+        if (!this.started) {
+            this.start();
+        }
         //console.log('Index:' + index + ' Value:' + this.cc[index]);
         return this.ccArray;
     }
