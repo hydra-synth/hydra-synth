@@ -1,6 +1,4 @@
-'use babel'
-
-export default class Midi {
+class Midi {
     
     constructor() {
         this.reset();
