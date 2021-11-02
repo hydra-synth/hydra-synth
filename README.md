@@ -86,9 +86,29 @@ npm run dev
 Sets up an example using hydra-synth that is automatically updated when source files are updated. It is possible to write test code by editing /example/index.js or by writing hydra code into the developer console.
 
 #### Non-global mode [in progress]
-If makeGlobal is set to false, buffers and functions can be accessed via the synth property of the hydra instance. Note that sources and buffers are contained in an array and accessed by index. E.g.:
+If makeGlobal is set to false, buffers and functions can be accessed via the synth property of the hydra instance.
 ```javascript
-let synth = hydra.synth
-synth.osc().out()
-synth.s0.initCam()
+const h = new Hydra({ makeGlobal: false, detectAudio: false }).synth
+h.osc().rotate().out()
 ```
+
+In non-global mode, it is important to start all hydra functions, buffers, and variables by referencing the instance of hydra synth you are currently using.e.g.
+```javascript
+const h = new Hydra({ makeGlobal: false, detectAudio: false }).synth
+h.osc().diff(h.shape()).out()
+h.gradient().out(h.o1)
+h.render()
+```
+
+This also makes it possible to use more than one hydra canvas at once:
+```javascript
+const h = new Hydra({ makeGlobal: false, detectAudio: false }).synth
+h.osc().diff(h.shape()).out()
+h.gradient().out(h.o1)
+h.render()
+
+const h2 = new Hydra({ makeGlobal: false, detectAudio: false }).synth
+h2.shape(4).diff(h2.osc(2, 0.1, 1.2)).out()
+```
+
+See https://glitch.com/edit/#!/multi-hydra for a working example of multiple hydra canvases, created by Naoto Hieda.
