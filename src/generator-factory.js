@@ -1,4 +1,3 @@
-const glslTransforms = require('./glsl/glsl-functions.js')
 const GlslSource = require('./glsl-source.js')
 
 class GeneratorFactory {
@@ -28,7 +27,7 @@ class GeneratorFactory {
       }
     })()
 
-    let functions = glslTransforms
+    let functions = require('./glsl/glsl-functions.js')()
 
     // add user definied transforms
     if (Array.isArray(this.extendTransforms)) {

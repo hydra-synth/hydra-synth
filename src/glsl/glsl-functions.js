@@ -68,7 +68,7 @@ const types = {
 
 */
 
-module.exports = [
+module.exports = () => [
   {
   name: 'noise',
   type: 'src',

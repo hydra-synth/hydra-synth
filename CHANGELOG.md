@@ -1,4 +1,11 @@
 # Changelog
+## [1.3.9] - 2021-11-02
+### Fixed
+- non-global mode
+
+### Added
+- documentation for non-global mode
+
 ## [1.3.8] - 2021-04-12
 ### Changed
 - uses absolute position for mouse

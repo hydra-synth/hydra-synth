@@ -4,7 +4,7 @@ const loop = require('raf-loop')
 const HydraShaders = require('./../shader-generator.js')
 
 function init () {
-///  exampleNonGlobal()
+ exampleNonGlobal()
 
 //  exampleExtendTransforms()
   // const shader = new HydraShaders()
@@ -121,11 +121,16 @@ function exampleVideo() {
 }
 
 function exampleNonGlobal() {
-    var hydra = new Hydra({ makeGlobal: false })
-    hydra.synth.fps = 10
-    hydra.synth.osc().out()
-    window.hydra = hydra
-}
+    const hydra = new Hydra({ makeGlobal: false, detectAudio: false })
+    console.log('instance', hydra)
+    const h = hydra.synth
+    h.osc().diff(h.shape()).out()
+    h.gradient().out(h.o1)
+    h.render()
+
+    const h2 = new Hydra({ makeGlobal: false, detectAudio: false }).synth
+    h2.shape(4).diff(h2.osc(2, 0.1, 1.2)).out()
+  }
 
 function exampleExtendTransforms() {
   var hydra = new Hydra({
