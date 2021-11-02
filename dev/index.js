@@ -4,8 +4,7 @@ const loop = require('raf-loop')
 const HydraShaders = require('./../shader-generator.js')
 
 function init () {
- exampleNonGlobal()
-
+ //exampleNonGlobal()
 //  exampleExtendTransforms()
   // const shader = new HydraShaders()
 
@@ -32,6 +31,8 @@ function init () {
   // canvas.style.height = '100%'
 //  exampleCustomCanvas()
  var hydra = new Hydra({detectAudio:false, canvas: canvas})
+ exampleLoadScript()
+
 //  window.hydra = hydra
 
   shape().scroll(() => mouse.x/width, () => mouse.y/height).out()
@@ -88,6 +89,13 @@ function init () {
  //  }).start()
 
 //osc(5).out()
+}
+
+function exampleLoadScript() {
+(async() => {
+  await loadScript("https://unpkg.com/tone")
+  console.log('loaded script!!')
+})()
 }
 
 function exampleVideo() {

@@ -57,6 +57,9 @@ class HydraRenderer {
       hush: this.hush.bind(this)
     }
 
+    if (makeGlobal) window.loadScript = this.loadScript
+
+
     this.timeSinceLastUpdate = 0
     this._time = 0 // for internal use, only to use for deciding when to render frames
 
@@ -133,6 +136,23 @@ class HydraRenderer {
       this.synth.solid(1, 1, 1, 0).out(output)
     })
   }
+
+  loadScript(url = "") {
+   const p = new Promise((res, rej) => {
+     var script = document.createElement("script");
+     script.onload = function () {
+       console.log(`loaded script ${url}`);
+       res();
+     };
+     script.onerror = (err) => {
+       console.log(`error loading script ${url}`, "log-error");
+       res()
+     };
+     script.src = url;
+     document.head.appendChild(script);
+   });
+   return p;
+ }
 
   setResolution(width, height) {
   //  console.log(width, height)

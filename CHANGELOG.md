@@ -5,6 +5,7 @@
 
 ### Added
 - documentation for non-global mode
+- loadScript function to hydra-synth
 
 ## [1.3.8] - 2021-04-12
 ### Changed
