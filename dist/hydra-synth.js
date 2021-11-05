@@ -3332,15 +3332,22 @@ class HydraSource {
     if (opts.dynamic) this.dynamic = opts.dynamic
   }
 
-  initCam (index) {
+  initCam (index, errorHandler) {
     const self = this
+    if (typeof index === "function") {
+      errorHandler = index;
+      index = undefined;
+    }
+    if (errorHandler === undefined) {
+      errorHandler = err => console.log('could not get camera', err);
+    }
     Webcam(index)
       .then(response => {
         self.src = response.video
         self.dynamic = true
         self.tex = self.regl.texture(self.src)
       })
-      .catch(err => console.log('could not get camera', err))
+      .catch(errorHandler)
   }
 
   initVideo (url = '') {
@@ -3386,8 +3393,11 @@ class HydraSource {
     }
   }
 
-  initScreen () {
+  initScreen (errorHandler) {
     const self = this
+    if (errorHandler === undefined) {
+      errorHandler = err => console.log('could not get screen', err);
+    }
     Screen()
       .then(function (response) {
         self.src = response.video
@@ -3395,7 +3405,7 @@ class HydraSource {
         self.dynamic = true
         //  console.log("received screen input")
       })
-      .catch(err => console.log('could not get screen', err))
+      .catch(errorHandler)
   }
 
   resize (width, height) {
