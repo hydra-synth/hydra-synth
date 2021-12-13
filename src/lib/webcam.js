@@ -15,6 +15,9 @@ module.exports = function (deviceId) {
     })
     .then(stream => {
       const video = document.createElement('video')
+      video.setAttribute('autoplay', '')
+      video.setAttribute('muted', '')
+      video.setAttribute('playsinline', '')
       //  video.src = window.URL.createObjectURL(stream)
       video.srcObject = stream
       return new Promise((resolve, reject) => {

@@ -4,23 +4,7 @@ const loop = require('raf-loop')
 const HydraShaders = require('./../shader-generator.js')
 
 function init () {
- //exampleNonGlobal()
-//  exampleExtendTransforms()
-  // const shader = new HydraShaders()
-
-  // let x = shader.eval('osc().out()')
-  // console.log(x.frag, x.uniforms)
-  //
-  // let y = shader.eval(`
-  //     let myFunc = () => 4
-  //     osc(myFunc).out()
-  // `)
-  // console.log(y.frag, y.uniforms)
-  //
-  // let z = shader.eval(`
-  //     src(s0).out()
-  // `)
-  // console.log(z.frag, z.uniforms)
+ 
   const canvas = document.createElement('canvas')
   canvas.style.backgroundColor = "#000"
   canvas.width = 800
@@ -31,7 +15,7 @@ function init () {
   // canvas.style.height = '100%'
 //  exampleCustomCanvas()
  var hydra = new Hydra({detectAudio:false, canvas: canvas})
- exampleLoadScript()
+ //exampleLoadScript()
 
 //  window.hydra = hydra
 
@@ -39,6 +23,7 @@ function init () {
 
   // gradient(0.4).out()
 //  voronoi().out()
+  exampleCamera()
 
   const debugLog = document.createElement('pre')
    const frag = noise().glsl()[0].frag
@@ -96,6 +81,11 @@ function exampleLoadScript() {
   await loadScript("https://unpkg.com/tone")
   console.log('loaded script!!')
 })()
+}
+
+function exampleCamera() {
+  s0.initCam()
+  src(s0).out()
 }
 
 function exampleVideo() {

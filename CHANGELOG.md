@@ -1,4 +1,8 @@
 # Changelog
+## [1.3.10] - 2021-12-13
+### Fixed
+- camera working on ios
+
 ## [1.3.9] - 2021-11-02
 ### Fixed
 - non-global mode
