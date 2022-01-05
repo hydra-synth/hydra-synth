@@ -1,3 +1,10 @@
+// [WIP] how to treat different dimensions (?)
+const DEFAULT_CONVERSIONS = {
+    float: {
+      'vec4': {name: 'sum', args: [[1, 1, 1, 1]]},
+      'vec2': {name: 'sum', args: [[1, 1]]}
+    }
+  }
 
 function fillArrayWithDefaults (arr, len) {
     // fill the array with default values if it's too short
@@ -22,9 +29,10 @@ function fillArrayWithDefaults (arr, len) {
   
 
 module.exports = function formatArguments (transform, startIndex, synthContext) {
-    //  console.log('processing args', transform, startIndex)
     const defaultArgs = transform.transform.inputs
     const userArgs = transform.userArgs
+    const { generators } = transform.synth
+    const { src } = generators // depends on synth having src() function
     return defaultArgs.map( (input, index) => {
       const typedArg = {
         value: input.default,

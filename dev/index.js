@@ -10,11 +10,12 @@ function init () {
 //   canvas.width = 800
 //   canvas.height = 200
 //   document.body.appendChild(canvas)
-
 //   // canvas.style.width = '100%'
 //   // canvas.style.height = '100%'
 // //  exampleCustomCanvas()
-//  var hydra = new Hydra({detectAudio:false, canvas: canvas})
+// var hydra = new Hydra({detectAudio:false})
+// exampleSmoothstep()
+
  //exampleLoadScript()
 exampleMultipleCanvases()
 //  window.hydra = hydra

@@ -3,17 +3,10 @@ const formatArguments = require('./format-arguments.js')
 // Add extra functionality to Array.prototype for generating sequences in time
 const arrayUtils = require('./lib/array-utils.js')
 
-// [WIP] how to treat different dimensions (?)
-const DEFAULT_CONVERSIONS = {
-  float: {
-    'vec4': {name: 'sum', args: [[1, 1, 1, 1]]},
-    'vec2': {name: 'sum', args: [[1, 1]]}
-  }
-}
+
 
 // converts a tree of javascript functions to a shader
-module.exports =  function (transforms, synth) {
-    console.log('generating with synth', synth)
+module.exports =  function (transforms) {
     var shaderParams = {
       uniforms: [], // list of uniforms used in shader
       glslFunctions: [], // list of functions used in shader
@@ -34,14 +27,12 @@ module.exports =  function (transforms, synth) {
 // recursive function for generating shader string from object containing functions and user arguments. Order of functions in string depends on type of function
 // to do: improve variable names
 function generateGlsl (transforms, shaderParams) {
-
   // transform function that outputs a shader string corresponding to gl_FragColor
   var fragColor = () => ''
   // var uniforms = []
   // var glslFunctions = []
   transforms.forEach((transform) => {
     var inputs = formatArguments(transform, shaderParams.uniforms.length)
-  //  console.log('inputs', inputs, transform)
     inputs.forEach((input) => {
       if(input.isUniform) shaderParams.uniforms.push(input)
     })

@@ -40,6 +40,7 @@ class GeneratorFactory {
  }
 
  _addMethod (method, transform) {
+    const self = this
     this.glslTransforms[method] = transform
     if (transform.type === 'src') {
       const func = (...args) => new this.sourceClass({
@@ -48,14 +49,14 @@ class GeneratorFactory {
         userArgs: args,
         defaultOutput: this.defaultOutput,
         defaultUniforms: this.defaultUniforms,
-        synth: this
+        synth: self
       })
       this.generators[method] = func
       this.changeListener({type: 'add', synth: this, method})
       return func
     } else  {
       this.sourceClass.prototype[method] = function (...args) {
-        this.transforms.push({name: method, transform: transform, userArgs: args})
+        this.transforms.push({name: method, transform: transform, userArgs: args, synth: self})
         return this
       }
     }
