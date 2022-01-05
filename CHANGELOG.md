@@ -1,4 +1,12 @@
 # Changelog
+## [1.3.12] - 2022-01-05
+### Fixed
+- bug with `src()` function in non-global mode
+
+### Added
+- additional multiple-canvas example including dereferencing
+- link to `hydra-ts`
+
 ## [1.3.11] - 2021-12-13
 - updated build version
 

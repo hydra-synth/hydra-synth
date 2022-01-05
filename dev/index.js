@@ -18,6 +18,7 @@ function init () {
 
  //exampleLoadScript()
 exampleMultipleCanvases()
+exampleMultipleCanvases()
 //  window.hydra = hydra
 
 //  shape().scroll(() => mouse.x/width, () => mouse.y/height).out()
@@ -77,7 +78,13 @@ exampleMultipleCanvases()
 //osc(5).out()
 }
 
-function exampleMultipleCanvases() {
+function exampleMultipleCanvases(num = 2) {
+  for(var i = 0; i < num; i++) {
+    nonGlobalCanvas()
+  }
+}
+
+function nonGlobalCanvas() {
   const canvas = document.createElement('canvas')
   canvas.style.backgroundColor = "#000"
   canvas.width = 800
@@ -87,9 +94,9 @@ function exampleMultipleCanvases() {
   // canvas.style.width = '100%'
   // canvas.style.height = '100%'
 //  exampleCustomCanvas()
- var hydra = new Hydra({detectAudio:false, canvas: canvas, makeGlobal: false}).synth
-   hydra.osc().rotate().blend(hydra.o0, 0.99).out()
-
+ const hydra = new Hydra({detectAudio:false, canvas: canvas, makeGlobal: false}).synth
+ const { osc, o0, s0, src, noise } = hydra
+ osc().rotate().blend(noise().repeat(), 0.99).out()
 }
 
 function exampleLoadScript() {

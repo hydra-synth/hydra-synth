@@ -85,7 +85,7 @@ npm run dev
 ```
 Sets up an example using hydra-synth that is automatically updated when source files are updated. It is possible to write test code by editing /example/index.js or by writing hydra code into the developer console.
 
-#### Non-global mode [in progress]
+#### Non-global mode
 If makeGlobal is set to false, buffers and functions can be accessed via the synth property of the hydra instance.
 ```javascript
 const h = new Hydra({ makeGlobal: false, detectAudio: false }).synth
@@ -112,3 +112,11 @@ h2.shape(4).diff(h2.osc(2, 0.1, 1.2)).out()
 ```
 
 See https://glitch.com/edit/#!/multi-hydra for a working example of multiple hydra canvases, created by Naoto Hieda.
+
+If you would like to keep the same syntax as hydra in non-global mode, consider destructuring the object further:
+```javascript
+const { src, osc, gradient, shape, voronoi, noise, s0, s1, s2, s3, o0, o1, o2, o3, render } = hydra
+shape(4).diff(osc(2, 0.1, 1.2)).out()
+```
+
+[hydra-ts](https://github.com/folz/hydra-ts) is a fork of hydra-synth in Typescript maintained by @folz. 
