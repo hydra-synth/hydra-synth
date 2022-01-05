@@ -1,4 +1,4 @@
-const generateGlsl = require('./glsl-utils.js').generateGlsl
+const generateGlsl = require('./generate-glsl.js')
 // const formatArguments = require('./glsl-utils.js').formatArguments
 
 // const glslTransforms = require('./glsl/composable-glsl-functions.js')

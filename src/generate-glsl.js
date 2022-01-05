@@ -1,4 +1,3 @@
-// converts a tree of javascript functions to a shader
 const formatArguments = require('./format-arguments.js')
 
 // Add extra functionality to Array.prototype for generating sequences in time
@@ -12,8 +11,8 @@ const DEFAULT_CONVERSIONS = {
   }
 }
 
-module.exports = {
-  generateGlsl: function (transforms, synth) {
+// converts a tree of javascript functions to a shader
+module.exports =  function (transforms, synth) {
     console.log('generating with synth', synth)
     var shaderParams = {
       uniforms: [], // list of uniforms used in shader
@@ -28,8 +27,7 @@ module.exports = {
     shaderParams.uniforms.forEach((uniform) => uniforms[uniform.name] = uniform)
     shaderParams.uniforms = Object.values(uniforms)
     return shaderParams
-  },
-  formatArguments: formatArguments
+
 }
 
 
