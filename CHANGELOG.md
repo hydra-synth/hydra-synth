@@ -1,4 +1,7 @@
 # Changelog
+## [1.3.11] - 2021-12-13
+- updated build version
+
 ## [1.3.10] - 2021-12-13
 ### Fixed
 - camera working on ios

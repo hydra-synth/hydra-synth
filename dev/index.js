@@ -5,30 +5,30 @@ const HydraShaders = require('./../shader-generator.js')
 
 function init () {
  
-  const canvas = document.createElement('canvas')
-  canvas.style.backgroundColor = "#000"
-  canvas.width = 800
-  canvas.height = 200
-  document.body.appendChild(canvas)
+//   const canvas = document.createElement('canvas')
+//   canvas.style.backgroundColor = "#000"
+//   canvas.width = 800
+//   canvas.height = 200
+//   document.body.appendChild(canvas)
 
-  // canvas.style.width = '100%'
-  // canvas.style.height = '100%'
-//  exampleCustomCanvas()
- var hydra = new Hydra({detectAudio:false, canvas: canvas})
+//   // canvas.style.width = '100%'
+//   // canvas.style.height = '100%'
+// //  exampleCustomCanvas()
+//  var hydra = new Hydra({detectAudio:false, canvas: canvas})
  //exampleLoadScript()
-
+exampleMultipleCanvases()
 //  window.hydra = hydra
 
-  shape().scroll(() => mouse.x/width, () => mouse.y/height).out()
+//  shape().scroll(() => mouse.x/width, () => mouse.y/height).out()
 
   // gradient(0.4).out()
 //  voronoi().out()
-  exampleCamera()
+ // exampleCamera()
 
-  const debugLog = document.createElement('pre')
-   const frag = noise().glsl()[0].frag
-   debugLog.innerText = frag
-  document.body.appendChild(debugLog)
+  // const debugLog = document.createElement('pre')
+  //  const frag = noise().glsl()[0].frag
+  //  debugLog.innerText = frag
+  // document.body.appendChild(debugLog)
   //exampleSmoothstep()
 
   // shape().modulateScrollX(osc()).out()
@@ -74,6 +74,21 @@ function init () {
  //  }).start()
 
 //osc(5).out()
+}
+
+function exampleMultipleCanvases() {
+  const canvas = document.createElement('canvas')
+  canvas.style.backgroundColor = "#000"
+  canvas.width = 800
+  canvas.height = 200
+  document.body.appendChild(canvas)
+
+  // canvas.style.width = '100%'
+  // canvas.style.height = '100%'
+//  exampleCustomCanvas()
+ var hydra = new Hydra({detectAudio:false, canvas: canvas, makeGlobal: false}).synth
+   hydra.osc().rotate().blend(hydra.o0, 0.99).out()
+
 }
 
 function exampleLoadScript() {
