@@ -24,18 +24,18 @@ class HydraSource {
     if (opts.dynamic) this.dynamic = opts.dynamic
   }
 
-  initCam (index) {
+  initCam (index, min = 'nearest', mag) {
     const self = this
     Webcam(index)
       .then(response => {
         self.src = response.video
         self.dynamic = true
-        self.tex = self.regl.texture(self.src)
+        self.tex = self.regl.texture({ data: self.src, min: min, mag: (mag ? mag : min)})
       })
       .catch(err => console.log('could not get camera', err))
   }
 
-  initVideo (url = '') {
+  initVideo (url = '', min = 'nearest', mag) {
     // const self = this
     const vid = document.createElement('video')
     vid.crossOrigin = 'anonymous'
@@ -45,24 +45,24 @@ class HydraSource {
     const onload = vid.addEventListener('loadeddata', () => {
       this.src = vid
       vid.play()
-      this.tex = this.regl.texture(this.src)
+      this.tex = this.regl.texture({ data: this.src, min: min, mag: (mag ? mag : min)})
       this.dynamic = true
     })
     vid.src = url
   }
 
-  initImage (url = '') {
+  initImage (url = '', min = 'nearest', mag) {
     const img = document.createElement('img')
     img.crossOrigin = 'anonymous'
     img.src = url
     img.onload = () => {
       this.src = img
       this.dynamic = false
-      this.tex = this.regl.texture(this.src)
+      this.tex = this.regl.texture({ data: this.src, min: min, mag: (mag ? mag : min)})
     }
   }
 
-  initStream (streamName) {
+  initStream (streamName, min = 'nearest', mag) {
     //  console.log("initing stream!", streamName)
     let self = this
     if (streamName && this.pb) {
@@ -72,18 +72,18 @@ class HydraSource {
         if (nick === streamName) {
           self.src = video
           self.dynamic = true
-          self.tex = self.regl.texture(self.src)
+          self.tex = self.regl.texture({ data: self.src, min: min, mag: (mag ? mag : min)})
         }
       })
     }
   }
 
-  initScreen () {
+  initScreen (min = 'nearest', mag) {
     const self = this
     Screen()
       .then(function (response) {
         self.src = response.video
-        self.tex = self.regl.texture(self.src)
+        self.tex = self.regl.texture({ data: self.src, min: min, mag: (mag ? mag : min)})
         self.dynamic = true
         //  console.log("received screen input")
       })
