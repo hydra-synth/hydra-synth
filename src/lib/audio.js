@@ -44,7 +44,7 @@ class Audio {
     this.ctx.fillStyle="#DFFFFF"
     this.ctx.strokeStyle="#0ff"
     this.ctx.lineWidth=0.5
-
+    if(window.navigator.mediaDevices) {
     window.navigator.mediaDevices.getUserMedia({video: false, audio: true})
       .then((stream) => {
       //  console.log('got mic stream', stream)
@@ -66,6 +66,7 @@ class Audio {
         })
       })
       .catch((err) => console.log('ERROR', err))
+    }
   }
 
   detectBeat (level) {

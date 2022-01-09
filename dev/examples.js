@@ -1,69 +1,54 @@
 
-exampleMultipleMasks()
-// exampleSmoothstep()
 
- //exampleLoadScript()
-// exampleMultipleCanvases()
-// exampleMultipleCanvases()
-//  window.hydra = hydra
-
-//  shape().scroll(() => mouse.x/width, () => mouse.y/height).out()
-
-  // gradient(0.4).out()
-//  voronoi().out()
- // exampleCamera()
-
-  // const debugLog = document.createElement('pre')
-  //  const frag = noise().glsl()[0].frag
-  //  debugLog.innerText = frag
-  // document.body.appendChild(debugLog)
-  //exampleSmoothstep()
-
-  // shape().modulateScrollX(osc()).out()
-
-//  exampleGetGLSL()
-  // window.update = (dt) => draw.draw(time)
-
-  // shape(3, f0(), 0.5).out()
-//
-//   exampleAddFunction(hydra)
-// //  exampleScreen()
-//
-// exampleCustomCanvas()
-// exampleSmoothing()
-  ///var generator = new shader()
-
-
- // document.body.appendChild(canvas)
- //  var hydra = new Hydra({
- //  //  autoLoad: false
- //    canvas: canvas,
- //    enableStreamCapture: true,
- //    detectAudio: true,
- //    makeGlobal: false
- //  })
- //
- //  window.hydra = hydra
- //
- //  var sinN = v => (Math.sin(v)+1)/2
- //  var cosN = v => (Math.cos(v)+1)/2
- //
-
-
- //
- //  osc().out()
- //
- //  // set bpm
- //  //hydra.bpm(30)
- //
- //  var x = 0
- //  loop((dt) => {
- //    hydra.tick(dt)
- //  }).start()
-
-//osc(5).out()
+module.exports = {
+    fugitiveGeometry: fugitiveGeometry2
 }
 
+// from :
+// not working on updated hydra-synth
+function fugitiveGeometry2 () {
+    s= ()=>
+  shape(4)
+.scrollX([-0.5,-0.2,0.3,-0.1,-0.1].smooth(0.1).fast(0.3))
+.scrollY([0.25,-0.2,0.3,-0.1,0.2].smooth(0.9).fast(0.15))
+
+//s().out()
+// //
+solid()
+.add(gradient(3,0.05).rotate(0.05,-0.2).posterize(2).contrast(0.6),[1,0,1,0.5,0,0.6].smooth(0.9))
+ .add(s())
+ .mult(s().scale(0.8).scrollX(0.01).scrollY(-0.01).rotate(0.2,0.06).add(gradient(3).contrast(0.6),[1,0,1,0.5].smooth(0.9),0.5).mult(src(o0).scale(0.98),()=>a.fft[0]*9)
+     )
+// .diff(s().modulate(shape(500)).scale([1.7,1.2].smooth(0.9).fast(0.05)))
+// .add(gradient(2).invert(),()=>a.fft[2])
+// .mult(gradient(()=>a.fft[3]*8))
+// .blend(src((o0),()=>a.fft[1]*40))
+// .add(voronoi(()=>a.fft[1],()=>a.fft[3],()=>a.fft[0]).thresh(0.7).posterize(2,4).luma(0.9).scrollY(1,()=>a.fft[0]/30).colorama(3).thresh(()=>a.fft[1]).scale(()=>a.fft[3]*2),()=>a.fft[0]/2)
+  .out()
+// //
+// speed= 1
+}
+
+function fugitiveGeometry () {
+    s= ()=>
+  shape(4)
+.scrollX([-0.5,-0.2,0.3,-0.1,-0.1].smooth(0.1).fast(0.3))
+.scrollY([0.25,-0.2,0.3,-0.1,0.2].smooth(0.9).fast(0.15))
+//
+solid()
+.add(gradient(3,0.05).rotate(0.05,-0.2).posterize(2).contrast(0.6),[1,0,1,0.5,0,0.6].smooth(0.9))
+.add(s())
+.mult(s().scale(0.8).scrollX(0.01).scrollY(-0.01).rotate(0.2,0.06).add(gradient(3).contrast(0.6),[1,0,1,0.5].smooth(0.9),0.5).mult(src(o0).scale(0.98),()=>a.fft[0]*9)
+     )
+.diff(s().modulate(shape(500)).scale([1.7,1.2].smooth(0.9).fast(0.05)))
+.add(gradient(2).invert(),()=>a.fft[2])
+.mult(gradient(()=>a.fft[3]*8))
+.blend(src((o0),()=>a.fft[1]*40))
+.add(voronoi(()=>a.fft[1],()=>a.fft[3],()=>a.fft[0]).thresh(0.7).posterize(2,4).luma(0.9).scrollY(1,()=>a.fft[0]/30).colorama(3).thresh(()=>a.fft[1]).scale(()=>a.fft[3]*2),()=>a.fft[0]/2)
+  .out()
+//
+speed= 1
+}
 function exampleMultipleMasks() {
   setFunction({
     name: 'mask2',
