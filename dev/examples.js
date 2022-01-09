@@ -1,7 +1,8 @@
 
 
 module.exports = {
-    fugitiveGeometry: fugitiveGeometry
+    fugitiveGeometry: fugitiveGeometry,
+    exampleVideo: exampleVideo
 }
 
 // from :
@@ -99,8 +100,8 @@ function exampleCamera() {
 }
 
 function exampleVideo() {
-  s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4")
-  src(s0).out()
+  s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", { flipY: true })
+    src(s0).repeat(3,3).out()
 }
 
 function exampleEasingFunctions() {
@@ -123,10 +124,7 @@ function exampleSmoothstep() {
   osc(89, 0.01, 1.8).thresh(0.5, 0).out()
 }
 
-function exampleVideo() {
-  s0.initVideo("https://media.giphy.com/media/AS9LIFttYzkc0/giphy.mp4")
-  src(s0).out()
-}
+
 
 function exampleNonGlobal() {
     const hydra = new Hydra({ makeGlobal: false, detectAudio: false })
