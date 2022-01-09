@@ -19,7 +19,7 @@ class HydraSource {
   init (opts, params) {
     if (opts.src) {
       this.src = opts.src
-      this.tex = this.regl.texture({ data: self.src, ...params })
+      this.tex = this.regl.texture({ data: this.src, ...params })
     }
     if (opts.dynamic) this.dynamic = opts.dynamic
   }
