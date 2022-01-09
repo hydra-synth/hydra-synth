@@ -1,3 +1,5 @@
+const arrayUtils = require('./lib/array-utils.js')
+
 // [WIP] how to treat different dimensions (?)
 const DEFAULT_CONVERSIONS = {
     float: {

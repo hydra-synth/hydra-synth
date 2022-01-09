@@ -13,12 +13,14 @@ function init () {
 //   // canvas.style.width = '100%'
 //   // canvas.style.height = '100%'
 // //  exampleCustomCanvas()
-// var hydra = new Hydra({detectAudio:false})
+var hydra = new Hydra({detectAudio:false})
+
+exampleMultipleMasks()
 // exampleSmoothstep()
 
  //exampleLoadScript()
-exampleMultipleCanvases()
-exampleMultipleCanvases()
+// exampleMultipleCanvases()
+// exampleMultipleCanvases()
 //  window.hydra = hydra
 
 //  shape().scroll(() => mouse.x/width, () => mouse.y/height).out()
@@ -78,6 +80,21 @@ exampleMultipleCanvases()
 //osc(5).out()
 }
 
+function exampleMultipleMasks() {
+  setFunction({
+    name: 'mask2',
+    type: 'combine',
+    inputs: [
+    ],
+    glsl:
+  `   float a = _luminance(_c1.rgb);
+     return vec4(_c0.rgb*a, a*_c0.a);`
+  })
+
+  gradient().layer(osc().luma().mask(noise(3))).out()
+  gradient().layer(osc().luma().mask2(noise(3))).out(o1)
+  render()
+}
 function exampleMultipleCanvases(num = 2) {
   for(var i = 0; i < num; i++) {
     nonGlobalCanvas()
