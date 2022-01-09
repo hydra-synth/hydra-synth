@@ -1,7 +1,7 @@
 
 
 module.exports = {
-    fugitiveGeometry: fugitiveGeometry2
+    fugitiveGeometry: fugitiveGeometry
 }
 
 // from :
@@ -48,6 +48,7 @@ solid()
   .out()
 //
 speed= 1
+a.setSmooth(0.96)
 }
 function exampleMultipleMasks() {
   setFunction({
