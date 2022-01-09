@@ -461,7 +461,7 @@ class HydraRenderer {
 
 module.exports = HydraRenderer
 
-},{"./src/eval-sandbox.js":9,"./src/generator-factory.js":10,"./src/hydra-source.js":15,"./src/lib/array-utils.js":16,"./src/lib/audio.js":17,"./src/lib/mouse.js":20,"./src/lib/video-recorder.js":23,"./src/output.js":25,"raf-loop":5,"regl":7}],2:[function(require,module,exports){
+},{"./src/eval-sandbox.js":9,"./src/generator-factory.js":12,"./src/hydra-source.js":16,"./src/lib/array-utils.js":17,"./src/lib/audio.js":18,"./src/lib/mouse.js":21,"./src/lib/video-recorder.js":24,"./src/output.js":26,"raf-loop":5,"regl":7}],2:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -535,7 +535,7 @@ function n(t,r){if(t===r)return 0;for(var e=t.length,n=r.length,o=0,i=Math.min(e
 
 
 }).call(this,require('_process'))
-},{"_process":27}],5:[function(require,module,exports){
+},{"_process":28}],5:[function(require,module,exports){
 var inherits = require('inherits')
 var EventEmitter = require('events').EventEmitter
 var now = require('right-now')
@@ -580,7 +580,7 @@ Engine.prototype.tick = function() {
     this.emit('tick', dt)
     this.last = time
 }
-},{"events":26,"inherits":2,"raf":6,"right-now":8}],6:[function(require,module,exports){
+},{"events":27,"inherits":2,"raf":6,"right-now":8}],6:[function(require,module,exports){
 (function (global){
 var now = require('performance-now')
   , root = typeof window === 'undefined' ? global : window
@@ -870,7 +870,250 @@ class EvalSandbox {
 
 module.exports = EvalSandbox
 
-},{"./lib/array-utils.js":16,"./lib/sandbox.js":21}],10:[function(require,module,exports){
+},{"./lib/array-utils.js":17,"./lib/sandbox.js":22}],10:[function(require,module,exports){
+const arrayUtils = require('./lib/array-utils.js')
+
+// [WIP] how to treat different dimensions (?)
+const DEFAULT_CONVERSIONS = {
+    float: {
+      'vec4': {name: 'sum', args: [[1, 1, 1, 1]]},
+      'vec2': {name: 'sum', args: [[1, 1]]}
+    }
+  }
+
+function fillArrayWithDefaults (arr, len) {
+    // fill the array with default values if it's too short
+    while (arr.length < len) {
+      if (arr.length === 3) { // push a 1 as the default for .a in vec4
+        arr.push(1.0)
+      } else {
+        arr.push(0.0)
+      }
+    }
+    return arr.slice(0, len)
+  }
+  
+  const ensure_decimal_dot = (val) => {
+    val = val.toString()
+    if (val.indexOf('.') < 0) {
+      val += '.'
+    }
+    return val
+  }
+  
+  
+
+module.exports = function formatArguments (transform, startIndex, synthContext) {
+    const defaultArgs = transform.transform.inputs
+    const userArgs = transform.userArgs
+    const { generators } = transform.synth
+    const { src } = generators // depends on synth having src() function
+    return defaultArgs.map( (input, index) => {
+      const typedArg = {
+        value: input.default,
+        type: input.type, //
+        isUniform: false,
+        name: input.name,
+        vecLen: 0
+        //  generateGlsl: null // function for creating glsl
+      }
+  
+      if(typedArg.type === 'float') typedArg.value = ensure_decimal_dot(input.default)
+      if (input.type.startsWith('vec')) {
+        try {
+          typedArg.vecLen = Number.parseInt(input.type.substr(3))
+        } catch (e) {
+          console.log(`Error determining length of vector input type ${input.type} (${input.name})`)
+        }
+      }
+  
+      // if user has input something for this argument
+      if(userArgs.length > index) {
+        typedArg.value = userArgs[index]
+        // do something if a composite or transform
+  
+        if (typeof userArgs[index] === 'function') {
+          if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
+            typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
+          } else {
+            typedArg.value = (context, props, batchId) => {
+              try {
+                return userArgs[index](props)
+              } catch (e) {
+                console.log('ERROR', e)
+                return input.default
+              }
+            }
+          }
+  
+          typedArg.isUniform = true
+        } else if (userArgs[index].constructor === Array) {
+          if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
+            typedArg.isUniform = true
+            typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)
+          } else {
+            //  console.log("is Array")
+            typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
+            typedArg.isUniform = true
+          }
+        }
+      }
+  
+      if(startIndex< 0){
+      } else {
+        if (typedArg.value && typedArg.value.transforms) {
+          const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
+  
+          if (final_transform.transform.glsl_return_type !== input.type) {
+            const defaults = DEFAULT_CONVERSIONS[input.type]
+            if (typeof defaults !== 'undefined') {
+              const default_def = defaults[final_transform.transform.glsl_return_type]
+              if (typeof default_def !== 'undefined') {
+                const {name, args} = default_def
+                typedArg.value = typedArg.value[name](...args)
+              }
+            }
+          }
+  
+          typedArg.isUniform = false
+        } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
+          typedArg.value = ensure_decimal_dot(typedArg.value)
+        } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
+          typedArg.isUniform = false
+          typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
+        } else if (input.type === 'sampler2D') {
+          // typedArg.tex = typedArg.value
+          var x = typedArg.value
+          typedArg.value = () => (x.getTexture())
+          typedArg.isUniform = true
+        } else {
+          // if passing in a texture reference, when function asks for vec4, convert to vec4
+          if (typedArg.value.getTexture && input.type === 'vec4') {
+            var x1 = typedArg.value
+            typedArg.value = src(x1)
+            typedArg.isUniform = false
+          }
+        }
+  
+        // add tp uniform array if is a function that will pass in a different value on each render frame,
+        // or a texture/ external source
+  
+        if(typedArg.isUniform) {
+          typedArg.name += startIndex
+          //  shaderParams.uniforms.push(typedArg)
+        }
+      }
+      return typedArg
+    })
+  }
+
+  
+},{"./lib/array-utils.js":17}],11:[function(require,module,exports){
+const formatArguments = require('./format-arguments.js')
+
+// Add extra functionality to Array.prototype for generating sequences in time
+const arrayUtils = require('./lib/array-utils.js')
+
+
+
+// converts a tree of javascript functions to a shader
+module.exports =  function (transforms) {
+    var shaderParams = {
+      uniforms: [], // list of uniforms used in shader
+      glslFunctions: [], // list of functions used in shader
+      fragColor: ''
+    }
+
+    var gen = generateGlsl(transforms, shaderParams)('st')
+    shaderParams.fragColor = gen
+    // remove uniforms with duplicate names
+    let uniforms = {}
+    shaderParams.uniforms.forEach((uniform) => uniforms[uniform.name] = uniform)
+    shaderParams.uniforms = Object.values(uniforms)
+    return shaderParams
+
+}
+
+
+// recursive function for generating shader string from object containing functions and user arguments. Order of functions in string depends on type of function
+// to do: improve variable names
+function generateGlsl (transforms, shaderParams) {
+  // transform function that outputs a shader string corresponding to gl_FragColor
+  var fragColor = () => ''
+  // var uniforms = []
+  // var glslFunctions = []
+  transforms.forEach((transform) => {
+    var inputs = formatArguments(transform, shaderParams.uniforms.length)
+    inputs.forEach((input) => {
+      if(input.isUniform) shaderParams.uniforms.push(input)
+    })
+
+    // add new glsl function to running list of functions
+    if(!contains(transform, shaderParams.glslFunctions)) shaderParams.glslFunctions.push(transform)
+
+    // current function for generating frag color shader code
+    var f0 = fragColor
+    if (transform.transform.type === 'src') {
+      fragColor = (uv) => `${shaderString(uv, transform.name, inputs, shaderParams)}`
+    } else if (transform.transform.type === 'coord') {
+      fragColor = (uv) => `${f0(`${shaderString(uv, transform.name, inputs, shaderParams)}`)}`
+    } else if (transform.transform.type === 'color') {
+      fragColor = (uv) =>  `${shaderString(`${f0(uv)}`, transform.name, inputs, shaderParams)}`
+    } else if (transform.transform.type === 'combine') {
+      // combining two generated shader strings (i.e. for blend, mult, add funtions)
+      var f1 = inputs[0].value && inputs[0].value.transforms ?
+      (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+      (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
+      fragColor = (uv) => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`
+    } else if (transform.transform.type === 'combineCoord') {
+      // combining two generated shader strings (i.e. for modulate functions)
+      var f1 = inputs[0].value && inputs[0].value.transforms ?
+      (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
+      (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
+      fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`
+
+
+    }
+  })
+//  console.log(fragColor)
+  //  break;
+  return fragColor
+}
+
+// assembles a shader string containing the arguments and the function name, i.e. 'osc(uv, frequency)'
+function shaderString (uv, method, inputs, shaderParams) {
+  const str = inputs.map((input) => {
+    if (input.isUniform) {
+      return input.name
+    } else if (input.value && input.value.transforms) {
+      // this by definition needs to be a generator, hence we start with 'st' as the initial value for generating the glsl fragment
+      return `${generateGlsl(input.value.transforms, shaderParams)('st')}`
+    }
+    return input.value
+  }).reduce((p, c) => `${p}, ${c}`, '')
+
+  return `${method}(${uv}${str})`
+}
+
+// merge two arrays and remove duplicates
+function mergeArrays (a, b) {
+  return a.concat(b.filter(function (item) {
+    return a.indexOf(item) < 0;
+  }))
+}
+
+// check whether array
+function contains(object, arr) {
+  for(var i = 0; i < arr.length; i++){
+    if(object.name == arr[i].name) return true
+  }
+  return false
+}
+
+
+
+
+},{"./format-arguments.js":10,"./lib/array-utils.js":17}],12:[function(require,module,exports){
 const GlslSource = require('./glsl-source.js')
 
 class GeneratorFactory {
@@ -913,6 +1156,7 @@ class GeneratorFactory {
  }
 
  _addMethod (method, transform) {
+    const self = this
     this.glslTransforms[method] = transform
     if (transform.type === 'src') {
       const func = (...args) => new this.sourceClass({
@@ -921,14 +1165,14 @@ class GeneratorFactory {
         userArgs: args,
         defaultOutput: this.defaultOutput,
         defaultUniforms: this.defaultUniforms,
-        synth: this
+        synth: self
       })
       this.generators[method] = func
       this.changeListener({type: 'add', synth: this, method})
       return func
     } else  {
       this.sourceClass.prototype[method] = function (...args) {
-        this.transforms.push({name: method, transform: transform, userArgs: args})
+        this.transforms.push({name: method, transform: transform, userArgs: args, synth: self})
         return this
       }
     }
@@ -1032,9 +1276,9 @@ function processGlsl(obj) {
 
 module.exports = GeneratorFactory
 
-},{"./glsl-source.js":11,"./glsl/glsl-functions.js":13}],11:[function(require,module,exports){
-const generateGlsl = require('./glsl-utils.js').generateGlsl
-const formatArguments = require('./glsl-utils.js').formatArguments
+},{"./glsl-source.js":13,"./glsl/glsl-functions.js":14}],13:[function(require,module,exports){
+const generateGlsl = require('./generate-glsl.js')
+// const formatArguments = require('./glsl-utils.js').formatArguments
 
 // const glslTransforms = require('./glsl/composable-glsl-functions.js')
 const utilityGlsl = require('./glsl/utility-functions.js')
@@ -1098,7 +1342,7 @@ GlslSource.prototype.glsl = function () {
 }
 
 GlslSource.prototype.compile = function (transforms) {
-  var shaderInfo = generateGlsl(transforms)
+  var shaderInfo = generateGlsl(transforms, this.synth)
   var uniforms = {}
   shaderInfo.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
 
@@ -1148,239 +1392,7 @@ GlslSource.prototype.compile = function (transforms) {
 
 module.exports = GlslSource
 
-},{"./glsl-utils.js":12,"./glsl/utility-functions.js":14}],12:[function(require,module,exports){
-// converts a tree of javascript functions to a shader
-
-// Add extra functionality to Array.prototype for generating sequences in time
-const arrayUtils = require('./lib/array-utils.js')
-
-// [WIP] how to treat different dimensions (?)
-const DEFAULT_CONVERSIONS = {
-  float: {
-    'vec4': {name: 'sum', args: [[1, 1, 1, 1]]},
-    'vec2': {name: 'sum', args: [[1, 1]]}
-  }
-}
-
-module.exports = {
-  generateGlsl: function (transforms) {
-    var shaderParams = {
-      uniforms: [], // list of uniforms used in shader
-      glslFunctions: [], // list of functions used in shader
-      fragColor: ''
-    }
-
-    var gen = generateGlsl(transforms, shaderParams)('st')
-    shaderParams.fragColor = gen
-    // remove uniforms with duplicate names
-    let uniforms = {}
-    shaderParams.uniforms.forEach((uniform) => uniforms[uniform.name] = uniform)
-    shaderParams.uniforms = Object.values(uniforms)
-    return shaderParams
-  },
-  formatArguments: formatArguments
-}
-// recursive function for generating shader string from object containing functions and user arguments. Order of functions in string depends on type of function
-// to do: improve variable names
-function generateGlsl (transforms, shaderParams) {
-
-  // transform function that outputs a shader string corresponding to gl_FragColor
-  var fragColor = () => ''
-  // var uniforms = []
-  // var glslFunctions = []
-  transforms.forEach((transform) => {
-    var inputs = formatArguments(transform, shaderParams.uniforms.length)
-  //  console.log('inputs', inputs, transform)
-    inputs.forEach((input) => {
-      if(input.isUniform) shaderParams.uniforms.push(input)
-    })
-
-    // add new glsl function to running list of functions
-    if(!contains(transform, shaderParams.glslFunctions)) shaderParams.glslFunctions.push(transform)
-
-    // current function for generating frag color shader code
-    var f0 = fragColor
-    if (transform.transform.type === 'src') {
-      fragColor = (uv) => `${shaderString(uv, transform.name, inputs, shaderParams)}`
-    } else if (transform.transform.type === 'coord') {
-      fragColor = (uv) => `${f0(`${shaderString(uv, transform.name, inputs, shaderParams)}`)}`
-    } else if (transform.transform.type === 'color') {
-      fragColor = (uv) =>  `${shaderString(`${f0(uv)}`, transform.name, inputs, shaderParams)}`
-    } else if (transform.transform.type === 'combine') {
-      // combining two generated shader strings (i.e. for blend, mult, add funtions)
-      var f1 = inputs[0].value && inputs[0].value.transforms ?
-      (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
-      (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
-      fragColor = (uv) => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`
-    } else if (transform.transform.type === 'combineCoord') {
-      // combining two generated shader strings (i.e. for modulate functions)
-      var f1 = inputs[0].value && inputs[0].value.transforms ?
-      (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` :
-      (inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value)
-      fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`
-
-
-    }
-  })
-//  console.log(fragColor)
-  //  break;
-  return fragColor
-}
-
-// assembles a shader string containing the arguments and the function name, i.e. 'osc(uv, frequency)'
-function shaderString (uv, method, inputs, shaderParams) {
-  const str = inputs.map((input) => {
-    if (input.isUniform) {
-      return input.name
-    } else if (input.value && input.value.transforms) {
-      // this by definition needs to be a generator, hence we start with 'st' as the initial value for generating the glsl fragment
-      return `${generateGlsl(input.value.transforms, shaderParams)('st')}`
-    }
-    return input.value
-  }).reduce((p, c) => `${p}, ${c}`, '')
-
-  return `${method}(${uv}${str})`
-}
-
-// merge two arrays and remove duplicates
-function mergeArrays (a, b) {
-  return a.concat(b.filter(function (item) {
-    return a.indexOf(item) < 0;
-  }))
-}
-
-// check whether array
-function contains(object, arr) {
-  for(var i = 0; i < arr.length; i++){
-    if(object.name == arr[i].name) return true
-  }
-  return false
-}
-
-function fillArrayWithDefaults (arr, len) {
-  // fill the array with default values if it's too short
-  while (arr.length < len) {
-    if (arr.length === 3) { // push a 1 as the default for .a in vec4
-      arr.push(1.0)
-    } else {
-      arr.push(0.0)
-    }
-  }
-  return arr.slice(0, len)
-}
-
-const ensure_decimal_dot = (val) => {
-  val = val.toString()
-  if (val.indexOf('.') < 0) {
-    val += '.'
-  }
-  return val
-}
-
-function formatArguments (transform, startIndex) {
-  //  console.log('processing args', transform, startIndex)
-  const defaultArgs = transform.transform.inputs
-  const userArgs = transform.userArgs
-  return defaultArgs.map( (input, index) => {
-    const typedArg = {
-      value: input.default,
-      type: input.type, //
-      isUniform: false,
-      name: input.name,
-      vecLen: 0
-      //  generateGlsl: null // function for creating glsl
-    }
-
-    if(typedArg.type === 'float') typedArg.value = ensure_decimal_dot(input.default)
-    if (input.type.startsWith('vec')) {
-      try {
-        typedArg.vecLen = Number.parseInt(input.type.substr(3))
-      } catch (e) {
-        console.log(`Error determining length of vector input type ${input.type} (${input.name})`)
-      }
-    }
-
-    // if user has input something for this argument
-    if(userArgs.length > index) {
-      typedArg.value = userArgs[index]
-      // do something if a composite or transform
-
-      if (typeof userArgs[index] === 'function') {
-        if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
-          typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
-        } else {
-          typedArg.value = (context, props, batchId) => {
-            try {
-              return userArgs[index](props)
-            } catch (e) {
-              console.log('ERROR', e)
-              return input.default
-            }
-          }
-        }
-
-        typedArg.isUniform = true
-      } else if (userArgs[index].constructor === Array) {
-        if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
-          typedArg.isUniform = true
-          typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)
-        } else {
-          //  console.log("is Array")
-          typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
-          typedArg.isUniform = true
-        }
-      }
-    }
-
-    if(startIndex< 0){
-    } else {
-      if (typedArg.value && typedArg.value.transforms) {
-        const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
-
-        if (final_transform.transform.glsl_return_type !== input.type) {
-          const defaults = DEFAULT_CONVERSIONS[input.type]
-          if (typeof defaults !== 'undefined') {
-            const default_def = defaults[final_transform.transform.glsl_return_type]
-            if (typeof default_def !== 'undefined') {
-              const {name, args} = default_def
-              typedArg.value = typedArg.value[name](...args)
-            }
-          }
-        }
-
-        typedArg.isUniform = false
-      } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
-        typedArg.value = ensure_decimal_dot(typedArg.value)
-      } else if (typedArg.type.startsWith('vec') && typeof typedArg.value === 'object' && Array.isArray(typedArg.value)) {
-        typedArg.isUniform = false
-        typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(', ')})`
-      } else if (input.type === 'sampler2D') {
-        // typedArg.tex = typedArg.value
-        var x = typedArg.value
-        typedArg.value = () => (x.getTexture())
-        typedArg.isUniform = true
-      } else {
-        // if passing in a texture reference, when function asks for vec4, convert to vec4
-        if (typedArg.value.getTexture && input.type === 'vec4') {
-          var x1 = typedArg.value
-          typedArg.value = src(x1)
-          typedArg.isUniform = false
-        }
-      }
-
-      // add tp uniform array if is a function that will pass in a different value on each render frame,
-      // or a texture/ external source
-
-      if(typedArg.isUniform) {
-        typedArg.name += startIndex
-        //  shaderParams.uniforms.push(typedArg)
-      }
-    }
-    return typedArg
-  })
-}
-
-},{"./lib/array-utils.js":16}],13:[function(require,module,exports){
+},{"./generate-glsl.js":11,"./glsl/utility-functions.js":15}],14:[function(require,module,exports){
 /*
 Format for adding functions to hydra. For each entry in this file, hydra automatically generates a glsl function and javascript function with the same name. You can also ass functions dynamically using setFunction(object).
 
@@ -2260,9 +2272,10 @@ module.exports = () => [
 
   ],
   glsl:
-`   float a = _luminance(_c1.rgb);
-   return vec4(_c0.rgb*a, a);`
+  `   float a = _luminance(_c1.rgb);
+  return vec4(_c0.rgb*a, a*_c0.a);`
 },
+
 {
   name: 'luma',
   type: 'color',
@@ -2481,7 +2494,7 @@ module.exports = () => [
 }
 ]
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 // functions that are only used within other functions
 
 module.exports = {
@@ -2594,7 +2607,7 @@ module.exports = {
   }
 }
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 const Webcam = require('./lib/webcam.js')
 const Screen = require('./lib/screenmedia.js')
 
@@ -2730,7 +2743,7 @@ class HydraSource {
 
 module.exports = HydraSource
 
-},{"./lib/screenmedia.js":22,"./lib/webcam.js":24}],16:[function(require,module,exports){
+},{"./lib/screenmedia.js":23,"./lib/webcam.js":25}],17:[function(require,module,exports){
 // WIP utils for working with arrays
 // Possibly should be integrated with lfo extension, etc.
 // to do: transform time rather than array values, similar to working with coordinates in hydra
@@ -2806,7 +2819,7 @@ module.exports = {
   }
 }
 
-},{"./easing-functions.js":18}],17:[function(require,module,exports){
+},{"./easing-functions.js":19}],18:[function(require,module,exports){
 const Meyda = require('meyda')
 
 class Audio {
@@ -3023,7 +3036,7 @@ class Audio {
 
 module.exports = Audio
 
-},{"meyda":3}],18:[function(require,module,exports){
+},{"meyda":3}],19:[function(require,module,exports){
 // from https://gist.github.com/gre/1650294
 
 module.exports = {
@@ -3057,7 +3070,7 @@ module.exports = {
   sin: function (t) { return (1 + Math.sin(Math.PI*t-Math.PI/2))/2 }
 }
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 // https://github.com/mikolalysenko/mouse-event
 
 'use strict'
@@ -3115,7 +3128,7 @@ function mouseRelativeY(ev) {
 }
 exports.y = mouseRelativeY
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 // based on https://github.com/mikolalysenko/mouse-change
 
 'use strict'
@@ -3324,7 +3337,7 @@ function mouseListen (element, callback) {
   return result
 }
 
-},{"./mouse-event.js":19}],21:[function(require,module,exports){
+},{"./mouse-event.js":20}],22:[function(require,module,exports){
 // attempt custom evaluation sandbox for hydra functions
 // for now, just avoids polluting the global namespace
 // should probably be replaced with an abstract syntax tree
@@ -3361,7 +3374,7 @@ module.exports = (parent) => {
   }
 }
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 
 module.exports = function (options) {
   return new Promise(function(resolve, reject) {
@@ -3377,7 +3390,7 @@ module.exports = function (options) {
   })
 }
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 class VideoRecorder {
   constructor(stream) {
     this.mediaSource = new MediaSource()
@@ -3465,7 +3478,7 @@ class VideoRecorder {
 
 module.exports = VideoRecorder
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 //const enumerateDevices = require('enumerate-devices')
 
 module.exports = function (deviceId) {
@@ -3497,7 +3510,7 @@ module.exports = function (deviceId) {
     .catch(console.log.bind(console))
 }
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 //const transforms = require('./glsl-transforms.js')
 
 var Output = function ({ regl, precision, label = "", width, height}) {
@@ -3623,7 +3636,7 @@ Output.prototype.tick = function (props) {
 
 module.exports = Output
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4148,7 +4161,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
