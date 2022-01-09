@@ -1,4 +1,11 @@
 # Changelog
+## [1.3.12] - 2022-01-08
+### Fixed
+- arrayUtils imprted to formatArguents.js
+
+### Changed
+- mask function now preserves earlier transparency
+
 ## [1.3.12] - 2022-01-05
 ### Fixed
 - bug with `src()` function in non-global mode

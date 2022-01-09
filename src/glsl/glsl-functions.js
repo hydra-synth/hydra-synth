@@ -877,9 +877,10 @@ module.exports = () => [
 
   ],
   glsl:
-`   float a = _luminance(_c1.rgb);
-   return vec4(_c0.rgb*a, a);`
+  `   float a = _luminance(_c1.rgb);
+  return vec4(_c0.rgb*a, a*_c0.a);`
 },
+
 {
   name: 'luma',
   type: 'color',
