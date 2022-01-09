@@ -1,5 +1,5 @@
 # Changelog
-## [1.3.12] - 2022-01-08
+## [1.3.14] - 2022-01-08
 ### Fixed
 - arrayUtils imprted to formatArguents.js
 
