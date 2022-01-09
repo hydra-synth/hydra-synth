@@ -17,11 +17,11 @@ class HydraSource {
   }
 
   init (opts, params) {
-    if (opts.src) {
+    if ('src' in opts) {
       this.src = opts.src
       this.tex = this.regl.texture({ data: this.src, ...params })
     }
-    if (opts.dynamic) this.dynamic = opts.dynamic
+    if ('dynamic' in opts) this.dynamic = opts.dynamic
   }
 
   initCam (index, params) {
@@ -78,7 +78,8 @@ class HydraSource {
     }
   }
 
-  initScreen (params) {
+  // index only relevant in atom-hydra + desktop apps
+  initScreen (index = 0, params) {
     const self = this
     Screen()
       .then(function (response) {

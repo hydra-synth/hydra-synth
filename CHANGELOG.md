@@ -1,4 +1,12 @@
 # Changelog
+## [1.3.15] - 2022-01-08
+### Fixed 
+- error in function argument formatting
+### Added 
+- texture params to regl sources
+
+### Fixed
+- arrayUtils imprted to formatArguents.js
 ## [1.3.14] - 2022-01-08
 ### Fixed
 - arrayUtils imprted to formatArguents.js
