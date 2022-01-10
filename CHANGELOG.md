@@ -1,4 +1,11 @@
 # Changelog
+## [1.3.16] - 2022-01-10
+### Fixed 
+- nested layers error
+
+### Added 
+- texture params to regl sources
+
 ## [1.3.15] - 2022-01-08
 ### Fixed 
 - error in function argument formatting
