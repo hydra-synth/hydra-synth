@@ -636,7 +636,7 @@ module.exports = [
     
   ],
   glsl:
-`   return vec4(mix(_c0.rgb, _c1.rgb, _c1.a), _c0.a+_c1.a);
+`   return vec4(mix(_c0.rgb, _c1.rgb, _c1.a), clamp(_c0.a + _c1.a, 0.0, 1.0));
    }`
 },
 {
