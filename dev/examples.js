@@ -2,7 +2,15 @@
 
 module.exports = {
     fugitiveGeometry: fugitiveGeometry,
-    exampleVideo: exampleVideo
+    exampleVideo: exampleVideo,
+    exampleResize: exampleResize
+}
+
+function exampleResize() {
+  window.addEventListener('resize', () => {
+    setResolution(window.innerWidth, window.innerHeight)
+    console.log('width', width, window.innerWidth)
+  })
 }
 
 // from :

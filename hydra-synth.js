@@ -158,8 +158,11 @@ class HydraRenderer {
   //  console.log(width, height)
     this.canvas.width = width
     this.canvas.height = height
-    this.width = width
-    this.height = height
+    this.width = width // is this necessary?
+    this.height = height // ?
+    this.sandbox.set('width', width)
+    this.sandbox.set('height', height)
+    console.log(this.width)
     this.o.forEach((output) => {
       output.resize(width, height)
     })
