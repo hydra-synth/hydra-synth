@@ -133,8 +133,9 @@ class HydraRenderer {
       source.clear()
     })
     this.o.forEach((output) => {
-      this.synth.solid(1, 1, 1, 0).out(output)
+      this.synth.solid(0, 0, 0, 0).out(output)
     })
+    this.synth.render(this.o[0])
   }
 
   loadScript(url = "") {

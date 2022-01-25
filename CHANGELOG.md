@@ -6,6 +6,9 @@
 ### Added 
 - texture params to regl sources
 
+### Changed
+- hush() resets to source o0
+
 ## [1.3.15] - 2022-01-08
 ### Fixed 
 - error in function argument formatting
