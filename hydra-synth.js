@@ -136,6 +136,7 @@ class HydraRenderer {
       this.synth.solid(0, 0, 0, 0).out(output)
     })
     this.synth.render(this.o[0])
+    this.synth.update = (dt) => {}
   }
 
   loadScript(url = "") {
@@ -414,7 +415,7 @@ class HydraRenderer {
     if(this.detectAudio === true) this.synth.a.tick()
   //  let updateInterval = 1000/this.synth.fps // ms
     if(this.synth.update) {
-      try { this.synth.update(dt) } catch (e) { console.log(error) }
+      try { this.synth.update(dt) } catch (e) { console.log(e) }
     }
 
     this.sandbox.set('time', this.synth.time += dt * 0.001 * this.synth.speed)
