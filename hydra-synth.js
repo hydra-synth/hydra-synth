@@ -414,14 +414,13 @@ class HydraRenderer {
     this.sandbox.tick()
     if(this.detectAudio === true) this.synth.a.tick()
   //  let updateInterval = 1000/this.synth.fps // ms
-    if(this.synth.update) {
-      try { this.synth.update(dt) } catch (e) { console.log(e) }
-    }
-
     this.sandbox.set('time', this.synth.time += dt * 0.001 * this.synth.speed)
     this.timeSinceLastUpdate += dt
     if(!this.synth.fps || this.timeSinceLastUpdate >= 1000/this.synth.fps) {
     //  console.log(1000/this.timeSinceLastUpdate)
+      if(this.synth.update) {
+        try { this.synth.update(dt) } catch (e) { console.log(e) }
+      }
       this.synth.stats.fps = Math.ceil(1000/this.timeSinceLastUpdate)
     //  console.log(this.synth.speed, this.synth.time)
       for (let i = 0; i < this.s.length; i++) {
