@@ -85,6 +85,7 @@ class HydraRenderer {
 
     // boolean to store when to save screenshot
     this.saveFrame = false
+    this.frameName = null
 
     // if stream capture is enabled, this object contains the capture stream
     this.captureStream = null
@@ -96,7 +97,8 @@ class HydraRenderer {
     this._initSources(numSources)
     this._generateGlslTransforms()
 
-    this.synth.screencap = () => {
+    this.synth.screencap = (frameName) => {
+      this.frameName = frameName
       this.saveFrame = true
     }
 
@@ -179,8 +181,12 @@ class HydraRenderer {
     const a = document.createElement('a')
     a.style.display = 'none'
 
-    let d = new Date()
-    a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.png`
+    if (this.frameName){
+      a.download = `${this.frameName}.png`
+    } else {
+      let d = new Date()
+      a.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.png`
+    }
     document.body.appendChild(a)
     var self = this
     this.canvas.toBlob( (blob) => {
