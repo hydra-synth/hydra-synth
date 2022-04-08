@@ -136,7 +136,8 @@ class HydraRenderer {
       this.synth.solid(0, 0, 0, 0).out(output)
     })
     this.synth.render(this.o[0])
-    this.synth.update = (dt) => {}
+    // this.synth.update = (dt) => {}
+    this.sandbox.set('update', (dt) => {})
   }
 
   loadScript(url = "") {
