@@ -83,11 +83,13 @@ function exampleMultipleCanvases(num = 2) {
 }
 
 function nonGlobalCanvas() {
+  const div = document.createElement('div')
   const canvas = document.createElement('canvas')
   canvas.style.backgroundColor = "#000"
   canvas.width = 800
   canvas.height = 200
-  document.body.appendChild(canvas)
+  div.appendChild(canvas)
+  document.body.appendChild(div)
 
   // canvas.style.width = '100%'
   // canvas.style.height = '100%'
