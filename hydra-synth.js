@@ -203,7 +203,6 @@ class HydraRenderer {
 
   _initAudio () {
     const that = this
-    console.log('parent', this.canvas.parentNode)
     this.synth.a = new Audio({
       numBins: 4,
       parentEl: this.canvas.parentNode

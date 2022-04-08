@@ -55,7 +55,8 @@ class HydraRenderer {
       render: this._render.bind(this),
       setResolution: this.setResolution.bind(this),
       update: (dt) => {},// user defined update function
-      hush: this.hush.bind(this)
+      hush: this.hush.bind(this),
+      tick: this.tick.bind(this)
     }
 
     if (makeGlobal) window.loadScript = this.loadScript
@@ -134,8 +135,11 @@ class HydraRenderer {
       source.clear()
     })
     this.o.forEach((output) => {
-      this.synth.solid(1, 1, 1, 0).out(output)
+      this.synth.solid(0, 0, 0, 0).out(output)
     })
+    this.synth.render(this.o[0])
+    // this.synth.update = (dt) => {}
+    this.sandbox.set('update', (dt) => {})
   }
 
   loadScript(url = "") {
@@ -159,8 +163,11 @@ class HydraRenderer {
   //  console.log(width, height)
     this.canvas.width = width
     this.canvas.height = height
-    this.width = width
-    this.height = height
+    this.width = width // is this necessary?
+    this.height = height // ?
+    this.sandbox.set('width', width)
+    this.sandbox.set('height', height)
+    console.log(this.width)
     this.o.forEach((output) => {
       output.resize(width, height)
     })
@@ -197,8 +204,10 @@ class HydraRenderer {
 
   _initAudio () {
     const that = this
+    console.log('parent', this.canvas.parentNode)
     this.synth.a = new Audio({
       numBins: 4,
+      parentEl: this.canvas.parentNode
       // changeListener: ({audio}) => {
       //   that.a = audio.bins.map((_, index) =>
       //     (scale = 1, offset = 0) => () => (audio.fft[index] * scale + offset)
@@ -410,15 +419,14 @@ class HydraRenderer {
     this.sandbox.tick()
     if(this.detectAudio === true) this.synth.a.tick()
   //  let updateInterval = 1000/this.synth.fps // ms
-    if(this.synth.update) {
-      try { this.synth.update(dt) } catch (e) { console.log(error) }
-    }
-
     this.sandbox.set('time', this.synth.time += dt * 0.001 * this.synth.speed)
     this.timeSinceLastUpdate += dt
     if(!this.synth.fps || this.timeSinceLastUpdate >= 1000/this.synth.fps) {
     //  console.log(1000/this.timeSinceLastUpdate)
       this.synth.stats.fps = Math.ceil(1000/this.timeSinceLastUpdate)
+      if(this.synth.update) {
+        try { this.synth.update(this.timeSinceLastUpdate) } catch (e) { console.log(e) }
+      }
     //  console.log(this.synth.speed, this.synth.time)
       for (let i = 0; i < this.s.length; i++) {
         this.s[i].tick(this.synth.time)
@@ -2830,7 +2838,8 @@ class Audio {
     smooth = 0.4,
     max = 15,
     scale = 10,
-    isDrawing = false
+    isDrawing = false,
+    parentEl = document.body
   }) {
     this.vol = 0
     this.scale = scale
@@ -2860,7 +2869,7 @@ class Audio {
     this.canvas.style.position = 'absolute'
     this.canvas.style.right = '0px'
     this.canvas.style.bottom = '0px'
-    document.body.appendChild(this.canvas)
+    parentEl.appendChild(this.canvas)
 
     this.isDrawing = isDrawing
     this.ctx = this.canvas.getContext('2d')
