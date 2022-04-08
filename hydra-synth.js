@@ -54,7 +54,8 @@ class HydraRenderer {
       render: this._render.bind(this),
       setResolution: this.setResolution.bind(this),
       update: (dt) => {},// user defined update function
-      hush: this.hush.bind(this)
+      hush: this.hush.bind(this),
+      tick: this.tick.bind(this)
     }
 
     if (makeGlobal) window.loadScript = this.loadScript

@@ -1,9 +1,11 @@
+const Hydra = require('./../index.js')
 
 
 module.exports = {
     fugitiveGeometry: fugitiveGeometry,
     exampleVideo: exampleVideo,
-    exampleResize: exampleResize
+    exampleResize: exampleResize,
+    nonGlobalCanvas: nonGlobalCanvas
 }
 
 function exampleResize() {
@@ -90,9 +92,13 @@ function nonGlobalCanvas() {
   // canvas.style.width = '100%'
   // canvas.style.height = '100%'
 //  exampleCustomCanvas()
- const hydra = new Hydra({detectAudio:false, canvas: canvas, makeGlobal: false}).synth
+ const hydra = new Hydra({detectAudio:false, autoLoop: false, canvas: canvas, makeGlobal: false}).synth
  const { osc, o0, s0, src, noise } = hydra
  osc().rotate().blend(noise().repeat(), 0.99).out()
+
+ setInterval(() => {
+   hydra.tick(1000)
+ }, 1000)
 }
 
 function exampleLoadScript() {

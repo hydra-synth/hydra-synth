@@ -1,6 +1,6 @@
 const Hydra = require('./../index.js')
 const loop = require('raf-loop')
-const { fugitiveGeometry, exampleVideo, exampleResize } = require('./examples.js')
+const { fugitiveGeometry, exampleVideo, exampleResize, nonGlobalCanvas } = require('./examples.js')
 
 const HydraShaders = require('./../shader-generator.js')
 
@@ -15,10 +15,12 @@ function init () {
 //   // canvas.style.height = '100%'
 // //  exampleCustomCanvas()
 
-var hydra = new Hydra({detectAudio:true})
-//osc().out()
-exampleVideo()
-exampleResize()
+// var hydra = new Hydra({detectAudio:true})
+// //osc().out()
+// exampleVideo()
+// exampleResize()
+nonGlobalCanvas()
+
 //s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", {})
 //src(s0).repeat().out()
 }

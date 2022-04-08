@@ -3,6 +3,7 @@
 ### Fixed
 - Fix 'update' function error log 
 - reset 'update' function when hush()
+- `.tick()` working in non-global mode
 
 ## [1.3.16] - 2022-01-10
 ### Fixed 
