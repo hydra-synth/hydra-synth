@@ -7,7 +7,8 @@ class Audio {
     smooth = 0.4,
     max = 15,
     scale = 10,
-    isDrawing = false
+    isDrawing = false,
+    parentEl = document.body
   }) {
     this.vol = 0
     this.scale = scale
@@ -37,7 +38,7 @@ class Audio {
     this.canvas.style.position = 'absolute'
     this.canvas.style.right = '0px'
     this.canvas.style.bottom = '0px'
-    document.body.appendChild(this.canvas)
+    parentEl.appendChild(this.canvas)
 
     this.isDrawing = isDrawing
     this.ctx = this.canvas.getContext('2d')
