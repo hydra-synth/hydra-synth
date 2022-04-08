@@ -1,4 +1,9 @@
 # Changelog
+## [1.3.17] - 2022-01-10
+### Fixed
+- Fix 'update' function error log 
+- reset 'update' function when hush()
+
 ## [1.3.16] - 2022-01-10
 ### Fixed 
 - nested layers error
