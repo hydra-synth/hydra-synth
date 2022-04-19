@@ -162,6 +162,44 @@ module.exports = () => [
    float b = sin((st.x+offset/frequency+time*sync)*frequency)*0.5  + 0.5;
    return vec4(r, g, b, 1.0);`
 },
+  {
+  name: 'tri',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'frequency',
+      default: 60,
+    },
+    {
+      type: 'float',
+      name: 'sync',
+      default: 0.1,
+    },
+  ],
+  glsl: `   vec2 st = _st;
+ float c = (2. / PI) * asin(sin(PI * (st.x + time * sync) * frequency / PI)) * 0.5 + 0.5;
+ return vec4(c, c, c, 1.0);`,
+},
+{
+  name: 'sq',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'frequency',
+      default: 60,
+    },
+    {
+      type: 'float',
+      name: 'sync',
+      default: 0.1,
+    },
+  ],
+  glsl: `   vec2 st = _st;
+ float c = floor(sin((st.x + time * sync) * frequency) * 0.5 + 1.);
+ return vec4(c, c, c, 1.0);`,
+},
 {
   name: 'shape',
   type: 'src',
