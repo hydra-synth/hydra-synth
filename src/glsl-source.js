@@ -69,6 +69,9 @@ GlslSource.prototype.compile = function (transforms) {
 
   var frag = `
   precision ${this.defaultOutput.precision} float;
+
+  #define PI 3.1415926538
+
   ${Object.values(shaderInfo.uniforms).map((uniform) => {
     let type = uniform.type
     switch (uniform.type) {
