@@ -2,7 +2,7 @@ const Webcam = require('./lib/webcam.js')
 const Screen = require('./lib/screenmedia.js')
 
 class HydraSource {
-  constructor ({ regl, width, height, pb, label = ""}) {
+  constructor ({ regl, width, height, pb, label = "", synth }) {
     this.label = label
     this.regl = regl
     this.src = null
@@ -14,6 +14,7 @@ class HydraSource {
       shape: [ 1, 1 ]
     })
     this.pb = pb
+    this.synth = synth
   }
 
   init (opts, params) {
@@ -47,6 +48,7 @@ class HydraSource {
       vid.play()
       this.tex = this.regl.texture({ data: this.src, ...params})
       this.dynamic = true
+      this.videoElement = vid;
     })
     vid.src = url
   }
@@ -121,6 +123,12 @@ class HydraSource {
 
       if (this.src.width && this.src.width !== this.tex.width) {
         this.tex.resize(this.src.width, this.src.height)
+      }
+
+      if (this.videoElement !== undefined) {
+        if (this.videoElement.playbackRate !== this.synth.speed) {
+          this.videoElement.playbackRate = this.synth.speed
+        }
       }
 
       this.tex.subimage(this.src)

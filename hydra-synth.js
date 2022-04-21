@@ -377,7 +377,7 @@ class HydraRenderer {
   }
 
   createSource (i) {
-    let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height, label: `s${i}`})
+    let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height, label: `s${i}`, synth: this.synth})
     this.synth['s' + this.s.length] = s
     this.s.push(s)
     return s
