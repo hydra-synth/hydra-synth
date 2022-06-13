@@ -121,8 +121,8 @@ function exampleCamera() {
 }
 
 function exampleVideo() {
-  s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", { flipY: true })
-  src(s0).repeat(3, 3).out()
+  s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", { flipY: false })
+  src(s0).out()
 }
 
 function exampleEasingFunctions() {

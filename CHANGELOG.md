@@ -1,4 +1,8 @@
 # Changelog
+## [1.3.18] - 2022-06-13
+### Fixed
+- updated Meyda to v5.5
+
 ## [1.3.17] - 2022-01-10
 ### Fixed
 - Fix 'update' function error log 

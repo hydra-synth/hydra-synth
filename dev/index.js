@@ -15,11 +15,11 @@ function init () {
 //   // canvas.style.height = '100%'
 // //  exampleCustomCanvas()
 
-// var hydra = new Hydra({detectAudio:true})
+var hydra = new Hydra({detectAudio:true})
 // //osc().out()
-// exampleVideo()
+exampleVideo()
 // exampleResize()
-nonGlobalCanvas()
+//nonGlobalCanvas()
 
 //s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", {})
 //src(s0).repeat().out()
