@@ -67,9 +67,15 @@ module.exports = function formatArguments(transform, startIndex, synthContext) {
         // } else {
         typedArg.value = (context, props, batchId) => {
           try {
-            return userArgs[index](props)
+            const val = userArgs[index](props)
+            if(typeof val === 'number') {
+              return val
+            } else {
+              console.warn('function does not return a number', userArgs[index])
+            }
+            return input.default
           } catch (e) {
-            console.log('ERROR', e)
+            console.warn('ERROR', e)
             return input.default
           }
         }
@@ -82,7 +88,9 @@ module.exports = function formatArguments(transform, startIndex, synthContext) {
         //     typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)
         //  } else {
         //  console.log("is Array")
-        typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
+        // filter out values that are not a number
+        const filteredArray = userArgs[index].filter((val) => typeof val === 'number')
+        typedArg.value = (context, props, batchId) => arrayUtils.getValue(filteredArray)(props)
         typedArg.isUniform = true
         // }
       } else if (userArgs[index].constructor.name === 'Pattern') {
