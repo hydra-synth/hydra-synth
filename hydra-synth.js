@@ -5,6 +5,8 @@ const Mouse = require('./src/lib/mouse.js')()
 const Audio = require('./src/lib/audio.js')
 const VidRecorder = require('./src/lib/video-recorder.js')
 const ArrayUtils = require('./src/lib/array-utils.js')
+const strudel = require('./src/lib/strudel.js')
+
 const Sandbox = require('./src/eval-sandbox.js')
 
 const Generator = require('./src/generator-factory.js')
