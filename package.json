@@ -7,7 +7,7 @@
     "test": "mocha",
     "dev-ssl": "budo ./dev/index.js --ssl --open --live --port 8000 --",
     "dev": "budo ./dev/index.js --open --live --port 8000 -- -p esmify",
-    "build-hydra": "browserify hydra-synth.js --standalone Hydra > dist/hydra-synth.js",
+    "build-hydra": "browserify hydra-synth.js -p esmify --standalone Hydra > dist/hydra-synth.js",
     "build-shader-generator": "browserify shader-generator.js --standalone HydraShaders > dist/hydra-shaders.js",
     "build": "npm run build-hydra",
     "coverage": "nyc npm run test"
