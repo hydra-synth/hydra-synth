@@ -65,9 +65,15 @@ module.exports = function formatArguments(transform, startIndex, synthContext) {
         // } else {
         typedArg.value = (context, props, batchId) => {
           try {
-            return userArgs[index](props)
+            const val = userArgs[index](props)
+            if(typeof val === 'number') {
+              return val
+            } else {
+              console.warn('function does not return a number', userArgs[index])
+            }
+            return input.default
           } catch (e) {
-            console.log('ERROR', e)
+            console.warn('ERROR', e)
             return input.default
           }
         }
