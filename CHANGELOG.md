@@ -1,4 +1,8 @@
 # Changelog
+## [1.3.19] - 2022-07-07
+### Fixed
+- better error handling for functions
+
 ## [1.3.18] - 2022-06-13
 ### Fixed
 - updated Meyda to v5.5
