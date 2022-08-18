@@ -87,9 +87,10 @@ module.exports = function formatArguments(transform, startIndex, synthContext) {
         //  } else {
         //  console.log("is Array")
         // filter out values that are not a number
-        const filteredArray = userArgs[index].filter((val) => typeof val === 'number')
-        typedArg.value = (context, props, batchId) => arrayUtils.getValue(filteredArray)(props)
-        typedArg.isUniform = true
+       // const filteredArray = userArgs[index].filter((val) => typeof val === 'number')
+       // typedArg.value = (context, props, batchId) => arrayUtils.getValue(filteredArray)(props)
+       typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
+       typedArg.isUniform = true
         // }
       }
     }
