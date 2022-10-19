@@ -1,5 +1,5 @@
-const arrayUtils = require('./lib/array-utils.js')
-const { parseStrudel } = require('./lib/strudel.js')
+import arrayUtils from './lib/array-utils.js'
+import { parseStrudel } from './lib/strudel.js'
 import { mini } from '@strudel.cycles/mini'
 
 // [WIP] how to treat different dimensions (?)
@@ -32,7 +32,7 @@ const ensure_decimal_dot = (val) => {
 
 
 
-module.exports = function formatArguments(transform, startIndex, synthContext) {
+export default function formatArguments(transform, startIndex, synthContext) {
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
   const { generators } = transform.synth

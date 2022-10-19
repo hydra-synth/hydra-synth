@@ -1,6 +1,6 @@
 // from https://gist.github.com/gre/1650294
 
-module.exports = {
+export default {
   // no easing, no acceleration
   linear: function (t) { return t },
   // accelerating from zero velocity

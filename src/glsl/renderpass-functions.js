@@ -4,9 +4,9 @@
 // basic sdf shapes
 // repeat
 // iq color palletes
-var glsl = require('glslify')
+import glsl from 'glslify'
 
-module.exports = {
+export default {
   blur: {
     type: 'renderpass',
     inputs: [

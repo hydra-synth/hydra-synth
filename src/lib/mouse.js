@@ -1,10 +1,8 @@
 // based on https://github.com/mikolalysenko/mouse-change
 
-'use strict'
+export default mouseListen
 
-module.exports = mouseListen
-
-var mouse = require('./mouse-event.js')
+import mouse from './mouse-event.js'
 
 function mouseListen (element, callback) {
   if (!callback) {

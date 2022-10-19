@@ -1,8 +1,8 @@
-const generateGlsl = require('./generate-glsl.js')
+import generateGlsl from './generate-glsl.js'
 // const formatArguments = require('./glsl-utils.js').formatArguments
 
 // const glslTransforms = require('./glsl/composable-glsl-functions.js')
-const utilityGlsl = require('./glsl/utility-functions.js')
+import utilityGlsl from './glsl/utility-functions.js'
 
 var GlslSource = function (obj) {
   this.transforms = []
@@ -111,4 +111,4 @@ GlslSource.prototype.compile = function (transforms) {
 
 }
 
-module.exports = GlslSource
+export default GlslSource

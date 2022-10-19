@@ -1,12 +1,12 @@
-const formatArguments = require('./format-arguments.js')
+import formatArguments from './format-arguments.js'
 
 // Add extra functionality to Array.prototype for generating sequences in time
-const arrayUtils = require('./lib/array-utils.js')
+import arrayUtils from './lib/array-utils.js'
 
 
 
 // converts a tree of javascript functions to a shader
-module.exports =  function (transforms) {
+export default function (transforms) {
     var shaderParams = {
       uniforms: [], // list of uniforms used in shader
       glslFunctions: [], // list of functions used in shader

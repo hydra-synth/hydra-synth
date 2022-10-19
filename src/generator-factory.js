@@ -1,4 +1,6 @@
-const GlslSource = require('./glsl-source.js')
+import GlslSource from './glsl-source.js'
+import glslFunctions from './glsl/glsl-functions.js'
+const functions = glslFunctions()
 
 class GeneratorFactory {
   constructor ({
@@ -27,7 +29,7 @@ class GeneratorFactory {
       }
     })()
 
-    let functions = require('./glsl/glsl-functions.js')()
+    
 
     // add user definied transforms
     if (Array.isArray(this.extendTransforms)) {
@@ -158,4 +160,4 @@ function processGlsl(obj) {
 
 }
 
-module.exports = GeneratorFactory
+export default GeneratorFactory

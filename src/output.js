@@ -121,4 +121,4 @@ Output.prototype.tick = function (props) {
   this.draw(props)
 }
 
-module.exports = Output
+export default Output

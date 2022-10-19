@@ -24,6 +24,4 @@ const parseStrudel = (pattern) => ({ time, bpm }) => {
 
 window.strudel = parseStrudel
 
-module.exports = {
-    parseStrudel: parseStrudel
-}
+export { parseStrudel }
