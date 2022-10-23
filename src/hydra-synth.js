@@ -6,7 +6,7 @@ import MouseTools from './lib/mouse.js'
 import Audio from './lib/audio.js'
 import VidRecorder from './lib/video-recorder.js'
 import ArrayUtils from './lib/array-utils.js'
-import strudel from './lib/strudel.js'
+// import strudel from './lib/strudel.js'
 import Sandbox from './eval-sandbox.js'
 import Generator from './generator-factory.js'
 

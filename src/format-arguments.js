@@ -1,6 +1,4 @@
 import arrayUtils from './lib/array-utils.js'
-import { parseStrudel } from './lib/strudel.js'
-import { mini } from '@strudel.cycles/mini'
 
 // [WIP] how to treat different dimensions (?)
 const DEFAULT_CONVERSIONS = {
@@ -94,21 +92,7 @@ export default function formatArguments(transform, startIndex, synthContext) {
        typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
        typedArg.isUniform = true
         // }
-      } else if (userArgs[index].constructor.name === 'Pattern') {
-        typedArg.value = (context, props, batchId) => parseStrudel(userArgs[index])(props)
-        typedArg.isUniform = true
-      // parse strings as strudel mini notation
-      } else if (typeof userArgs[index] === "string") {
-        typedArg.value = input.default
-        try {
-          const pattern = mini(userArgs[index])
-          typedArg.value = (context, props, batchId) => parseStrudel(pattern)(props)
-          typedArg.isUniform = true
-        } catch (e) {
-          console.warn('error parsing strudel pattern', e)
-        }
-      }
-       
+      } 
     }
 
     if (startIndex < 0) {
