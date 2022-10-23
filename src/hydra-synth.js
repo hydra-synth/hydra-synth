@@ -10,7 +10,13 @@ import ArrayUtils from './lib/array-utils.js'
 import Sandbox from './eval-sandbox.js'
 import Generator from './generator-factory.js'
 
-const window = global.window
+// const window = global.window
+
+console.log('global', global, 'window', window)
+
+if (typeof window.global === 'undefined') {
+  window.global = window;
+}
 
 const Mouse = MouseTools()
 // to do: add ability to pass in certain uniforms and transforms
