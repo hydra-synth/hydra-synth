@@ -2590,6 +2590,7 @@ function processGlsl(obj) {
   }
 }
 
+const window$1 = global.window;
 const Mouse = mouseListen(); // to do: add ability to pass in certain uniforms and transforms
 
 class HydraRenderer {
@@ -2615,8 +2616,9 @@ class HydraRenderer {
     this.renderAll = false;
     this.detectAudio = detectAudio;
 
-    this._initCanvas(canvas); // object that contains all properties that will be made available on the global context and during local evaluation
+    this._initCanvas(canvas);
 
+    global.window.test = 'hi'; // object that contains all properties that will be made available on the global context and during local evaluation
 
     this.synth = {
       time: 0,
@@ -2636,7 +2638,7 @@ class HydraRenderer {
       hush: this.hush.bind(this),
       tick: this.tick.bind(this)
     };
-    if (makeGlobal) window.loadScript = this.loadScript;
+    if (makeGlobal) window$1.loadScript = this.loadScript;
     this.timeSinceLastUpdate = 0;
     this._time = 0; // for internal use, only to use for deciding when to render frames
     // only allow valid precision options
@@ -2649,7 +2651,7 @@ class HydraRenderer {
       //   console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
       // }
     } else {
-      let isIOS = (/iPad|iPhone|iPod/.test(navigator.platform) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) && !window.MSStream;
+      let isIOS = (/iPad|iPhone|iPod/.test(navigator.platform) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) && !window$1.MSStream;
       this.precision = isIOS ? 'highp' : 'mediump';
     }
 
@@ -2772,7 +2774,7 @@ class HydraRenderer {
     }, 'image/png');
     setTimeout(() => {
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(a.href);
+      window$1.URL.revokeObjectURL(a.href);
     }, 300);
   }
 
@@ -3049,5 +3051,7 @@ class HydraRenderer {
 
 }
 
-export { HydraRenderer as default };
+// export default Synth
+
+module.exports = HydraRenderer;
 //# sourceMappingURL=hydra-synth.modern.js.map

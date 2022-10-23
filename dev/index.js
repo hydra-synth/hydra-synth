@@ -3,8 +3,8 @@
 // const Hydra = require('./../src/index.js').default
 
 
-
-import Hydra from './../src/index.js'
+const Hydra = require('./../src/index.js')
+// import Hydra from './../src/index.js'
 const loop = require('raf-loop')
 const { fugitiveGeometry, exampleVideo, exampleResize, nonGlobalCanvas } = require('./examples.js')
 

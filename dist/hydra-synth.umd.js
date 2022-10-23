@@ -1,7 +1,7 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('raf-loop'), require('meyda'), require('@strudel.cycles/mini')) :
+  typeof exports === 'object' && typeof module !== 'undefined' ? factory(require('raf-loop'), require('meyda'), require('@strudel.cycles/mini')) :
   typeof define === 'function' && define.amd ? define(['raf-loop', 'meyda', '@strudel.cycles/mini'], factory) :
-  (global = global || self, global.hydraSynth = factory(global.rafLoop, global.meyda, global.mini));
+  (global = global || self, factory(global.rafLoop, global.meyda, global.mini));
 })(this, (function (loop, Meyda, mini) {
   function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
@@ -2548,6 +2548,7 @@
     }
   }
 
+  var window$1 = global.window;
   var Mouse = mouseListen(); // to do: add ability to pass in certain uniforms and transforms
 
   var HydraRenderer = /*#__PURE__*/function () {
@@ -2585,8 +2586,9 @@
       this.renderAll = false;
       this.detectAudio = detectAudio;
 
-      this._initCanvas(canvas); // object that contains all properties that will be made available on the global context and during local evaluation
+      this._initCanvas(canvas);
 
+      global.window.test = 'hi'; // object that contains all properties that will be made available on the global context and during local evaluation
 
       this.synth = {
         time: 0,
@@ -2606,7 +2608,7 @@
         hush: this.hush.bind(this),
         tick: this.tick.bind(this)
       };
-      if (makeGlobal) window.loadScript = this.loadScript;
+      if (makeGlobal) window$1.loadScript = this.loadScript;
       this.timeSinceLastUpdate = 0;
       this._time = 0; // for internal use, only to use for deciding when to render frames
       // only allow valid precision options
@@ -2619,7 +2621,7 @@
         //   console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
         // }
       } else {
-        var isIOS = (/iPad|iPhone|iPod/.test(navigator.platform) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) && !window.MSStream;
+        var isIOS = (/iPad|iPhone|iPod/.test(navigator.platform) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) && !window$1.MSStream;
         this.precision = isIOS ? 'highp' : 'mediump';
       }
 
@@ -2750,7 +2752,7 @@
       }, 'image/png');
       setTimeout(function () {
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(a.href);
+        window$1.URL.revokeObjectURL(a.href);
       }, 300);
     };
 
@@ -2978,7 +2980,9 @@
     return HydraRenderer;
   }();
 
-  return HydraRenderer;
+  // export default Synth
+
+  module.exports = HydraRenderer;
 
 }));
 //# sourceMappingURL=hydra-synth.umd.js.map
