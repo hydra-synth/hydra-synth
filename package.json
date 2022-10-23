@@ -15,12 +15,8 @@
     "test": "mocha",
     "dev-ssl": "budo ./dev/index.js --ssl --open --live --port 8000 --",
     "dev": "budo ./dev/index.js --open --live --port 8000 -- -p esmify",
-    "build-hydra": "browserify ./dev/index.js -p esmify --standalone Hydra > dist/hydra-synth.js",
-    "build-shader-generator": "browserify shader-generator.js --standalone HydraShaders > dist/hydra-shaders.js",
-    "build": "npm run build-hydra",
-    "coverage": "nyc npm run test",
-    "microbundle": "microbundle build",
-    "watch": "microbundle watch --compress false  & npm run dev"
+    "build": "browserify ./dev/index.js -p esmify --standalone Hydra > dist/hydra-synth.js",
+    "coverage": "nyc npm run test"
   },
   "repository": {
     "type": "git",
