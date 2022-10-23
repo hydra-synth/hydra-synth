@@ -1,7 +1,14 @@
-const Hydra = require('./../dist/hydra-synth.cjs')
+// const Hydra = require('./../dist/hydra-synth.cjs')
+// const Hydra = require('./../src/index.js').default
+// const Hydra = require('./../src/index.js').default
+
+
+
+import Hydra from './../src/index.js'
 const loop = require('raf-loop')
 const { fugitiveGeometry, exampleVideo, exampleResize, nonGlobalCanvas } = require('./examples.js')
 
+console.log('HYDRA', Hydra)
 // const HydraShaders = require('./../shader-generator.js')
 
 function init () {
@@ -17,7 +24,9 @@ function init () {
 
 
 
-var hydra = new Hydra({detectAudio:false, makeGlobal: false})
+var hydra = new Hydra({detectAudio:false, makeGlobal: true})
+
+osc().out()
 // console.log(hydra)
 // window.hydra = hydra
 // // //osc().out()

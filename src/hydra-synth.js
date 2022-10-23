@@ -10,6 +10,8 @@ import strudel from './lib/strudel.js'
 import Sandbox from './eval-sandbox.js'
 import Generator from './generator-factory.js'
 
+const window = global.window
+
 const Mouse = MouseTools()
 // to do: add ability to pass in certain uniforms and transforms
 class HydraRenderer {
@@ -40,7 +42,7 @@ class HydraRenderer {
 
     this._initCanvas(canvas)
 
-
+    global.window.test = 'hi'
     // object that contains all properties that will be made available on the global context and during local evaluation
     this.synth = {
       time: 0,
