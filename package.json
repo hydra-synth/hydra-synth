@@ -4,6 +4,10 @@
   "description": "base synth for hydra-editor",
   "type": "module",
   "main": "./src/index.js",
+  "exports": {
+    "import": "./src/hydra-synth.js",
+    "require": "./src/index.js"
+  },
   "unpkg": "./dist/hydra-synth.js",
   "scripts": {
     "test": "mocha",
