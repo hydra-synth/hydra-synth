@@ -3,14 +3,9 @@
   "version": "1.3.20",
   "description": "base synth for hydra-editor",
   "source": "./src/index.js",
-  "exports": {
-    "require": "./dist/hydra-synth.cjs",
-    "default": "./dist/hydra-synth.modern.js"
-  },
   "type": "module",
   "main": "./dist/hydra-synth.js",
-  "module": "./dist/hydra-synth.m.js",
-  "unpkg": "./dist/hydra-synth.umd.js",
+  "unpkg": "./dist/hydra-synth.js",
   "scripts": {
     "test": "mocha",
     "dev-ssl": "budo ./dev/index.js --ssl --open --live --port 8000 --",
