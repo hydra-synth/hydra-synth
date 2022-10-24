@@ -1,6 +1,6 @@
 {
   "name": "hydra-synth",
-  "version": "1.3.20",
+  "version": "1.3.21",
   "description": "base synth for hydra-editor",
   "type": "module",
   "main": "./src/index.js",
@@ -13,8 +13,7 @@
     "test": "mocha",
     "dev-ssl": "budo ./dev/index.js --ssl --open --live --port 8000 --",
     "dev": "budo ./dev/index.js --open --live --port 8000 -- -p esmify",
-    "build": "browserify ./dev/index.js -p esmify --standalone Hydra > dist/hydra-synth.js",
-    "coverage": "nyc npm run test"
+    "build": "browserify ./dev/index.js -p esmify --standalone Hydra > dist/hydra-synth.js"
   },
   "repository": {
     "type": "git",
