@@ -4,7 +4,7 @@
 - support for ES6 modules and import syntax
 
 ### Removed
-- extraneous files
+- removed extraneous files
 
 ## Changed
 - 'window' to 'global.window' to work with es6 bundling
