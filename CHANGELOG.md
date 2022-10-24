@@ -1,4 +1,8 @@
 # Changelog
+## [1.3.22] - 2022-10-23
+### Fixed
+- Fixed bundled version that was broken in previous commit
+
 ## [1.3.21] - 2022-10-23
 ### Added
 - support for ES6 modules and import syntax

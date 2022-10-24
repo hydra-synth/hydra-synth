@@ -1,332 +1,4 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Hydra = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-const Hydra = require('../src/index.js')
-
-
-module.exports = {
-  fugitiveGeometry: fugitiveGeometry,
-  exampleVideo: exampleVideo,
-  exampleResize: exampleResize,
-  nonGlobalCanvas: nonGlobalCanvas
-}
-
-function exampleResize() {
-  window.addEventListener('resize', () => {
-    setResolution(window.innerWidth, window.innerHeight)
-    console.log('width', width, window.innerWidth)
-  })
-}
-
-// from :
-// not working on updated hydra-synth
-function fugitiveGeometry2() {
-  s = () =>
-    shape(4)
-      .scrollX([-0.5, -0.2, 0.3, -0.1, -0.1].smooth(0.1).fast(0.3))
-      .scrollY([0.25, -0.2, 0.3, -0.1, 0.2].smooth(0.9).fast(0.15))
-
-  //s().out()
-  // //
-  solid()
-    .add(gradient(3, 0.05).rotate(0.05, -0.2).posterize(2).contrast(0.6), [1, 0, 1, 0.5, 0, 0.6].smooth(0.9))
-    .add(s())
-    .mult(s().scale(0.8).scrollX(0.01).scrollY(-0.01).rotate(0.2, 0.06).add(gradient(3).contrast(0.6), [1, 0, 1, 0.5].smooth(0.9), 0.5).mult(src(o0).scale(0.98), () => a.fft[0] * 9)
-    )
-    // .diff(s().modulate(shape(500)).scale([1.7,1.2].smooth(0.9).fast(0.05)))
-    // .add(gradient(2).invert(),()=>a.fft[2])
-    // .mult(gradient(()=>a.fft[3]*8))
-    // .blend(src((o0),()=>a.fft[1]*40))
-    // .add(voronoi(()=>a.fft[1],()=>a.fft[3],()=>a.fft[0]).thresh(0.7).posterize(2,4).luma(0.9).scrollY(1,()=>a.fft[0]/30).colorama(3).thresh(()=>a.fft[1]).scale(()=>a.fft[3]*2),()=>a.fft[0]/2)
-    .out()
-  // //
-  // speed= 1
-}
-
-function fugitiveGeometry() {
-  s = () =>
-    shape(4)
-      .scrollX([-0.5, -0.2, 0.3, -0.1, -0.1].smooth(0.1).fast(0.3))
-      .scrollY([0.25, -0.2, 0.3, -0.1, 0.2].smooth(0.9).fast(0.15))
-  //
-  solid()
-    .add(gradient(3, 0.05).rotate(0.05, -0.2).posterize(2).contrast(0.6), [1, 0, 1, 0.5, 0, 0.6].smooth(0.9))
-    .add(s())
-    .mult(s().scale(0.8).scrollX(0.01).scrollY(-0.01).rotate(0.2, 0.06).add(gradient(3).contrast(0.6), [1, 0, 1, 0.5].smooth(0.9), 0.5).mult(src(o0).scale(0.98), () => a.fft[0] * 9)
-    )
-    .diff(s().modulate(shape(500)).scale([1.7, 1.2].smooth(0.9).fast(0.05)))
-    .add(gradient(2).invert(), () => a.fft[2])
-    .mult(gradient(() => a.fft[3] * 8))
-    .blend(src((o0), () => a.fft[1] * 40))
-    .add(voronoi(() => a.fft[1], () => a.fft[3], () => a.fft[0]).thresh(0.7).posterize(2, 4).luma(0.9).scrollY(1, () => a.fft[0] / 30).colorama(3).thresh(() => a.fft[1]).scale(() => a.fft[3] * 2), () => a.fft[0] / 2)
-    .out()
-  //
-  speed = 1
-  a.setSmooth(0.96)
-}
-function exampleMultipleMasks() {
-  setFunction({
-    name: 'mask2',
-    type: 'combine',
-    inputs: [
-    ],
-    glsl:
-      `   float a = _luminance(_c1.rgb);
-     return vec4(_c0.rgb*a, a*_c0.a);`
-  })
-
-  gradient().layer(osc().luma().mask(noise(3))).out()
-  gradient().layer(osc().luma().mask2(noise(3))).out(o1)
-  render()
-}
-function exampleMultipleCanvases(num = 2) {
-  for (var i = 0; i < num; i++) {
-    nonGlobalCanvas()
-  }
-}
-
-function nonGlobalCanvas() {
-  const div = document.createElement('div')
-  const canvas = document.createElement('canvas')
-  canvas.style.backgroundColor = "#000"
-  canvas.width = 800
-  canvas.height = 200
-  div.appendChild(canvas)
-  document.body.appendChild(div)
-
-  // canvas.style.width = '100%'
-  // canvas.style.height = '100%'
-  //  exampleCustomCanvas()
-  const hydra = new Hydra({
-    //detectAudio:false, 
-    autoLoop: false,
-    canvas: canvas,
-    makeGlobal: false
-  }).synth
-  const { osc, o0, s0, src, noise } = hydra
-  osc().rotate().blend(noise().repeat(), 0.99).out()
-  window.c1 = hydra
-  setInterval(() => {
-    hydra.tick(1000)
-  }, 1000)
-}
-
-function exampleLoadScript() {
-  (async () => {
-    await loadScript("https://unpkg.com/tone")
-    console.log('loaded script!!')
-  })()
-}
-
-function exampleCamera() {
-  s0.initCam()
-  src(s0).out()
-}
-
-function exampleVideo() {
-  s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", { flipY: false })
-  src(s0).out()
-}
-
-function exampleEasingFunctions() {
-  //  //
-  //  // // Example array sequences
-  //  // shape([4, 5, 3]).out()
-  //  //
-  //  // // array easing
-  //  // shape([4, 3, 2].ease('easeInQuad')).out()
-  //  //
-  //  // // array smoothing
-  //  // shape([4, 3, 2].smooth()).out()
-}
-
-// fixing smoothstep issue so that 0 is not passed as a parameter
-function exampleSmoothstep() {
-  shape(4, 0.3, 0.01).out()
-  shape(4, 0.5, 0).out()
-  osc(89, 0.01, 1.8).luma(0.5, 0).out()
-  osc(89, 0.01, 1.8).thresh(0.5, 0).out()
-}
-
-
-
-function exampleNonGlobal() {
-  const hydra = new Hydra({ makeGlobal: false, detectAudio: false })
-  console.log('instance', hydra)
-  const h = hydra.synth
-  h.osc().diff(h.shape()).out()
-  h.gradient().out(h.o1)
-  h.render()
-
-  const h2 = new Hydra({ makeGlobal: false, detectAudio: false }).synth
-  h2.shape(4).diff(h2.osc(2, 0.1, 1.2)).out()
-}
-
-function exampleExtendTransforms() {
-  var hydra = new Hydra({
-    extendTransforms: {
-      name: 'myOsc', // name that will be used to access function as well as within glsl
-      type: 'src', // can be src: vec4(vec2 _st), coord: vec2(vec2 _st), color: vec4(vec4 _c0), combine: vec4(vec4 _c0, vec4 _c1), combineCoord: vec2(vec2 _st, vec4 _c0)
-      inputs: [
-        {
-          name: 'freq',
-          type: 'float', // 'float'   //, 'texture', 'vec4'
-          default: 0.2
-        },
-        {
-          name: 'sync',
-          type: 'float',
-          default: 0.1
-        },
-        {
-          name: 'offset',
-          type: 'float',
-          default: 0.0
-        }
-      ], glsl: `
-         vec2 st = _st;
-        float r = sin((st.x-offset*20./freq-time*sync)*freq)*0.5  + 0.5;
-        float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
-        float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
-        return vec4(r, g, b, 1.0);
-       `}
-  })
-  myOsc(10, 0.2, 0.8).out()
-
-}
-
-function exampleImage() {
-  s0.initImage("https://upload.wikimedia.org/wikipedia/commons/2/25/Hydra-Foto.jpg")
-  src(s0).out()
-}
-
-function exampleAddFunction(hydra) {
-  // example custom function
-  setFunction({
-    name: 'myOsc', // name that will be used to access function as well as within glsl
-    type: 'src', // can be src: vec4(vec2 _st), coord: vec2(vec2 _st), color: vec4(vec4 _c0), combine: vec4(vec4 _c0, vec4 _c1), combineCoord: vec2(vec2 _st, vec4 _c0)
-    inputs: [
-      {
-        name: 'freq',
-        type: 'float', // 'float'   //, 'texture', 'vec4'
-        default: 0.2
-      },
-      {
-        name: 'sync',
-        type: 'float',
-        default: 0.1
-      },
-      {
-        name: 'offset',
-        type: 'float',
-        default: 0.0
-      }
-    ], glsl: `
-    vec2 st = _st;
-   float r = sin((st.x-offset*20./freq-time*sync)*freq)*0.5  + 0.5;
-   float g = sin((st.x+time*sync)*freq)*0.5 + 0.5;
-   float b = sin((st.x+offset/freq+time*sync)*freq)*0.5  + 0.5;
-   return vec4(r, g, b, 1.0);
-  `})
-
-  myOsc(10, 0.2, 0.8).out()
-  //
-  //  // ooo(10, 0.01, 1.2).blur().out()
-}
-
-function exampleScreen() {
-  s0.initScreen()
-  //src(s0).out()
-}
-
-function exampleGetGLSL() {
-  src(s0).blend(o0).glsl()
-}
-
-function exampleCustomCanvas() {
-  const canvas = document.createElement('canvas')
-  canvas.style.backgroundColor = "#000"
-  canvas.width = 800
-  canvas.height = 200
-
-  canvas.style.width = '100%'
-  canvas.style.height = '100%'
-
-  //canvas.style.imageRe
-
-  var ctx = canvas.getContext('2d')
-  ctx.moveTo(0, 0);
-  ctx.lineTo(200, 100);
-  ctx.stroke();
-
-  s0.init({ src: canvas })
-}
-
-
-function exampleSmoothing() {
-  var shapes = [
-    shape(4)
-      .scale(1, 0.5, [0.5, 1, 2])
-      .scrollX(0.3),
-    shape(4)
-      .scale(1, 0.5, [0.5, 1, 2].smooth(0.5))
-      .scrollX(0.0),
-    shape(4)
-      .scale(1, 0.5, [0.5, 1, 2].smooth())
-      .scrollX(-0.3),
-  ]
-
-  solid()
-    .add(shapes[0])
-    .add(shapes[1])
-    .add(shapes[2])
-    .out(o0)
-}
-
-function exampleSetResolution() {
-  setResolution(20, 20)
-}
-},{"../src/index.js":21}],2:[function(require,module,exports){
-"use strict";
-
-const Hydra = require('./../'); // import Hydra from './../src/index.js'
-
-
-const loop = require('raf-loop');
-
-const {
-  fugitiveGeometry,
-  exampleVideo,
-  exampleResize,
-  nonGlobalCanvas
-} = require('./examples.js'); // console.log('HYDRA', Hydra)
-// const HydraShaders = require('./../shader-generator.js')
-
-
-function init() {
-  //   const canvas = document.createElement('canvas')
-  //   canvas.style.backgroundColor = "#000"
-  //   canvas.width = 800
-  //   canvas.height = 200
-  //   document.body.appendChild(canvas)
-  //   // canvas.style.width = '100%'
-  //   // canvas.style.height = '100%'
-  // //  exampleCustomCanvas()
-  var hydra = new Hydra({
-    detectAudio: false,
-    makeGlobal: true
-  });
-  osc().out(); // console.log(hydra)
-  // window.hydra = hydra
-  // // //osc().out()
-  // exampleVideo()
-  // exampleResize()
-  //nonGlobalCanvas()
-  //s0.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", {})
-  //src(s0).repeat().out()
-}
-
-window.onload = init;
-
-},{"./../":21,"./examples.js":1,"raf-loop":8}],3:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -825,7 +497,7 @@ function eventTargetAgnosticAddListener(emitter, name, listener, flags) {
   }
 }
 
-},{}],4:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -854,11 +526,11 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],5:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 !function(r,t){"object"==typeof exports&&"undefined"!=typeof module?module.exports=t():"function"==typeof define&&define.amd?define(t):(r="undefined"!=typeof globalThis?globalThis:r||self).Meyda=t()}(this,(function(){"use strict";function r(r,t,e){if(e||2===arguments.length)for(var a,n=0,o=t.length;n<o;n++)!a&&n in t||(a||(a=Array.prototype.slice.call(t,0,n)),a[n]=t[n]);return r.concat(a||Array.prototype.slice.call(t))}var t=Object.freeze({__proto__:null,blackman:function(r){for(var t=new Float32Array(r),e=2*Math.PI/(r-1),a=2*e,n=0;n<r/2;n++)t[n]=.42-.5*Math.cos(n*e)+.08*Math.cos(n*a);for(n=Math.ceil(r/2);n>0;n--)t[r-n]=t[n-1];return t},sine:function(r){for(var t=Math.PI/(r-1),e=new Float32Array(r),a=0;a<r;a++)e[a]=Math.sin(t*a);return e},hanning:function(r){for(var t=new Float32Array(r),e=0;e<r;e++)t[e]=.5-.5*Math.cos(2*Math.PI*e/(r-1));return t},hamming:function(r){for(var t=new Float32Array(r),e=0;e<r;e++)t[e]=.54-.46*Math.cos(2*Math.PI*(e/r-1));return t}}),e={};function a(r){for(;r%2==0&&r>1;)r/=2;return 1===r}function n(r,a){if("rect"!==a){if(""!==a&&a||(a="hanning"),e[a]||(e[a]={}),!e[a][r.length])try{e[a][r.length]=t[a](r.length)}catch(r){throw new Error("Invalid windowing function")}r=function(r,t){for(var e=[],a=0;a<Math.min(r.length,t.length);a++)e[a]=r[a]*t[a];return e}(r,e[a][r.length])}return r}function o(r,t,e){for(var a=new Float32Array(r),n=0;n<a.length;n++)a[n]=n*t/e,a[n]=13*Math.atan(a[n]/1315.8)+3.5*Math.atan(Math.pow(a[n]/7518,2));return a}function i(r){return Float32Array.from(r)}function u(r){return 1125*Math.log(1+r/700)}function f(r,t,e){for(var a,n=new Float32Array(r+2),o=new Float32Array(r+2),i=t/2,f=u(0),c=(u(i)-f)/(r+1),l=new Array(r+2),s=0;s<n.length;s++)n[s]=s*c,o[s]=(a=n[s],700*(Math.exp(a/1125)-1)),l[s]=Math.floor((e+1)*o[s]/t);for(var m=new Array(r),p=0;p<m.length;p++){m[p]=new Array(e/2+1).fill(0);for(s=l[p];s<l[p+1];s++)m[p][s]=(s-l[p])/(l[p+1]-l[p]);for(s=l[p+1];s<l[p+2];s++)m[p][s]=(l[p+2]-s)/(l[p+2]-l[p+1])}return m}function c(t,e,a,n,o,i,u){void 0===n&&(n=5),void 0===o&&(o=2),void 0===i&&(i=!0),void 0===u&&(u=440);var f=Math.floor(a/2)+1,c=new Array(a).fill(0).map((function(r,n){return t*function(r,t){return Math.log2(16*r/t)}(e*n/a,u)}));c[0]=c[1]-1.5*t;var l,s,m,p=c.slice(1).map((function(r,t){return Math.max(r-c[t])}),1).concat([1]),h=Math.round(t/2),g=new Array(t).fill(0).map((function(r,e){return c.map((function(r){return(10*t+h+r-e)%t-h}))})),w=g.map((function(r,t){return r.map((function(r,e){return Math.exp(-.5*Math.pow(2*g[t][e]/p[e],2))}))}));if(s=(l=w)[0].map((function(){return 0})),m=l.reduce((function(r,t){return t.forEach((function(t,e){r[e]+=Math.pow(t,2)})),r}),s).map(Math.sqrt),w=l.map((function(r,t){return r.map((function(r,t){return r/(m[t]||1)}))})),o){var v=c.map((function(r){return Math.exp(-.5*Math.pow((r/t-n)/o,2))}));w=w.map((function(r){return r.map((function(r,t){return r*v[t]}))}))}return i&&(w=r(r([],w.slice(3),!0),w.slice(0,3),!0)),w.map((function(r){return r.slice(0,f)}))}function l(r,t){for(var e=0,a=0,n=0;n<t.length;n++)e+=Math.pow(n,r)*Math.abs(t[n]),a+=t[n];return e/a}function s(r){var t=r.ampSpectrum,e=r.barkScale,a=r.numberOfBarkBands,n=void 0===a?24:a;if("object"!=typeof t||"object"!=typeof e)throw new TypeError;var o=n,i=new Float32Array(o),u=0,f=t,c=new Int32Array(o+1);c[0]=0;for(var l=e[f.length-1]/o,s=1,m=0;m<f.length;m++)for(;e[m]>l;)c[s++]=m,l=s*e[f.length-1]/o;c[o]=f.length-1;for(m=0;m<o;m++){for(var p=0,h=c[m];h<c[m+1];h++)p+=f[h];i[m]=Math.pow(p,.23)}for(m=0;m<i.length;m++)u+=i[m];return{specific:i,total:u}}function m(r){var t=r.ampSpectrum;if("object"!=typeof t)throw new TypeError;for(var e=new Float32Array(t.length),a=0;a<e.length;a++)e[a]=Math.pow(t[a],2);return e}function p(r){var t=r.ampSpectrum,e=r.melFilterBank,a=r.bufferSize;if("object"!=typeof t)throw new TypeError("Valid ampSpectrum is required to generate melBands");if("object"!=typeof e)throw new TypeError("Valid melFilterBank is required to generate melBands");for(var n=m({ampSpectrum:t}),o=e.length,i=Array(o),u=new Float32Array(o),f=0;f<u.length;f++){i[f]=new Float32Array(a/2),u[f]=0;for(var c=0;c<a/2;c++)i[f][c]=e[f][c]*n[c],u[f]+=i[f][c];u[f]=Math.log(u[f]+1)}return Array.prototype.slice.call(u)}function h(r){return r&&r.__esModule&&Object.prototype.hasOwnProperty.call(r,"default")?r.default:r}var g={exports:{}},w=null;var v=function(r,t){var e=r.length;return t=t||2,w&&w[e]||function(r){(w=w||{})[r]=new Array(r*r);for(var t=Math.PI/r,e=0;e<r;e++)for(var a=0;a<r;a++)w[r][a+e*r]=Math.cos(t*(a+.5)*e)}(e),r.map((function(){return 0})).map((function(a,n){return t*r.reduce((function(r,t,a,o){return r+t*w[e][a+n*e]}),0)}))};!function(r){r.exports=v}(g);var d=h(g.exports);var y=Object.freeze({__proto__:null,buffer:function(r){return r.signal},rms:function(r){var t=r.signal;if("object"!=typeof t)throw new TypeError;for(var e=0,a=0;a<t.length;a++)e+=Math.pow(t[a],2);return e/=t.length,e=Math.sqrt(e)},energy:function(r){var t=r.signal;if("object"!=typeof t)throw new TypeError;for(var e=0,a=0;a<t.length;a++)e+=Math.pow(Math.abs(t[a]),2);return e},complexSpectrum:function(r){return r.complexSpectrum},spectralSlope:function(r){var t=r.ampSpectrum,e=r.sampleRate,a=r.bufferSize;if("object"!=typeof t)throw new TypeError;for(var n=0,o=0,i=new Float32Array(t.length),u=0,f=0,c=0;c<t.length;c++){n+=t[c];var l=c*e/a;i[c]=l,u+=l*l,o+=l,f+=l*t[c]}return(t.length*f-o*n)/(n*(u-Math.pow(o,2)))},spectralCentroid:function(r){var t=r.ampSpectrum;if("object"!=typeof t)throw new TypeError;return l(1,t)},spectralRolloff:function(r){var t=r.ampSpectrum,e=r.sampleRate;if("object"!=typeof t)throw new TypeError;for(var a=t,n=e/(2*(a.length-1)),o=0,i=0;i<a.length;i++)o+=a[i];for(var u=.99*o,f=a.length-1;o>u&&f>=0;)o-=a[f],--f;return(f+1)*n},spectralFlatness:function(r){var t=r.ampSpectrum;if("object"!=typeof t)throw new TypeError;for(var e=0,a=0,n=0;n<t.length;n++)e+=Math.log(t[n]),a+=t[n];return Math.exp(e/t.length)*t.length/a},spectralSpread:function(r){var t=r.ampSpectrum;if("object"!=typeof t)throw new TypeError;return Math.sqrt(l(2,t)-Math.pow(l(1,t),2))},spectralSkewness:function(r){var t=r.ampSpectrum;if("object"!=typeof t)throw new TypeError;var e=l(1,t),a=l(2,t),n=l(3,t);return(2*Math.pow(e,3)-3*e*a+n)/Math.pow(Math.sqrt(a-Math.pow(e,2)),3)},spectralKurtosis:function(r){var t=r.ampSpectrum;if("object"!=typeof t)throw new TypeError;var e=t,a=l(1,e),n=l(2,e),o=l(3,e),i=l(4,e);return(-3*Math.pow(a,4)+6*a*n-4*a*o+i)/Math.pow(Math.sqrt(n-Math.pow(a,2)),4)},amplitudeSpectrum:function(r){return r.ampSpectrum},zcr:function(r){var t=r.signal;if("object"!=typeof t)throw new TypeError;for(var e=0,a=1;a<t.length;a++)(t[a-1]>=0&&t[a]<0||t[a-1]<0&&t[a]>=0)&&e++;return e},loudness:s,perceptualSpread:function(r){for(var t=s({ampSpectrum:r.ampSpectrum,barkScale:r.barkScale}),e=0,a=0;a<t.specific.length;a++)t.specific[a]>e&&(e=t.specific[a]);return Math.pow((t.total-e)/t.total,2)},perceptualSharpness:function(r){for(var t=s({ampSpectrum:r.ampSpectrum,barkScale:r.barkScale}),e=t.specific,a=0,n=0;n<e.length;n++)a+=n<15?(n+1)*e[n+1]:.066*Math.exp(.171*(n+1));return a*=.11/t.total},powerSpectrum:m,mfcc:function(r){var t=r.ampSpectrum,e=r.melFilterBank,a=r.numberOfMFCCCoefficients,n=r.bufferSize,o=Math.min(40,Math.max(1,a||13));if(e.length<o)throw new Error("Insufficient filter bank for requested number of coefficients");var i=p({ampSpectrum:t,melFilterBank:e,bufferSize:n});return d(i).slice(0,o)},chroma:function(r){var t=r.ampSpectrum,e=r.chromaFilterBank;if("object"!=typeof t)throw new TypeError("Valid ampSpectrum is required to generate chroma");if("object"!=typeof e)throw new TypeError("Valid chromaFilterBank is required to generate chroma");var a=e.map((function(r,e){return t.reduce((function(t,e,a){return t+e*r[a]}),0)})),n=Math.max.apply(Math,a);return n?a.map((function(r){return r/n})):a},spectralFlux:function(r){var t=r.signal,e=r.previousSignal,a=r.bufferSize;if("object"!=typeof t||"object"!=typeof e)throw new TypeError;for(var n=0,o=-a/2;o<t.length/2-1;o++)x=Math.abs(t[o])-Math.abs(e[o]),n+=(x+Math.abs(x))/2;return n},spectralCrest:function(r){var t=r.ampSpectrum;if("object"!=typeof t)throw new TypeError;var e=0,a=-1/0;return t.forEach((function(r){e+=Math.pow(r,2),a=r>a?r:a})),e/=t.length,e=Math.sqrt(e),a/e},melBands:p});function S(r){if(Array.isArray(r)){for(var t=0,e=Array(r.length);t<r.length;t++)e[t]=r[t];return e}return Array.from(r)}var _={},b={},M={bitReverseArray:function(r){if(void 0===_[r]){for(var t=(r-1).toString(2).length,e="0".repeat(t),a={},n=0;n<r;n++){var o=n.toString(2);o=e.substr(o.length)+o,o=[].concat(S(o)).reverse().join(""),a[n]=parseInt(o,2)}_[r]=a}return _[r]},multiply:function(r,t){return{real:r.real*t.real-r.imag*t.imag,imag:r.real*t.imag+r.imag*t.real}},add:function(r,t){return{real:r.real+t.real,imag:r.imag+t.imag}},subtract:function(r,t){return{real:r.real-t.real,imag:r.imag-t.imag}},euler:function(r,t){var e=-2*Math.PI*r/t;return{real:Math.cos(e),imag:Math.sin(e)}},conj:function(r){return r.imag*=-1,r},constructComplexArray:function(r){var t={};t.real=void 0===r.real?r.slice():r.real.slice();var e=t.real.length;return void 0===b[e]&&(b[e]=Array.apply(null,Array(e)).map(Number.prototype.valueOf,0)),t.imag=b[e].slice(),t}},F=function(r){var t={};void 0===r.real||void 0===r.imag?t=M.constructComplexArray(r):(t.real=r.real.slice(),t.imag=r.imag.slice());var e=t.real.length,a=Math.log2(e);if(Math.round(a)!=a)throw new Error("Input size must be a power of 2.");if(t.real.length!=t.imag.length)throw new Error("Real and imaginary components must have the same length.");for(var n=M.bitReverseArray(e),o={real:[],imag:[]},i=0;i<e;i++)o.real[n[i]]=t.real[i],o.imag[n[i]]=t.imag[i];for(var u=0;u<e;u++)t.real[u]=o.real[u],t.imag[u]=o.imag[u];for(var f=1;f<=a;f++)for(var c=Math.pow(2,f),l=0;l<c/2;l++)for(var s=M.euler(l,c),m=0;m<e/c;m++){var p=c*m+l,h=c*m+l+c/2,g={real:t.real[p],imag:t.imag[p]},w={real:t.real[h],imag:t.imag[h]},v=M.multiply(s,w),d=M.subtract(g,v);t.real[h]=d.real,t.imag[h]=d.imag;var y=M.add(v,g);t.real[p]=y.real,t.imag[p]=y.imag}return t},A=F,E=function(){function r(r,t){var e=this;if(this._m=t,!r.audioContext)throw this._m.errors.noAC;if(r.bufferSize&&!a(r.bufferSize))throw this._m._errors.notPow2;if(!r.source)throw this._m._errors.noSource;this._m.audioContext=r.audioContext,this._m.bufferSize=r.bufferSize||this._m.bufferSize||256,this._m.hopSize=r.hopSize||this._m.hopSize||this._m.bufferSize,this._m.sampleRate=r.sampleRate||this._m.audioContext.sampleRate||44100,this._m.callback=r.callback,this._m.windowingFunction=r.windowingFunction||"hanning",this._m.featureExtractors=y,this._m.EXTRACTION_STARTED=r.startImmediately||!1,this._m.channel="number"==typeof r.channel?r.channel:0,this._m.inputs=r.inputs||1,this._m.outputs=r.outputs||1,this._m.numberOfMFCCCoefficients=r.numberOfMFCCCoefficients||this._m.numberOfMFCCCoefficients||13,this._m.numberOfBarkBands=r.numberOfBarkBands||this._m.numberOfBarkBands||24,this._m.spn=this._m.audioContext.createScriptProcessor(this._m.bufferSize,this._m.inputs,this._m.outputs),this._m.spn.connect(this._m.audioContext.destination),this._m._featuresToExtract=r.featureExtractors||[],this._m.barkScale=o(this._m.bufferSize,this._m.sampleRate,this._m.bufferSize),this._m.melFilterBank=f(Math.max(this._m.melBands,this._m.numberOfMFCCCoefficients),this._m.sampleRate,this._m.bufferSize),this._m.inputData=null,this._m.previousInputData=null,this._m.frame=null,this._m.previousFrame=null,this.setSource(r.source),this._m.spn.onaudioprocess=function(r){var t;null!==e._m.inputData&&(e._m.previousInputData=e._m.inputData),e._m.inputData=r.inputBuffer.getChannelData(e._m.channel),e._m.previousInputData?((t=new Float32Array(e._m.previousInputData.length+e._m.inputData.length-e._m.hopSize)).set(e._m.previousInputData.slice(e._m.hopSize)),t.set(e._m.inputData,e._m.previousInputData.length-e._m.hopSize)):t=e._m.inputData,function(r,t,e){if(r.length<t)throw new Error("Buffer is too short for frame length");if(e<1)throw new Error("Hop length cannot be less that 1");if(t<1)throw new Error("Frame length cannot be less that 1");var a=1+Math.floor((r.length-t)/e);return new Array(a).fill(0).map((function(a,n){return r.slice(n*e,n*e+t)}))}(t,e._m.bufferSize,e._m.hopSize).forEach((function(r){e._m.frame=r;var t=e._m.extract(e._m._featuresToExtract,e._m.frame,e._m.previousFrame);"function"==typeof e._m.callback&&e._m.EXTRACTION_STARTED&&e._m.callback(t),e._m.previousFrame=e._m.frame}))}}return r.prototype.start=function(r){this._m._featuresToExtract=r||this._m._featuresToExtract,this._m.EXTRACTION_STARTED=!0},r.prototype.stop=function(){this._m.EXTRACTION_STARTED=!1},r.prototype.setSource=function(r){this._m.source&&this._m.source.disconnect(this._m.spn),this._m.source=r,this._m.source.connect(this._m.spn)},r.prototype.setChannel=function(r){r<=this._m.inputs?this._m.channel=r:console.error("Channel ".concat(r," does not exist. Make sure you've provided a value for 'inputs' that is greater than ").concat(r," when instantiating the MeydaAnalyzer"))},r.prototype.get=function(r){return this._m.inputData?this._m.extract(r||this._m._featuresToExtract,this._m.inputData,this._m.previousInputData):null},r}(),C={audioContext:null,spn:null,bufferSize:512,sampleRate:44100,melBands:26,chromaBands:12,callback:null,windowingFunction:"hanning",featureExtractors:y,EXTRACTION_STARTED:!1,numberOfMFCCCoefficients:13,numberOfBarkBands:24,_featuresToExtract:[],windowing:n,_errors:{notPow2:new Error("Meyda: Buffer size must be a power of 2, e.g. 64 or 512"),featureUndef:new Error("Meyda: No features defined."),invalidFeatureFmt:new Error("Meyda: Invalid feature format"),invalidInput:new Error("Meyda: Invalid input."),noAC:new Error("Meyda: No AudioContext specified."),noSource:new Error("Meyda: No source node specified.")},createMeydaAnalyzer:function(r){return new E(r,Object.assign({},C))},listAvailableFeatureExtractors:function(){return Object.keys(this.featureExtractors)},extract:function(r,t,e){var n=this;if(!t)throw this._errors.invalidInput;if("object"!=typeof t)throw this._errors.invalidInput;if(!r)throw this._errors.featureUndef;if(!a(t.length))throw this._errors.notPow2;void 0!==this.barkScale&&this.barkScale.length==this.bufferSize||(this.barkScale=o(this.bufferSize,this.sampleRate,this.bufferSize)),void 0!==this.melFilterBank&&this.barkScale.length==this.bufferSize&&this.melFilterBank.length==this.melBands||(this.melFilterBank=f(Math.max(this.melBands,this.numberOfMFCCCoefficients),this.sampleRate,this.bufferSize)),void 0!==this.chromaFilterBank&&this.chromaFilterBank.length==this.chromaBands||(this.chromaFilterBank=c(this.chromaBands,this.sampleRate,this.bufferSize)),"buffer"in t&&void 0===t.buffer?this.signal=i(t):this.signal=t;var u=k(t,this.windowingFunction,this.bufferSize);if(this.signal=u.windowedSignal,this.complexSpectrum=u.complexSpectrum,this.ampSpectrum=u.ampSpectrum,e){var l=k(e,this.windowingFunction,this.bufferSize);this.previousSignal=l.windowedSignal,this.previousComplexSpectrum=l.complexSpectrum,this.previousAmpSpectrum=l.ampSpectrum}var s=function(r){return n.featureExtractors[r]({ampSpectrum:n.ampSpectrum,chromaFilterBank:n.chromaFilterBank,complexSpectrum:n.complexSpectrum,signal:n.signal,bufferSize:n.bufferSize,sampleRate:n.sampleRate,barkScale:n.barkScale,melFilterBank:n.melFilterBank,previousSignal:n.previousSignal,previousAmpSpectrum:n.previousAmpSpectrum,previousComplexSpectrum:n.previousComplexSpectrum,numberOfMFCCCoefficients:n.numberOfMFCCCoefficients,numberOfBarkBands:n.numberOfBarkBands})};if("object"==typeof r)return r.reduce((function(r,t){var e;return Object.assign({},r,((e={})[t]=s(t),e))}),{});if("string"==typeof r)return s(r);throw this._errors.invalidFeatureFmt}},k=function(r,t,e){var a={};void 0===r.buffer?a.signal=i(r):a.signal=r,a.windowedSignal=n(a.signal,t),a.complexSpectrum=A(a.windowedSignal),a.ampSpectrum=new Float32Array(e/2);for(var o=0;o<e/2;o++)a.ampSpectrum[o]=Math.sqrt(Math.pow(a.complexSpectrum.real[o],2)+Math.pow(a.complexSpectrum.imag[o],2));return a};return"undefined"!=typeof window&&(window.Meyda=C),C}));
 
 
-},{}],6:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 (function (process){(function (){
 // Generated by CoffeeScript 1.12.2
 (function() {
@@ -898,7 +570,7 @@ if (typeof Object.create === 'function') {
 
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":7}],7:[function(require,module,exports){
+},{"_process":5}],5:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -1084,7 +756,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],8:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 var inherits = require('inherits')
 var EventEmitter = require('events').EventEmitter
 var now = require('right-now')
@@ -1129,7 +801,7 @@ Engine.prototype.tick = function() {
     this.emit('tick', dt)
     this.last = time
 }
-},{"events":3,"inherits":4,"raf":9,"right-now":11}],9:[function(require,module,exports){
+},{"events":1,"inherits":2,"raf":7,"right-now":9}],7:[function(require,module,exports){
 (function (global){(function (){
 var now = require('performance-now')
   , root = typeof window === 'undefined' ? global : window
@@ -1208,7 +880,7 @@ module.exports.polyfill = function(object) {
 }
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"performance-now":6}],10:[function(require,module,exports){
+},{"performance-now":4}],8:[function(require,module,exports){
 (function(aa,ia){"object"===typeof exports&&"undefined"!==typeof module?module.exports=ia():"function"===typeof define&&define.amd?define(ia):aa.createREGL=ia()})(this,function(){function aa(a,b){this.id=Ab++;this.type=a;this.data=b}function ia(a){if(0===a.length)return[];var b=a.charAt(0),c=a.charAt(a.length-1);if(1<a.length&&b===c&&('"'===b||"'"===b))return['"'+a.substr(1,a.length-2).replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"'];if(b=/\[(false|true|null|\d+|'[^']*'|"[^"]*")\]/.exec(a))return ia(a.substr(0,
 b.index)).concat(ia(b[1])).concat(ia(a.substr(b.index+b[0].length)));b=a.split(".");if(1===b.length)return['"'+a.replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"'];a=[];for(c=0;c<b.length;++c)a=a.concat(ia(b[c]));return a}function Za(a){return"["+ia(a).join("][")+"]"}function Bb(){var a={"":0},b=[""];return{id:function(c){var e=a[c];if(e)return e;e=a[c]=b.length;b.push(c);return e},str:function(a){return b[a]}}}function Cb(a,b,c){function e(){var b=window.innerWidth,e=window.innerHeight;a!==document.body&&
 (e=a.getBoundingClientRect(),b=e.right-e.left,e=e.bottom-e.top);g.width=c*b;g.height=c*e;E(g.style,{width:b+"px",height:e+"px"})}var g=document.createElement("canvas");E(g.style,{border:0,margin:0,padding:0,top:0,left:0});a.appendChild(g);a===document.body&&(g.style.position="absolute",E(a.style,{margin:0,padding:0}));window.addEventListener("resize",e,!1);e();return{canvas:g,onDestroy:function(){window.removeEventListener("resize",e);a.removeChild(g)}}}function Db(a,b){function c(c){try{return a.getContext(c,
@@ -1360,7 +1032,7 @@ d,!1));var aa=K.setFBO=n({framebuffer:la.define.call(null,1,"framebuffer")});m()
 renderbuffer:M.create,framebuffer:K.create,framebufferCube:K.createCube,attributes:h,frame:r,on:function(a,b){var c;switch(a){case "frame":return r(b);case "lost":c=U;break;case "restore":c=W;break;case "destroy":c=Z}c.push(b);return{cancel:function(){for(var a=0;a<c.length;++a)if(c[a]===b){c[a]=c[c.length-1];c.pop();break}}}},limits:R,hasExtension:function(a){return 0<=R.extensions.indexOf(a.toLowerCase())},read:u,destroy:function(){G.length=0;e();L&&(L.removeEventListener("webglcontextlost",g),
 L.removeEventListener("webglcontextrestored",d));Q.clear();K.clear();M.clear();A.clear();T.clear();F.clear();B&&B.clear();Z.forEach(function(a){a()})},_gl:k,_refresh:m,poll:function(){t();B&&B.update()},now:y,stats:v});a.onDone(null,h);return h}});
 
-},{}],11:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (global){(function (){
 module.exports =
   global.performance &&
@@ -1371,7 +1043,7 @@ module.exports =
   }
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],12:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1427,7 +1099,7 @@ class EvalSandbox {
 var _default = EvalSandbox;
 exports.default = _default;
 
-},{"./lib/array-utils.js":22,"./lib/sandbox.js":27}],13:[function(require,module,exports){
+},{"./lib/array-utils.js":20,"./lib/sandbox.js":25}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1602,7 +1274,7 @@ function formatArguments(transform, startIndex, synthContext) {
   });
 }
 
-},{"./lib/array-utils.js":22}],14:[function(require,module,exports){
+},{"./lib/array-utils.js":20}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1707,7 +1379,7 @@ function contains(object, arr) {
   return false;
 }
 
-},{"./format-arguments.js":13,"./lib/array-utils.js":22}],15:[function(require,module,exports){
+},{"./format-arguments.js":11,"./lib/array-utils.js":20}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1895,7 +1567,7 @@ function processGlsl(obj) {
 var _default = GeneratorFactory;
 exports.default = _default;
 
-},{"./glsl-source.js":16,"./glsl/glsl-functions.js":17}],16:[function(require,module,exports){
+},{"./glsl-source.js":14,"./glsl/glsl-functions.js":15}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2020,7 +1692,7 @@ GlslSource.prototype.compile = function (transforms) {
 var _default = GlslSource;
 exports.default = _default;
 
-},{"./generate-glsl.js":14,"./glsl/utility-functions.js":18}],17:[function(require,module,exports){
+},{"./generate-glsl.js":12,"./glsl/utility-functions.js":16}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2871,7 +2543,7 @@ var _default = () => [{
 
 exports.default = _default;
 
-},{}],18:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2988,7 +2660,7 @@ var _default = {
 };
 exports.default = _default;
 
-},{}],19:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3157,7 +2829,7 @@ class HydraSource {
 var _default = HydraSource;
 exports.default = _default;
 
-},{"./lib/screenmedia.js":28,"./lib/webcam.js":30}],20:[function(require,module,exports){
+},{"./lib/screenmedia.js":26,"./lib/webcam.js":28}],18:[function(require,module,exports){
 (function (global){(function (){
 "use strict";
 
@@ -3658,7 +3330,7 @@ var _default = HydraRenderer;
 exports.default = _default;
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./eval-sandbox.js":12,"./generator-factory.js":15,"./hydra-source.js":19,"./lib/array-utils.js":22,"./lib/audio.js":23,"./lib/mouse.js":26,"./lib/video-recorder.js":29,"./output.js":31,"raf-loop":8,"regl":10}],21:[function(require,module,exports){
+},{"./eval-sandbox.js":10,"./generator-factory.js":13,"./hydra-source.js":17,"./lib/array-utils.js":20,"./lib/audio.js":21,"./lib/mouse.js":24,"./lib/video-recorder.js":27,"./output.js":29,"raf-loop":6,"regl":8}],19:[function(require,module,exports){
 "use strict";
 
 var _hydraSynth = _interopRequireDefault(require("./hydra-synth.js"));
@@ -3670,7 +3342,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 // export default Synth
 module.exports = _hydraSynth.default;
 
-},{"./hydra-synth.js":20}],22:[function(require,module,exports){
+},{"./hydra-synth.js":18}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3757,7 +3429,7 @@ var _default = {
 };
 exports.default = _default;
 
-},{"./easing-functions.js":24}],23:[function(require,module,exports){
+},{"./easing-functions.js":22}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3977,7 +3649,7 @@ class Audio {
 var _default = Audio;
 exports.default = _default;
 
-},{"meyda":5}],24:[function(require,module,exports){
+},{"meyda":3}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4045,7 +3717,7 @@ var _default = {
 };
 exports.default = _default;
 
-},{}],25:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4119,7 +3791,7 @@ mouse.y = mouseRelativeY;
 var _default = mouse;
 exports.default = _default;
 
-},{}],26:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4329,7 +4001,7 @@ function mouseListen(element, callback) {
   return result;
 }
 
-},{"./mouse-event.js":25}],27:[function(require,module,exports){
+},{"./mouse-event.js":23}],25:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4372,7 +4044,7 @@ var _default = parent => {
 
 exports.default = _default;
 
-},{}],28:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4396,7 +4068,7 @@ function _default(options) {
   });
 }
 
-},{}],29:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4497,7 +4169,7 @@ class VideoRecorder {
 var _default = VideoRecorder;
 exports.default = _default;
 
-},{}],30:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4540,7 +4212,7 @@ function _default(deviceId) {
   }).catch(console.log.bind(console));
 }
 
-},{}],31:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4665,5 +4337,5 @@ Output.prototype.tick = function (props) {
 var _default = Output;
 exports.default = _default;
 
-},{}]},{},[2])(2)
+},{}]},{},[19])(19)
 });
