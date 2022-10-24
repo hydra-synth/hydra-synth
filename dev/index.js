@@ -4,7 +4,7 @@ const Hydra = require('./../')
 const loop = require('raf-loop')
 const { fugitiveGeometry, exampleVideo, exampleResize, nonGlobalCanvas } = require('./examples.js')
 
-console.log('HYDRA', Hydra)
+// console.log('HYDRA', Hydra)
 // const HydraShaders = require('./../shader-generator.js')
 
 function init () {

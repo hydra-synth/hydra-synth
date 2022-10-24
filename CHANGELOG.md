@@ -1,10 +1,13 @@
 # Changelog
 ## [1.3.21] - 2022-10-23
 ### Added
-- support for ES^ modules
+- support for ES6 modules and import syntax
 
 ### Removed
 - extraneous files
+
+## Changed
+- 'window' to 'global.window' to work with es6 bundling
 
 ## [1.3.20] - 2022-07-07
 ### Fixed

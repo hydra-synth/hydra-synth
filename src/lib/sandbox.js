@@ -8,7 +8,6 @@ export default (parent) => {
   var sandbox = createSandbox(initialCode)
 
   var addToContext = (name, object) => {
-    console.log('running', name, object)
     initialCode += `
       var ${name} = ${object}
     `
@@ -22,7 +21,6 @@ export default (parent) => {
   }
 
   function createSandbox (initial) {
-    console.log('evaling', initial)
     eval(initial)
     // optional params
     var localEval = function (code)  {

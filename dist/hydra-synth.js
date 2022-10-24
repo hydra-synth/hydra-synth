@@ -287,10 +287,7 @@ function exampleSetResolution() {
 },{"../src/index.js":21}],2:[function(require,module,exports){
 "use strict";
 
-// const Hydra = require('./../dist/hydra-synth.cjs')
-// const Hydra = require('./../src/index.js').default
-// const Hydra = require('./../src/index.js').default
-const Hydra = require('./../src/index.js'); // import Hydra from './../src/index.js'
+const Hydra = require('./../'); // import Hydra from './../src/index.js'
 
 
 const loop = require('raf-loop');
@@ -300,9 +297,9 @@ const {
   exampleVideo,
   exampleResize,
   nonGlobalCanvas
-} = require('./examples.js');
+} = require('./examples.js'); // console.log('HYDRA', Hydra)
+// const HydraShaders = require('./../shader-generator.js')
 
-console.log('HYDRA', Hydra); // const HydraShaders = require('./../shader-generator.js')
 
 function init() {
   //   const canvas = document.createElement('canvas')
@@ -329,7 +326,7 @@ function init() {
 
 window.onload = init;
 
-},{"./../src/index.js":21,"./examples.js":1,"raf-loop":8}],3:[function(require,module,exports){
+},{"./../":21,"./examples.js":1,"raf-loop":8}],3:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1442,8 +1439,6 @@ var _arrayUtils = _interopRequireDefault(require("./lib/array-utils.js"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-// import { parseStrudel } from './lib/strudel.js'
-// import { mini } from '@strudel.cycles/mini'
 // [WIP] how to treat different dimensions (?)
 const DEFAULT_CONVERSIONS = {
   float: {
@@ -1551,21 +1546,7 @@ function formatArguments(transform, startIndex, synthContext) {
         typedArg.value = (context, props, batchId) => _arrayUtils.default.getValue(userArgs[index])(props);
 
         typedArg.isUniform = true; // }
-      } // else if (userArgs[index].constructor.name === 'Pattern') {
-      //   typedArg.value = (context, props, batchId) => parseStrudel(userArgs[index])(props)
-      //   typedArg.isUniform = true
-      // // parse strings as strudel mini notation
-      // } else if (typeof userArgs[index] === "string") {
-      //   typedArg.value = input.default
-      //   try {
-      //     const pattern = mini(userArgs[index])
-      //     typedArg.value = (context, props, batchId) => parseStrudel(pattern)(props)
-      //     typedArg.isUniform = true
-      //   } catch (e) {
-      //     console.warn('error parsing strudel pattern', e)
-      //   }
-      // }
-
+      }
     }
 
     if (startIndex < 0) {} else {
@@ -3203,10 +3184,12 @@ var _evalSandbox = _interopRequireDefault(require("./eval-sandbox.js"));
 
 var _generatorFactory = _interopRequireDefault(require("./generator-factory.js"));
 
+var _regl = _interopRequireDefault(require("regl"));
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 // import strudel from './lib/strudel.js'
-const window = global.window;
+// const window = global.window
 const Mouse = (0, _mouse.default)(); // to do: add ability to pass in certain uniforms and transforms
 
 class HydraRenderer {
@@ -3433,7 +3416,7 @@ class HydraRenderer {
   }
 
   _initRegl() {
-    this.regl = require('regl')({
+    this.regl = (0, _regl.default)({
       //  profile: true,
       canvas: this.canvas,
       pixelRatio: 1 //,
@@ -3683,6 +3666,7 @@ var _hydraSynth = _interopRequireDefault(require("./hydra-synth.js"));
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 //import ShaderGenerator = require('./shader-generator.js')
+// alert('hi')
 // export default Synth
 module.exports = _hydraSynth.default;
 
@@ -4361,7 +4345,6 @@ var _default = parent => {
   var sandbox = createSandbox(initialCode);
 
   var addToContext = (name, object) => {
-    console.log('running', name, object);
     initialCode += `
       var ${name} = ${object}
     `;
@@ -4374,7 +4357,6 @@ var _default = parent => {
   };
 
   function createSandbox(initial) {
-    console.log('evaling', initial);
     eval(initial); // optional params
 
     var localEval = function (code) {
