@@ -10,7 +10,6 @@
   },
   "unpkg": "./dist/hydra-synth.js",
   "scripts": {
-    "test": "mocha",
     "dev-ssl": "budo ./dev/index.js --ssl --open --live --port 8000 --",
     "dev": "budo ./dev/index.js --open --live --port 8000 -- -p esmify",
     "build": "browserify ./dev/index.js -p esmify --standalone Hydra > dist/hydra-synth.js"
