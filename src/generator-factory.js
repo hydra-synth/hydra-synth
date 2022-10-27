@@ -1,6 +1,5 @@
 import GlslSource from './glsl-source.js'
 import glslFunctions from './glsl/glsl-functions.js'
-const functions = glslFunctions()
 
 class GeneratorFactory {
   constructor ({
@@ -18,6 +17,7 @@ class GeneratorFactory {
     this.init()
   }
   init () {
+    const functions = glslFunctions()
     this.glslTransforms = {}
     this.generators = Object.entries(this.generators).reduce((prev, [method, transform]) => {
       this.changeListener({type: 'remove', synth: this, method})

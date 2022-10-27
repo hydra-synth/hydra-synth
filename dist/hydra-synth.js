@@ -1393,8 +1393,6 @@ var _glslFunctions = _interopRequireDefault(require("./glsl/glsl-functions.js"))
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-const functions = (0, _glslFunctions.default)();
-
 class GeneratorFactory {
   constructor({
     defaultUniforms,
@@ -1411,6 +1409,7 @@ class GeneratorFactory {
   }
 
   init() {
+    const functions = (0, _glslFunctions.default)();
     this.glslTransforms = {};
     this.generators = Object.entries(this.generators).reduce((prev, [method, transform]) => {
       this.changeListener({
