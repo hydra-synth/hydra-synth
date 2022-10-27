@@ -1,4 +1,8 @@
 # Changelog
+## [1.3.24] - 2022-10-27
+### Fixed
+- Fixed globally exposed transforms which broke multi hydra
+
 ## [1.3.22] - 2022-10-23
 ### Fixed
 - Fixed bundled version that was broken in previous commit
