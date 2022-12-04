@@ -3,33 +3,32 @@
 // should probably be replaced with an abstract syntax tree
 
 export default (parent) => {
-  var initialCode = ``
+  var initialCode = ``;
 
-  var sandbox = createSandbox(initialCode)
+  var sandbox = createSandbox(initialCode);
 
   var addToContext = (name, object) => {
     initialCode += `
       var ${name} = ${object}
-    `
-    sandbox = createSandbox(initialCode)
-  }
-
+    `;
+    sandbox = createSandbox(initialCode);
+  };
 
   return {
     addToContext: addToContext,
-    eval: (code) => sandbox.eval(code)
-  }
+    eval: (code) => sandbox.eval(code),
+  };
 
-  function createSandbox (initial) {
-    eval(initial)
+  function createSandbox(initial) {
+    eval(initial);
     // optional params
-    var localEval = function (code)  {
-      eval(code)
-    }
+    var localEval = function (code) {
+      eval(code);
+    };
 
     // API/data for end-user
     return {
-      eval: localEval
-    }
+      eval: localEval,
+    };
   }
-}
+};

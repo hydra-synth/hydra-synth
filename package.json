@@ -10,9 +10,10 @@
   },
   "unpkg": "./dist/hydra-synth.js",
   "scripts": {
+    "build": "browserify ./src/index.js -p esmify --standalone Hydra > dist/hydra-synth.js",
     "dev-ssl": "budo ./dev/index.js --ssl --open --live --port 8000 --",
     "dev": "budo ./dev/index.js --open --live --port 8000 -- -p esmify",
-    "build": "browserify ./src/index.js -p esmify --standalone Hydra > dist/hydra-synth.js"
+    "format": "prettier --write ."
   },
   "repository": {
     "type": "git",
@@ -39,6 +40,13 @@
   "devDependencies": {
     "browserify": "^17.0.0",
     "budo": "^11.8.4",
-    "esmify": "^2.1.1"
+    "esmify": "^2.1.1",
+    "prettier": "2.8.0"
+  },
+  "engines": {
+    "node": ">=14 <18"
+  },
+  "volta": {
+    "node": "17.9.1"
   }
 }

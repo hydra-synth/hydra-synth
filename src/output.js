@@ -1,62 +1,65 @@
 //const transforms = require('./glsl-transforms.js')
 
-var Output = function ({ regl, precision, label = "", width, height}) {
-  this.regl = regl
-  this.precision = precision
-  this.label = label
+var Output = function ({ regl, precision, label = "", width, height }) {
+  this.regl = regl;
+  this.precision = precision;
+  this.label = label;
   this.positionBuffer = this.regl.buffer([
     [-2, 0],
     [0, -2],
-    [2, 2]
-  ])
+    [2, 2],
+  ]);
 
-  this.draw = () => {}
-  this.init()
-  this.pingPongIndex = 0
+  this.draw = () => {};
+  this.init();
+  this.pingPongIndex = 0;
 
   // for each output, create two fbos for pingponging
-  this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
-    color: this.regl.texture({
-      mag: 'nearest',
-      width: width,
-      height: height,
-      format: 'rgba'
-    }),
-    depthStencil: false
-  }))
+  this.fbos = Array(2)
+    .fill()
+    .map(() =>
+      this.regl.framebuffer({
+        color: this.regl.texture({
+          mag: "nearest",
+          width: width,
+          height: height,
+          format: "rgba",
+        }),
+        depthStencil: false,
+      })
+    );
 
   // array containing render passes
-//  this.passes = []
-}
+  //  this.passes = []
+};
 
-Output.prototype.resize = function(width, height) {
+Output.prototype.resize = function (width, height) {
   this.fbos.forEach((fbo) => {
-    fbo.resize(width, height)
-  })
-//  console.log(this)
-}
-
+    fbo.resize(width, height);
+  });
+  //  console.log(this)
+};
 
 Output.prototype.getCurrent = function () {
-  return this.fbos[this.pingPongIndex]
-}
+  return this.fbos[this.pingPongIndex];
+};
 
 Output.prototype.getTexture = function () {
-   var index = this.pingPongIndex ? 0 : 1
-  return this.fbos[index]
-}
+  var index = this.pingPongIndex ? 0 : 1;
+  return this.fbos[index];
+};
 
 Output.prototype.init = function () {
-//  console.log('clearing')
-  this.transformIndex = 0
+  //  console.log('clearing')
+  this.transformIndex = 0;
   this.fragHeader = `
   precision ${this.precision} float;
 
   uniform float time;
   varying vec2 uv;
-  `
+  `;
 
-  this.fragBody = ``
+  this.fragBody = ``;
 
   this.vert = `
   precision ${this.precision} float;
@@ -66,15 +69,15 @@ Output.prototype.init = function () {
   void main () {
     uv = position;
     gl_Position = vec4(2.0 * position - 1.0, 0, 1);
-  }`
+  }`;
 
   this.attributes = {
-    position: this.positionBuffer
-  }
+    position: this.positionBuffer,
+  };
   this.uniforms = {
-    time: this.regl.prop('time'),
-    resolution: this.regl.prop('resolution')
-  }
+    time: this.regl.prop("time"),
+    resolution: this.regl.prop("resolution"),
+  };
 
   this.frag = `
        ${this.fragHeader}
@@ -85,22 +88,22 @@ Output.prototype.init = function () {
         ${this.fragBody}
         gl_FragColor = c;
       }
-  `
-  return this
-}
-
+  `;
+  return this;
+};
 
 Output.prototype.render = function (passes) {
-  let pass = passes[0]
+  let pass = passes[0];
   //console.log('pass', pass, this.pingPongIndex)
-  var self = this
-      var uniforms = Object.assign(pass.uniforms, { prevBuffer:  () =>  {
-             //var index = this.pingPongIndex ? 0 : 1
-          //   var index = self.pingPong[(passIndex+1)%2]
-          //  console.log('ping pong', self.pingPongIndex)
-            return self.fbos[self.pingPongIndex]
-          }
-        })
+  var self = this;
+  var uniforms = Object.assign(pass.uniforms, {
+    prevBuffer: () => {
+      //var index = this.pingPongIndex ? 0 : 1
+      //   var index = self.pingPong[(passIndex+1)%2]
+      //  console.log('ping pong', self.pingPongIndex)
+      return self.fbos[self.pingPongIndex];
+    },
+  });
 
   self.draw = self.regl({
     frag: pass.frag,
@@ -109,16 +112,15 @@ Output.prototype.render = function (passes) {
     uniforms: uniforms,
     count: 3,
     framebuffer: () => {
-      self.pingPongIndex = self.pingPongIndex ? 0 : 1
-      return self.fbos[self.pingPongIndex]
-    }
-  })
-}
-
+      self.pingPongIndex = self.pingPongIndex ? 0 : 1;
+      return self.fbos[self.pingPongIndex];
+    },
+  });
+};
 
 Output.prototype.tick = function (props) {
-//  console.log(props)
-  this.draw(props)
-}
+  //  console.log(props)
+  this.draw(props);
+};
 
-export default Output
+export default Output;

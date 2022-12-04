@@ -4,22 +4,23 @@
 // basic sdf shapes
 // repeat
 // iq color palletes
-import glsl from 'glslify'
+import glsl from "glslify";
 
 export default {
   blur: {
-    type: 'renderpass',
+    type: "renderpass",
     inputs: [
       {
-        type: 'float',
-        name: 'directionX',
-        default: 1.0
-      },{
-        type: 'float',
-        name: 'directionY',
-        default: 0.0
-      }
+        type: "float",
+        name: "directionX",
+        default: 1.0,
+      },
+      {
+        type: "float",
+        name: "directionY",
+        default: 0.0,
+      },
     ],
-    frag: glsl('./gaussian.frag')
-  }
-}
+    frag: glsl("./gaussian.frag"),
+  },
+};

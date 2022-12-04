@@ -1,0 +1,11 @@
+# GL Shading Language fragment shader property files
+*.frag
+
+# User installed npm packages
+node_modules/
+
+# Markdown files
+*.md
+
+# Computer-generated distribution files
+dist/
