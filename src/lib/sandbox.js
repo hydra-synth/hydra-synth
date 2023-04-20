@@ -20,11 +20,12 @@ export default (parent) => {
     eval: (code) => sandbox.eval(code)
   }
 
-  function createSandbox (initial) {
-    eval(initial)
+  function createSandbox(initial) {
+    Function(initial)();
+
     // optional params
-    var localEval = function (code)  {
-      eval(code)
+    var localEval = function (code) {
+      Function(code)();
     }
 
     // API/data for end-user
