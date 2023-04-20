@@ -29,11 +29,17 @@ npm install --save hydra-synth
 
 Include in your app:
 ```javascript
-const Hydra = require('hydra-synth')
+import Hydra from 'hydra-synth'
 
 const hydra = new Hydra({ detectAudio: false })
 osc(4, 0.1, 1.2).out()
 ```
+
+### To use using cjs/require syntax:
+```javascript
+const Hydra = require('hydra-synth')
+```
+
 
 The rest of this README is about configuring hydra-synth. For broader hydra documentation and usage, see [getting started](https://github.com/ojack/hydra#basic-functions), [interactive function documentation](https://ojack.xyz/hydra-functions/), and [Hydra Book (by Naoto Hieda)](https://hydra-book.naotohieda.com/#/).
 
@@ -120,3 +126,7 @@ shape(4).diff(osc(2, 0.1, 1.2)).out()
 ```
 
 [hydra-ts](https://github.com/folz/hydra-ts) is a fork of hydra-synth in Typescript maintained by @folz. 
+
+### Known issues / troubleshooting
+
+When using hydra with Vite, you might see the error 

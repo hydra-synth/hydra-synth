@@ -1,4 +1,8 @@
 # Changelog
+## [1.3.25] - 2023-04-19
+### Changed
+- Removed global eval() from sandbox
+
 ## [1.3.24] - 2022-10-27
 ### Fixed
 - Fixed globally exposed transforms which broke multi hydra
