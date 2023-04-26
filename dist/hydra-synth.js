@@ -4028,10 +4028,10 @@ var _default = parent => {
   };
 
   function createSandbox(initial) {
-    Function(initial)(); // optional params
+    eval(initial); // optional params
 
     var localEval = function (code) {
-      Function(code)();
+      eval(code);
     }; // API/data for end-user
 
 
