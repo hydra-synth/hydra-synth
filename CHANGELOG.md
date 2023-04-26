@@ -1,5 +1,5 @@
 # Changelog
-## [1.3.26] - 2023-04-26
+## [1.3.27] - 2023-04-26
 ### Fixed
 - reverted changes from [1.3.25], see [here](https://github.com/hydra-synth/hydra-synth/pull/136#issuecomment-1523606639)
 
