@@ -129,4 +129,29 @@ shape(4).diff(osc(2, 0.1, 1.2)).out()
 
 ### Known issues / troubleshooting
 
+#### Vite
 When using hydra with Vite, you might see the error 
+
+#### Autoplay on iOS
+
+*from issue https://github.com/hydra-synth/hydra-synth/issues/137*
+
+It seems on mobile safari, videos won't autoplay because of several reasons:
+
+* you need playsinline attribute (which can be added programmatically) https://stackoverflow.com/questions/43570460/html5-video-autoplay-on-iphone
+* If the `<video>` element is not rendered on screen, the video does not update. As a workaround, you can make a small render of the video in a corner and this seems to work
+
+```html
+    <video style="position:static;top:1px;width:1px;height:1px" id="vid" autoplay loop muted playsinline crossorigin>
+      <source src="https://cdn.glitch.global/8df667c3-e544-4cbb-8c16-f604238e8d2e/paper.mov?v=1682418858521">
+    </video>
+```
+
+```
+let v = document.getElementById("vid")
+v.addEventListener('loadeddata', () => {
+  s0.init({src: v})
+})
+```
+
+Here is a live example: https://glitch.com/edit/#!/hydra-video-autoplay-ios
