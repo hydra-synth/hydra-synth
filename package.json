@@ -1,12 +1,18 @@
 {
   "name": "hydra-synth",
-  "version": "1.3.27",
+  "version": "1.3.28",
   "description": "base synth for hydra-editor",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
-    "import": "./src/hydra-synth.js",
-    "require": "./src/index.js"
+    ".": {
+      "import": "./src/hydra-synth.js",
+      "require": "./src/index.js"
+    },
+    "./src/glsl/glsl-functions.js": {
+      "import": "./src/glsl/glsl-functions.js",
+      "require": "./src/glsl/glsl-functions.js"
+    }
   },
   "unpkg": "./dist/hydra-synth.js",
   "scripts": {
