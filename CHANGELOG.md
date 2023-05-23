@@ -1,4 +1,11 @@
 # Changelog
+## [1.3.28] - 2023-05-22
+### Fixed
+- add explicit export of glsl-functions.js in package.json, see [here](https://github.com/hydra-synth/hydra-synth/issues/141)
+
+### Added
+- tips in readme for [iOS video autoplay](https://github.com/hydra-synth/hydra-synth/issues/137)
+
 ## [1.3.27] - 2023-04-26
 ### Fixed
 - reverted changes from [1.3.25], see [here](https://github.com/hydra-synth/hydra-synth/pull/136#issuecomment-1523606639)
