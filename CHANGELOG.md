@@ -1,4 +1,8 @@
 # Changelog
+## [1.3.29] - 2023-05-23
+### Changed
+- use vite for building/bundling
+
 ## [1.3.28] - 2023-05-22
 ### Fixed
 - add explicit export of glsl-functions.js in package.json, see [here](https://github.com/hydra-synth/hydra-synth/issues/141)

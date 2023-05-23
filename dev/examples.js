@@ -1,7 +1,7 @@
 const Hydra = require('../src/index.js')
 
 
-module.exports = {
+export default {
   fugitiveGeometry: fugitiveGeometry,
   exampleVideo: exampleVideo,
   exampleResize: exampleResize,
