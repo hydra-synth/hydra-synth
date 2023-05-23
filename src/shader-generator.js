@@ -34,4 +34,4 @@ class ShaderGenerator {
   }
 }
 
-module.exports = ShaderGenerator
+export default ShaderGenerator
