@@ -54,6 +54,7 @@ class HydraRenderer {
       render: this._render.bind(this),
       setResolution: this.setResolution.bind(this),
       update: (dt) => {},// user defined update function
+      afterUpdate: (dt) => {},// user defined function run after update
       hush: this.hush.bind(this),
       tick: this.tick.bind(this)
     }
@@ -117,7 +118,7 @@ class HydraRenderer {
     if(autoLoop) loop(this.tick.bind(this)).start()
 
     // final argument is properties that the user can set, all others are treated as read-only
-    this.sandbox = new Sandbox(this.synth, makeGlobal, ['speed', 'update', 'bpm', 'fps'])
+    this.sandbox = new Sandbox(this.synth, makeGlobal, ['speed', 'update', 'afterUpdate', 'bpm', 'fps'])
   }
 
   eval(code) {
@@ -139,6 +140,7 @@ class HydraRenderer {
     this.synth.render(this.o[0])
     // this.synth.update = (dt) => {}
     this.sandbox.set('update', (dt) => {})
+    this.sandbox.set('afterUpdate', (dt) => {})
   }
 
   loadScript(url = "") {
@@ -422,6 +424,9 @@ class HydraRenderer {
     if(!this.synth.fps || this.timeSinceLastUpdate >= 1000/this.synth.fps) {
     //  console.log(1000/this.timeSinceLastUpdate)
       this.synth.stats.fps = Math.ceil(1000/this.timeSinceLastUpdate)
+      if(this.synth.update) {
+        try { this.synth.update(this.timeSinceLastUpdate) } catch (e) { console.log(e) }
+      }
     //  console.log(this.synth.speed, this.synth.time)
       for (let i = 0; i < this.s.length; i++) {
         this.s[i].tick(this.synth.time)
@@ -450,8 +455,8 @@ class HydraRenderer {
           resolution: [this.canvas.width, this.canvas.height]
         })
       }
-      if(this.synth.update) {
-        try { this.synth.update(this.timeSinceLastUpdate) } catch (e) { console.log(e) }
+      if(this.synth.afterUpdate) {
+        try { this.synth.afterUpdate(this.timeSinceLastUpdate) } catch (e) { console.log(e) }
       }
       this.timeSinceLastUpdate = 0
     }
