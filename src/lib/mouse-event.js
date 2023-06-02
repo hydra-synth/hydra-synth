@@ -1,6 +1,6 @@
 // https://github.com/mikolalysenko/mouse-event
 
-'use strict'
+const mouse = {}
 
 function mouseButtons(ev) {
   if(typeof ev === 'object') {
@@ -28,12 +28,12 @@ function mouseButtons(ev) {
   }
   return 0
 }
-exports.buttons = mouseButtons
+mouse.buttons = mouseButtons
 
 function mouseElement(ev) {
   return ev.target || ev.srcElement || window
 }
-exports.element = mouseElement
+mouse.element = mouseElement
 
 function mouseRelativeX(ev) {
   if(typeof ev === 'object') {
@@ -43,7 +43,7 @@ function mouseRelativeX(ev) {
   }
   return 0
 }
-exports.x = mouseRelativeX
+mouse.x = mouseRelativeX
 
 function mouseRelativeY(ev) {
   if(typeof ev === 'object') {
@@ -53,4 +53,6 @@ function mouseRelativeY(ev) {
   }
   return 0
 }
-exports.y = mouseRelativeY
+mouse.y = mouseRelativeY
+
+export default mouse

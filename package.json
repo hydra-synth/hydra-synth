@@ -1,16 +1,24 @@
 {
   "name": "hydra-synth",
-  "version": "1.3.20",
+  "version": "1.3.28",
   "description": "base synth for hydra-editor",
-  "main": "index.js",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": {
+      "import": "./src/hydra-synth.js",
+      "require": "./src/index.js"
+    },
+    "./src/glsl/glsl-functions.js": {
+      "import": "./src/glsl/glsl-functions.js",
+      "require": "./src/glsl/glsl-functions.js"
+    }
+  },
+  "unpkg": "./dist/hydra-synth.js",
   "scripts": {
-    "test": "mocha",
     "dev-ssl": "budo ./dev/index.js --ssl --open --live --port 8000 --",
-    "dev": "budo ./dev/index.js --open --live --port 8000 --",
-    "build-hydra": "browserify hydra-synth.js --standalone Hydra > dist/hydra-synth.js",
-    "build-shader-generator": "browserify shader-generator.js --standalone HydraShaders > dist/hydra-shaders.js",
-    "build": "npm run build-hydra",
-    "coverage": "nyc npm run test"
+    "dev": "budo ./dev/index.js --open --live --port 8000 -- -p esmify",
+    "build": "browserify ./src/index.js -p esmify --standalone Hydra > dist/hydra-synth.js"
   },
   "repository": {
     "type": "git",
@@ -23,7 +31,6 @@
     "livecoding",
     "synth"
   ],
-  "unpkg": "dist/hydra-synth.js",
   "author": "ojack",
   "license": "AGPL",
   "bugs": {
@@ -33,35 +40,11 @@
   "dependencies": {
     "meyda": "^5.5.1",
     "raf-loop": "^1.1.3",
-    "regl": "^1.3.9",
-    "web-audio-analyser": "^2.0.1"
+    "regl": "^1.3.9"
   },
   "devDependencies": {
-    "babel-core": "^6.26.0",
-    "babel-preset-env": "^1.6.1",
-    "babelify": "^8.0.0",
-    "browserify": "^16.2.3",
-    "chai": "^4.2.0",
-    "codemirror": "^5.36.0",
-    "gl": "^4.4.0",
-    "glslify": "^6.3.1",
-    "jsdom": "^15.2.0",
-    "mocha": "^6.2.1",
-    "mock-require": "^3.0.3",
-    "nyc": "^14.1.1",
-    "rewire": "^4.0.1",
-    "rtc-patch-bay": "^1.0.0",
-    "sinon": "^7.5.0"
-  },
-  "nyc": {
-    "include": [
-      "src/**/*.js",
-      "index.js"
-    ],
-    "reporter": [
-      "text",
-      "html"
-    ],
-    "cache": false
+    "browserify": "^17.0.0",
+    "budo": "^11.8.4",
+    "esmify": "^2.1.1"
   }
 }

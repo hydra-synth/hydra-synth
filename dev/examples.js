@@ -1,4 +1,4 @@
-const Hydra = require('./../index.js')
+const Hydra = require('../src/index.js')
 
 
 module.exports = {

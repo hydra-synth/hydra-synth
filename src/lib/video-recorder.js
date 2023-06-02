@@ -83,4 +83,4 @@ class VideoRecorder {
   }
 }
 
-module.exports = VideoRecorder
+export default VideoRecorder

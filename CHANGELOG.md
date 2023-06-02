@@ -1,4 +1,37 @@
 # Changelog
+## [1.3.28] - 2023-05-22
+### Fixed
+- add explicit export of glsl-functions.js in package.json, see [here](https://github.com/hydra-synth/hydra-synth/issues/141)
+
+### Added
+- tips in readme for [iOS video autoplay](https://github.com/hydra-synth/hydra-synth/issues/137)
+
+## [1.3.27] - 2023-04-26
+### Fixed
+- reverted changes from [1.3.25], see [here](https://github.com/hydra-synth/hydra-synth/pull/136#issuecomment-1523606639)
+
+## [1.3.25] - 2023-04-19
+### Changed
+- Removed global eval() from sandbox
+
+## [1.3.24] - 2022-10-27
+### Fixed
+- Fixed globally exposed transforms which broke multi hydra
+
+## [1.3.22] - 2022-10-23
+### Fixed
+- Fixed bundled version that was broken in previous commit
+
+## [1.3.21] - 2022-10-23
+### Added
+- support for ES6 modules and import syntax
+
+### Removed
+- removed extraneous files
+
+## Changed
+- 'window' to 'global.window' to work with es6 bundling
+
 ## [1.3.20] - 2022-07-07
 ### Fixed
 - reverted Array typechecking as was causing error

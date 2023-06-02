@@ -1,5 +1,5 @@
-const Generator = require('./src/generator-factory.js')
-const Sandbox = require('./src/eval-sandbox.js')
+import Generator from './generator-factory.js'
+import Sandbox from './eval-sandbox.js'
 
 const baseUniforms = ['s0', 's1', 's2', 's3', 'o0', 'o1', 'o2'] // names of uniforms usually used in hydra. These can be customized
 

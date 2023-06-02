@@ -1,6 +1,6 @@
 // functions that are only used within other functions
 
-module.exports = {
+export default {
   _luminance: {
     type: 'util',
     glsl: `float _luminance(vec3 rgb){

@@ -1,4 +1,4 @@
-const Meyda = require('meyda')
+import Meyda from 'meyda'
 
 class Audio {
   constructor ({
@@ -214,4 +214,4 @@ class Audio {
   }
 }
 
-module.exports = Audio
+export default Audio

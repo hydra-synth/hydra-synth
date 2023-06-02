@@ -1,4 +1,4 @@
-const arrayUtils = require('./lib/array-utils.js')
+import arrayUtils from './lib/array-utils.js'
 
 // [WIP] how to treat different dimensions (?)
 const DEFAULT_CONVERSIONS = {
@@ -30,7 +30,7 @@ const ensure_decimal_dot = (val) => {
 
 
 
-module.exports = function formatArguments(transform, startIndex, synthContext) {
+export default function formatArguments(transform, startIndex, synthContext) {
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
   const { generators } = transform.synth
@@ -92,7 +92,7 @@ module.exports = function formatArguments(transform, startIndex, synthContext) {
        typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
        typedArg.isUniform = true
         // }
-      }
+      } 
     }
 
     if (startIndex < 0) {

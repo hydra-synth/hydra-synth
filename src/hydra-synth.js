@@ -1,14 +1,20 @@
-const Output = require('./src/output.js')
-const loop = require('raf-loop')
-const Source = require('./src/hydra-source.js')
-const Mouse = require('./src/lib/mouse.js')()
-const Audio = require('./src/lib/audio.js')
-const VidRecorder = require('./src/lib/video-recorder.js')
-const ArrayUtils = require('./src/lib/array-utils.js')
-const Sandbox = require('./src/eval-sandbox.js')
 
-const Generator = require('./src/generator-factory.js')
+import Output from './output.js'
+import loop from 'raf-loop'
+import Source from './hydra-source.js'
+import MouseTools from './lib/mouse.js'
+import Audio from './lib/audio.js'
+import VidRecorder from './lib/video-recorder.js'
+import ArrayUtils from './lib/array-utils.js'
+// import strudel from './lib/strudel.js'
+import Sandbox from './eval-sandbox.js'
+import Generator from './generator-factory.js'
+import regl from 'regl'
+// const window = global.window
 
+
+
+const Mouse = MouseTools()
 // to do: add ability to pass in certain uniforms and transforms
 class HydraRenderer {
 
@@ -38,7 +44,7 @@ class HydraRenderer {
 
     this._initCanvas(canvas)
 
-
+    global.window.test = 'hi'
     // object that contains all properties that will be made available on the global context and during local evaluation
     this.synth = {
       time: 0,
@@ -241,7 +247,7 @@ class HydraRenderer {
   }
 
   _initRegl () {
-    this.regl = require('regl')({
+    this.regl = regl({
     //  profile: true,
       canvas: this.canvas,
       pixelRatio: 1//,
@@ -470,4 +476,4 @@ class HydraRenderer {
 
 }
 
-module.exports = HydraRenderer
+export default HydraRenderer

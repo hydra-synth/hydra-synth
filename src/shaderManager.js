@@ -2,7 +2,7 @@
 // 1. how to handle multi-pass renders
 // 2. how to handle vertex shaders
 
-module.exports = function (defaultOutput, precision) {
+export default function (defaultOutput, precision) {
 
   var Frag = function (shaderString) {
     var obj =  Object.create(Frag.prototype)
