@@ -1096,5 +1096,22 @@ export default () => [
   ],
   glsl:
 `   return vec4(_c0.a * scale + offset);`
+},
+{
+  name: 'line',
+  type: 'src',
+  inputs: [
+    {
+      name: 'thickness',
+      type: 'float',
+      default: 1,
+    }
+  ],
+  glsl: `
+  float value = 0.;
+  if (_st.y > .5-thickness*.05 && _st.y < .5+thickness*.05){
+    value = 1.;
+  }
+  return vec4(vec3(value), 1.);`
 }
 ]
