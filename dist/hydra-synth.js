@@ -4026,10 +4026,10 @@ var _default = parent => {
   };
 
   function createSandbox(initial) {
-    eval(initial); // optional params
+    globalThis.eval(initial); // optional params
 
     var localEval = function (code) {
-      eval(code);
+      globalThis.eval(code);
     }; // API/data for end-user
 
 
