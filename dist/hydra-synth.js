@@ -1069,8 +1069,7 @@ class EvalSandbox {
   }
 
   add(name) {
-    if (this.makeGlobal) window[name] = this.parent[name];
-    this.sandbox.addToContext(name, `parent.${name}`);
+    if (this.makeGlobal) window[name] = this.parent[name]; // this.sandbox.addToContext(name, `parent.${name}`)
   } // sets on window as well as synth object if global (not needed for objects, which can be set directly)
 
 
