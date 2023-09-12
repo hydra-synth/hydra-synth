@@ -1,4 +1,9 @@
 # Changelog
+## [1.3.29] - 2023-08-16
+### Fixed
+- skip accessing parent object, fixing [iframe issue](https://github.com/hydra-synth/hydra-synth/issues/139#issuecomment-1523755523)
+- use `globalThis.eval` for vite compatibility
+
 ## [1.3.28] - 2023-05-22
 ### Fixed
 - add explicit export of glsl-functions.js in package.json, see [here](https://github.com/hydra-synth/hydra-synth/issues/141)

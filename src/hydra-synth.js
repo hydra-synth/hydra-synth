@@ -44,7 +44,7 @@ class HydraRenderer {
 
     this._initCanvas(canvas)
 
-    global.window.test = 'hi'
+    //global.window.test = 'hi'
     // object that contains all properties that will be made available on the global context and during local evaluation
     this.synth = {
       time: 0,

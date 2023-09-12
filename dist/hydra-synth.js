@@ -1069,8 +1069,7 @@ class EvalSandbox {
   }
 
   add(name) {
-    if (this.makeGlobal) window[name] = this.parent[name];
-    this.sandbox.addToContext(name, `parent.${name}`);
+    if (this.makeGlobal) window[name] = this.parent[name]; // this.sandbox.addToContext(name, `parent.${name}`)
   } // sets on window as well as synth object if global (not needed for objects, which can be set directly)
 
 
@@ -2829,7 +2828,6 @@ var _default = HydraSource;
 exports.default = _default;
 
 },{"./lib/screenmedia.js":26,"./lib/webcam.js":28}],18:[function(require,module,exports){
-(function (global){(function (){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2887,9 +2885,9 @@ class HydraRenderer {
     this.renderAll = false;
     this.detectAudio = detectAudio;
 
-    this._initCanvas(canvas);
+    this._initCanvas(canvas); //global.window.test = 'hi'
+    // object that contains all properties that will be made available on the global context and during local evaluation
 
-    global.window.test = 'hi'; // object that contains all properties that will be made available on the global context and during local evaluation
 
     this.synth = {
       time: 0,
@@ -3328,7 +3326,6 @@ class HydraRenderer {
 var _default = HydraRenderer;
 exports.default = _default;
 
-}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./eval-sandbox.js":10,"./generator-factory.js":13,"./hydra-source.js":17,"./lib/array-utils.js":20,"./lib/audio.js":21,"./lib/mouse.js":24,"./lib/video-recorder.js":27,"./output.js":29,"raf-loop":6,"regl":8}],19:[function(require,module,exports){
 "use strict";
 
@@ -4028,10 +4025,10 @@ var _default = parent => {
   };
 
   function createSandbox(initial) {
-    eval(initial); // optional params
+    globalThis.eval(initial); // optional params
 
     var localEval = function (code) {
-      eval(code);
+      globalThis.eval(code);
     }; // API/data for end-user
 
 
