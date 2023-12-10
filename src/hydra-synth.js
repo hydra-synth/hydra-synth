@@ -30,7 +30,8 @@ class HydraRenderer {
     enableStreamCapture = true,
     canvas,
     precision,
-    extendTransforms = {} // add your own functions on init
+    extendTransforms = {}, // add your own functions on init,
+    audioDeviceId = null
   } = {}) {
 
     ArrayUtils.init()
@@ -41,6 +42,7 @@ class HydraRenderer {
     this.height = height
     this.renderAll = false
     this.detectAudio = detectAudio
+    this.audioDeviceId = audioDeviceId
 
     this._initCanvas(canvas)
 
@@ -211,7 +213,8 @@ class HydraRenderer {
     const that = this
     this.synth.a = new Audio({
       numBins: 4,
-      parentEl: this.canvas.parentNode
+      parentEl: this.canvas.parentNode,
+      deviceId: this.audioDeviceId
       // changeListener: ({audio}) => {
       //   that.a = audio.bins.map((_, index) =>
       //     (scale = 1, offset = 0) => () => (audio.fft[index] * scale + offset)
