@@ -1,3 +1,4 @@
+// @flow
 
 export default function (options) {
   return new Promise(function(resolve, reject) {

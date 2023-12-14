@@ -1,3 +1,4 @@
+// @flow
 // to do:
 // 1. how to handle multi-pass renders
 // 2. how to handle vertex shaders

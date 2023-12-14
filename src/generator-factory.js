@@ -1,3 +1,4 @@
+// @flow
 import GlslSource from './glsl-source.js'
 import glslFunctions from './glsl/glsl-functions.js'
 

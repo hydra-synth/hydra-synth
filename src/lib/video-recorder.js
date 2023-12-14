@@ -1,3 +1,4 @@
+// @flow
 class VideoRecorder {
   constructor(stream) {
     this.mediaSource = new MediaSource()

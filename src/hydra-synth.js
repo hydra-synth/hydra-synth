@@ -1,3 +1,4 @@
+// @flow
 
 import Output from './output.js'
 import loop from 'raf-loop'

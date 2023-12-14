@@ -1,3 +1,4 @@
+// @flow
 // https://github.com/mikolalysenko/mouse-event
 
 const mouse = {}

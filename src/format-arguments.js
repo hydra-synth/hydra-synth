@@ -1,3 +1,4 @@
+// @flow
 import arrayUtils from './lib/array-utils.js'
 
 // [WIP] how to treat different dimensions (?)

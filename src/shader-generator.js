@@ -1,3 +1,4 @@
+// @flow
 import Generator from './generator-factory.js'
 import Sandbox from './eval-sandbox.js'
 

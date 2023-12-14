@@ -1,3 +1,4 @@
+// @flow
 // from https://gist.github.com/gre/1650294
 
 export default {

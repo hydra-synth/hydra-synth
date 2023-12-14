@@ -1,3 +1,4 @@
+// @flow
 // handles code evaluation and attaching relevant objects to global and evaluation contexts
 
 import Sandbox from './lib/sandbox.js'

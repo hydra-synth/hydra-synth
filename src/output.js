@@ -1,3 +1,4 @@
+// @flow
 //const transforms = require('./glsl-transforms.js')
 
 var Output = function ({ regl, precision, label = "", width, height}) {

@@ -1,3 +1,4 @@
+// @flow
 // functions that are only used within other functions
 
 export default {

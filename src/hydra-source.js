@@ -1,3 +1,5 @@
+// @flow
+
 import Webcam from './lib/webcam.js'
 import Screen from './lib/screenmedia.js'
 

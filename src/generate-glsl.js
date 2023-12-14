@@ -1,3 +1,4 @@
+// @flow
 import formatArguments from './format-arguments.js'
 
 // Add extra functionality to Array.prototype for generating sequences in time

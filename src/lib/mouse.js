@@ -1,3 +1,4 @@
+// @flow
 // based on https://github.com/mikolalysenko/mouse-change
 
 export default mouseListen

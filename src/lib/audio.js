@@ -1,3 +1,4 @@
+// @flow
 import Meyda from 'meyda'
 
 class Audio {

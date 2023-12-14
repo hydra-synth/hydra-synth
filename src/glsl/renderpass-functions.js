@@ -1,3 +1,4 @@
+// @flow
 // to add: ripple: https://www.shadertoy.com/view/4djGzz
 // mask
 // convolution

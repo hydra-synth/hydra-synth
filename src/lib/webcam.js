@@ -1,3 +1,4 @@
+// @flow
 //const enumerateDevices = require('enumerate-devices')
 
 export default function (deviceId) {

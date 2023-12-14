@@ -1,3 +1,4 @@
+// @flow
 import generateGlsl from './generate-glsl.js'
 // const formatArguments = require('./glsl-utils.js').formatArguments
 
