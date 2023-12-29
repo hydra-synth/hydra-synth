@@ -8,7 +8,7 @@ const { fugitiveGeometry, exampleVideo, exampleResize, nonGlobalCanvas } = requi
 // const HydraShaders = require('./../shader-generator.js')
 
 function init () {
- 
+
 //   const canvas = document.createElement('canvas')
 //   canvas.style.backgroundColor = "#000"
 //   canvas.width = 800
@@ -20,7 +20,7 @@ function init () {
 
 
 
-var hydra = new Hydra({detectAudio:false, makeGlobal: true})
+window.hydra = new Hydra({detectAudio:false, makeGlobal: true})
 
 osc().out()
 // console.log(hydra)
