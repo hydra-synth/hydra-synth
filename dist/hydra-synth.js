@@ -2804,7 +2804,7 @@ class HydraSource {
 
   tick(time) {
     //  console.log(this.src, this.tex.width, this.tex.height)
-    if (this.src !== null && this.dynamic === true) {
+    if (this.src && this.dynamic === true) {
       if (this.src.videoWidth && this.src.videoWidth !== this.tex.width) {
         console.log(this.src.videoWidth, this.src.videoHeight, this.tex.width, this.tex.height);
         this.tex.resize(this.src.videoWidth, this.src.videoHeight);
