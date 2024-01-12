@@ -130,7 +130,15 @@ shape(4).diff(osc(2, 0.1, 1.2)).out()
 ### Known issues / troubleshooting
 
 #### Vite
-When using hydra with Vite, you might see the error 
+When using hydra with Vite, you might see the error `Uncaught ReferenceError: global is not defined`. This is an issue in `hydra-synth` dependency, which further depends on node's `global`. 
+
+- To fully mitigate the issue: add a polyfill for `global`. (See [ref](https://github.com/vitejs/vite/discussions/5912#discussioncomment-1724947))
+- To workaround: add the following snippet to `vite.config.json`. (See [ref](https://github.com/vitejs/vite/discussions/5912#discussioncomment-2908994))
+``` js
+define: {
+  global: {},
+},
+```
 
 #### Autoplay on iOS
 
