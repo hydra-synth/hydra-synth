@@ -7,7 +7,7 @@
   "exports": {
     ".": {
       "import": "./src/hydra-synth.js",
-      "require": "./src/index.js"
+      "require": "./dist/hydra-synth.js"
     },
     "./src/glsl/glsl-functions.js": {
       "import": "./src/glsl/glsl-functions.js",
