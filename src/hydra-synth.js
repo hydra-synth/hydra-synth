@@ -436,9 +436,10 @@ class HydraRenderer {
         this.s[i].tick(this.synth.time)
       }
     //  console.log(this.canvas.width, this.canvas.height)
+      const currentTime = this.synth.time;
       for (let i = 0; i < this.o.length; i++) {
         this.o[i].tick({
-          time: this.synth.time,
+          time: currentTime,
           mouse: this.synth.mouse,
           bpm: this.synth.bpm,
           resolution: [this.canvas.width, this.canvas.height]
