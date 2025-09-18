@@ -8,7 +8,8 @@ class Audio {
     max = 15,
     scale = 10,
     isDrawing = false,
-    parentEl = document.body
+    parentEl = document.body,
+    deviceId = null
   }) {
     this.vol = 0
     this.scale = scale
@@ -46,7 +47,8 @@ class Audio {
     this.ctx.strokeStyle="#0ff"
     this.ctx.lineWidth=0.5
     if(window.navigator.mediaDevices) {
-    window.navigator.mediaDevices.getUserMedia({video: false, audio: true})
+    let audioConstraint = deviceId ? {deviceId: {exact: deviceId}} : true;
+    window.navigator.mediaDevices.getUserMedia({video: false, audio: audioConstraint})
       .then((stream) => {
       //  console.log('got mic stream', stream)
         this.stream = stream
