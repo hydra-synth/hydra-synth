@@ -1,6 +1,16 @@
-import Meyda from 'meyda'
+// Audio analysis now uses native Web Audio API (instead of Meyda)
 
 class Audio {
+  // Bark scale band edges (Hz) - 24 bands (similar to Meyda's numberOfBarkBands)
+  static BARK_EDGES = [
+    20, 100, 200, 300, 400, 510, 630, 770, 920, 1080, 1270, 1480,
+    1720, 2000, 2320, 2700, 3150, 3700, 4400, 5300, 6400, 7700, 9500, 12000, 15500
+  ]
+  static BARK_BANDS = 24;
+
+  // Gain correction to be as close as Meyda's analysis
+  static GAIN_CORRECTION = 1
+
   constructor ({
     numBins = 4,
     cutoff = 2,
@@ -45,28 +55,27 @@ class Audio {
     this.ctx.fillStyle="#DFFFFF"
     this.ctx.strokeStyle="#0ff"
     this.ctx.lineWidth=0.5
-    if(window.navigator.mediaDevices) {
-    window.navigator.mediaDevices.getUserMedia({video: false, audio: true})
-      .then((stream) => {
-      //  console.log('got mic stream', stream)
-        this.stream = stream
-        this.context = new AudioContext()
-        //  this.context = new AudioContext()
-        let audio_stream = this.context.createMediaStreamSource(stream)
 
-      //  console.log(this.context)
-        this.meyda = Meyda.createMeydaAnalyzer({
-          audioContext: this.context,
-          source: audio_stream,
-          featureExtractors: [
-            'loudness',
-            //  'perceptualSpread',
-            //  'perceptualSharpness',
-            //  'spectralCentroid'
-          ]
+    // Native audio analysis replacement for Meyda loudness features
+    this.analyser = null
+    this.freqData = null
+    this.linear = null
+    this.specific = new Float32Array(Audio.BARK_BANDS)
+
+    if (window.navigator.mediaDevices) {
+      window.navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+        .then((stream) => {
+          this.stream = stream
+          this.context = new AudioContext()
+          const audio_stream = this.context.createMediaStreamSource(stream)
+          this.analyser = this.context.createAnalyser()
+          this.analyser.fftSize = 2048
+          this.analyser.smoothingTimeConstant = 0 // keep custom smoothing implemented below
+          this.freqData = new Float32Array(this.analyser.frequencyBinCount)
+          this.linear = new Float32Array(this.analyser.frequencyBinCount)
+          audio_stream.connect(this.analyser)
         })
-      })
-      .catch((err) => console.log('ERROR', err))
+        .catch((err) => console.log('ERROR', err))
     }
   }
 
@@ -86,38 +95,67 @@ class Audio {
     }
   }
 
-  tick() {
-   if(this.meyda){
-     var features = this.meyda.get()
-     if(features && features !== null){
-       this.vol = features.loudness.total
-       this.detectBeat(this.vol)
-       // reduce loudness array to number of bins
-       const reducer = (accumulator, currentValue) => accumulator + currentValue;
-       let spacing = Math.floor(features.loudness.specific.length/this.bins.length)
-       this.prevBins = this.bins.slice(0)
-       this.bins = this.bins.map((bin, index) => {
-         return features.loudness.specific.slice(index * spacing, (index + 1)*spacing).reduce(reducer)
-       }).map((bin, index) => {
-         // map to specified range
+  tick () {
+    if (!this.analyser) return
 
-        // return (bin * (1.0 - this.smooth) + this.prevBins[index] * this.smooth)
-          return (bin * (1.0 - this.settings[index].smooth) + this.prevBins[index] * this.settings[index].smooth)
-       })
-       // var y = this.canvas.height - scale*this.settings[index].cutoff
-       // this.ctx.beginPath()
-       // this.ctx.moveTo(index*spacing, y)
-       // this.ctx.lineTo((index+1)*spacing, y)
-       // this.ctx.stroke()
-       //
-       // var yMax = this.canvas.height - scale*(this.settings[index].scale + this.settings[index].cutoff)
-       this.fft = this.bins.map((bin, index) => (
-        // Math.max(0, (bin - this.cutoff) / (this.max - this.cutoff))
-         Math.max(0, (bin - this.settings[index].cutoff)/this.settings[index].scale)
-       ))
-       if(this.isDrawing) this.draw()
-     }
-   }
+    // Acquire current spectrum in decibels
+    this.analyser.getFloatFrequencyData(this.freqData)
+
+    // Convert dB to linear amplitude and unnormalize by FFT size (to match Meyda's raw FFT magnitudes)
+    const fftSize = this.analyser.fftSize
+    const binCount = this.freqData.length
+    for (let i = 0; i < binCount; i++) {
+      this.linear[i] = Math.pow(10, this.freqData[i] / 20) * fftSize
+    }
+
+    const nyquist = this.context.sampleRate / 2
+    const binWidth = nyquist / binCount
+
+    // Reset specific loudness accumulation (reuse array)
+    this.specific.fill(0)
+
+    // Accumulate frequency bins into bark bands
+    let barkBandIndex = 0
+    for (let i = 0; i < binCount; i++) {
+      const freq = i * binWidth
+      // Advance bark band index when frequency exceeds current band edge
+      while (barkBandIndex < Audio.BARK_EDGES.length - 2 && freq >= Audio.BARK_EDGES[barkBandIndex + 1]) {
+        barkBandIndex++
+      }
+      this.specific[barkBandIndex] += this.linear[i]
+    }
+
+    // Apply Meyda's power law for perceptual loudness scaling
+    for (let i = 0; i < this.specific.length; i++) {
+      this.specific[i] = Math.pow(this.specific[i], 0.23) * Audio.GAIN_CORRECTION
+    }
+
+    // Calculate total volume
+    let vol = 0
+    for (let i = 0; i < this.specific.length; i++) {
+      vol += this.specific[i]
+    }
+    this.vol = vol
+    this.detectBeat(this.vol)
+
+    // Reduce specific array to bins with smoothing (combined single loop, no allocations)
+    const spacing = Math.floor(this.specific.length / this.bins.length)
+    for (let index = 0; index < this.bins.length; index++) {
+      // Sum bark bands for this bin
+      let sum = 0
+      const start = index * spacing
+      const end = (index + 1) * spacing
+      for (let i = start; i < end; i++) {
+        sum += this.specific[i]
+      }
+      // Apply smoothing using previous bin value
+      const prevBin = this.bins[index]
+      const smoothed = sum * (1.0 - this.settings[index].smooth) + prevBin * this.settings[index].smooth
+      this.bins[index] = smoothed
+      // Calculate FFT output
+      this.fft[index] = Math.max(0, (smoothed - this.settings[index].cutoff) / this.settings[index].scale)
+    }
+    if(this.isDrawing) this.draw()
   }
 
   setCutoff (cutoff) {
@@ -138,7 +176,6 @@ class Audio {
 
   setBins (numBins) {
     this.bins = Array(numBins).fill(0)
-    this.prevBins = Array(numBins).fill(0)
     this.fft = Array(numBins).fill(0)
     this.settings = Array(numBins).fill(0).map(() => ({
       cutoff: this.cutoff,
