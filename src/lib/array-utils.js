@@ -41,6 +41,11 @@ export default {
       return this
     }
 
+    Array.prototype.sequence = function(duration = 1) {
+      this._sequence = duration
+      return this
+    }
+
     Array.prototype.offset = function(offset = 0.5) {
       this._offset = offset%1.0
       return this
@@ -66,8 +71,20 @@ export default {
     let speed = arr._speed ? arr._speed : 1
     let smooth = arr._smooth ? arr._smooth : 0
     let index = time * speed * (bpm / 60) + (arr._offset || 0)
+    let duration = arr._sequence;
 
-    if (smooth!==0) {
+    if (duration) { 
+      let ease = arr._ease ? arr._ease : easing['linear']
+      if (!arr._sequenceStartTime) {
+        arr._sequenceStartTime = time
+        arr._sequenceEndTime = time + duration
+      }
+      let _index = map(time + (smooth/2), arr._sequenceStartTime, arr._sequenceEndTime, 0, arr.length)
+      let currValue = arr[Math.floor(Math.min(_index, arr.length - 1))]
+      let nextValue = arr[Math.floor(Math.min(_index + 1, arr.length - 1))]
+      let t = Math.min((_index%1)/smooth,1)
+      return ease(t) * (nextValue - currValue) + currValue
+    } else if (smooth!==0) {
       let ease = arr._ease ? arr._ease : easing['linear']
       let _index = index - (smooth / 2)
       // Compute the first value used for the interpolation: wrap _index inside the range [0, arr.length), then round the resulting value towards 0.

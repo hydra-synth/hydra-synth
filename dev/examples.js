@@ -280,6 +280,27 @@ function exampleSmoothing() {
     .out(o0)
 }
 
+
+function exampleSequences() {
+  var shapes = [
+    shape(4)
+      .scale(1, 0.5, [2, 0.25, 0.5, 1, 1.5, 2].smooth().sequence(8))
+      .scrollX(0.3),
+    shape(4)
+      .scale(1, 0.5, [2, 0.25, 0.5, 1, 1.5, 2].sequence(8))
+      .scrollX(0.0),
+    shape(4)
+      .scale(1, 0.5, [0.1, 0.5, 1, 2].smooth(0.5).sequence(2))
+      .scrollX(-0.3),
+  ]
+  
+  solid(1,0,0)
+    .add(shapes[0])
+    .add(shapes[1])
+    .add(shapes[2])
+    .out(o0)
+}
+
 function exampleSetResolution() {
   setResolution(20, 20)
 }
