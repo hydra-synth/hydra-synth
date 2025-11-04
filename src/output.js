@@ -1,10 +1,11 @@
 //const transforms = require('./glsl-transforms.js')
+import { Buffer, Framebuffer, Command, prop } from './webgl/index.js'
 
-var Output = function ({ regl, precision, label = "", width, height}) {
-  this.regl = regl
+var Output = function ({ gl, precision, label = "", width, height}) {
+  this.gl = gl
   this.precision = precision
   this.label = label
-  this.positionBuffer = this.regl.buffer([
+  this.positionBuffer = new Buffer(gl, [
     [-2, 0],
     [0, -2],
     [2, 2]
@@ -15,14 +16,11 @@ var Output = function ({ regl, precision, label = "", width, height}) {
   this.pingPongIndex = 0
 
   // for each output, create two fbos for pingponging
-  this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
-    color: this.regl.texture({
-      mag: 'nearest',
-      width: width,
-      height: height,
-      format: 'rgba'
-    }),
-    depthStencil: false
+  this.fbos = (Array(2)).fill().map(() => new Framebuffer(gl, {
+    width: width,
+    height: height,
+    format: 'rgba',
+    mag: 'nearest'
   }))
 
   // array containing render passes
@@ -72,8 +70,8 @@ Output.prototype.init = function () {
     position: this.positionBuffer
   }
   this.uniforms = {
-    time: this.regl.prop('time'),
-    resolution: this.regl.prop('resolution')
+    time: prop('time'),
+    resolution: prop('resolution')
   }
 
   this.frag = `
@@ -102,7 +100,7 @@ Output.prototype.render = function (passes) {
           }
         })
 
-  self.draw = self.regl({
+  self.draw = new Command(self.gl, {
     frag: pass.frag,
     vert: self.vert,
     attributes: self.attributes,
@@ -118,7 +116,9 @@ Output.prototype.render = function (passes) {
 
 Output.prototype.tick = function (props) {
 //  console.log(props)
-  this.draw(props)
+  if (this.draw && this.draw.execute) {
+    this.draw.execute(props)
+  }
 }
 
 export default Output

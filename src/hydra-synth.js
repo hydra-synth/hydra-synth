@@ -9,7 +9,7 @@ import ArrayUtils from './lib/array-utils.js'
 // import strudel from './lib/strudel.js'
 import Sandbox from './eval-sandbox.js'
 import Generator from './generator-factory.js'
-import regl from 'regl'
+import { WebGLContext, Command, Buffer, prop } from './webgl/index.js'
 // const window = global.window
 
 
@@ -99,7 +99,7 @@ class HydraRenderer {
 
     this.generator = undefined
 
-    this._initRegl()
+    this._initWebGL()
     this._initOutputs(numOutputs)
     this._initSources(numSources)
     this._generateGlslTransforms()
@@ -181,7 +181,7 @@ class HydraRenderer {
     this.s.forEach((source) => {
       source.resize(width, height)
     })
-    this.regl._refresh()
+    this.glContext.refresh()
      console.log(this.canvas.width)
   }
 
@@ -246,27 +246,23 @@ class HydraRenderer {
     }
   }
 
-  _initRegl () {
-    this.regl = regl({
-    //  profile: true,
-      canvas: this.canvas,
-      pixelRatio: 1//,
-      // extensions: [
-      //   'oes_texture_half_float',
-      //   'oes_texture_half_float_linear'
-      // ],
-      // optionalExtensions: [
-      //   'oes_texture_float',
-      //   'oes_texture_float_linear'
-     //]
-   })
+  _initWebGL () {
+    // Initialize WebGL context
+    this.glContext = new WebGLContext(this.canvas, { pixelRatio: 1 })
+    this.gl = this.glContext.gl
 
     // This clears the color buffer to black and the depth buffer to 1
-    this.regl.clear({
-      color: [0, 0, 0, 1]
-    })
+    this.glContext.clear([0, 0, 0, 1])
 
-    this.renderAll = this.regl({
+    // Create position buffer for fullscreen triangle
+    this.positionBuffer = new Buffer(this.gl, [
+      [-2, 0],
+      [0, -2],
+      [2, 2]
+    ])
+
+    // Create renderAll command for rendering all 4 outputs in quad layout
+    this.renderAll = new Command(this.gl, {
       frag: `
       precision ${this.precision} float;
       varying vec2 uv;
@@ -305,23 +301,19 @@ class HydraRenderer {
         gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
       }`,
       attributes: {
-        position: [
-          [-2, 0],
-          [0, -2],
-          [2, 2]
-        ]
+        position: this.positionBuffer
       },
       uniforms: {
-        tex0: this.regl.prop('tex0'),
-        tex1: this.regl.prop('tex1'),
-        tex2: this.regl.prop('tex2'),
-        tex3: this.regl.prop('tex3')
+        tex0: prop('tex0'),
+        tex1: prop('tex1'),
+        tex2: prop('tex2'),
+        tex3: prop('tex3')
       },
-      count: 3,
-      depth: { enable: false }
+      count: 3
     })
 
-    this.renderFbo = this.regl({
+    // Create renderFbo command for rendering a single framebuffer to screen
+    this.renderFbo = new Command(this.gl, {
       frag: `
       precision ${this.precision} float;
       varying vec2 uv;
@@ -342,18 +334,13 @@ class HydraRenderer {
         gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
       }`,
       attributes: {
-        position: [
-          [-2, 0],
-          [0, -2],
-          [2, 2]
-        ]
+        position: this.positionBuffer
       },
       uniforms: {
-        tex0: this.regl.prop('tex0'),
-        resolution: this.regl.prop('resolution')
+        tex0: prop('tex0'),
+        resolution: prop('resolution')
       },
-      count: 3,
-      depth: { enable: false }
+      count: 3
     })
   }
 
@@ -361,7 +348,7 @@ class HydraRenderer {
     const self = this
     this.o = (Array(numOutputs)).fill().map((el, index) => {
       var o = new Output({
-        regl: this.regl,
+        gl: this.gl,
         width: this.width,
         height: this.height,
         precision: this.precision,
@@ -385,7 +372,7 @@ class HydraRenderer {
   }
 
   createSource (i) {
-    let s = new Source({regl: this.regl, pb: this.pb, width: this.width, height: this.height, label: `s${i}`})
+    let s = new Source({gl: this.gl, pb: this.pb, width: this.width, height: this.height, label: `s${i}`})
     this.synth['s' + this.s.length] = s
     this.s.push(s)
     return s
@@ -449,7 +436,7 @@ class HydraRenderer {
         })
       }
       if (this.isRenderingAll) {
-        this.renderAll({
+        this.renderAll.execute({
           tex0: this.o[0].getCurrent(),
           tex1: this.o[1].getCurrent(),
           tex2: this.o[2].getCurrent(),
@@ -458,7 +445,7 @@ class HydraRenderer {
         })
       } else {
 
-        this.renderFbo({
+        this.renderFbo.execute({
           tex0: this.output.getCurrent(),
           resolution: [this.canvas.width, this.canvas.height]
         })
@@ -474,7 +461,6 @@ class HydraRenderer {
     }
   } catch(e) {
     console.warn('Error during tick():', e)
-  //  this.regl.poll()
   }
 }
 
