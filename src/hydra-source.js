@@ -1,17 +1,21 @@
 import Webcam from './lib/webcam.js'
 import Screen from './lib/screenmedia.js'
+import { Texture } from './webgl/index.js'
 
 class HydraSource {
-  constructor ({ regl, width, height, pb, label = ""}) {
+  constructor ({ gl, width, height, pb, label = ""}) {
     this.label = label
-    this.regl = regl
+    this.gl = gl
     this.src = null
     this.dynamic = true
     this.width = width
     this.height = height
-    this.tex = this.regl.texture({
-      //  shape: [width, height]
-      shape: [ 1, 1 ]
+    this.tex = new Texture(gl, {
+      width: 1,
+      height: 1,
+      format: 'rgba',
+      mag: 'nearest',
+      min: 'nearest'
     })
     this.pb = pb
   }
@@ -19,7 +23,13 @@ class HydraSource {
   init (opts, params) {
     if ('src' in opts) {
       this.src = opts.src
-      this.tex = this.regl.texture({ data: this.src, ...params })
+      const texParams = {
+        format: 'rgba',
+        mag: 'nearest',
+        min: 'nearest',
+        ...params
+      }
+      this.tex = new Texture(this.gl, { ...texParams, data: this.src })
     }
     if ('dynamic' in opts) this.dynamic = opts.dynamic
   }
@@ -30,7 +40,13 @@ class HydraSource {
       .then(response => {
         self.src = response.video
         self.dynamic = true
-        self.tex = self.regl.texture({ data: self.src, ...params })
+        const texParams = {
+          format: 'rgba',
+          mag: 'nearest',
+          min: 'nearest',
+          ...params
+        }
+        self.tex = new Texture(self.gl, { ...texParams, data: self.src })
       })
       .catch(err => console.log('could not get camera', err))
   }
@@ -45,7 +61,13 @@ class HydraSource {
     const onload = vid.addEventListener('loadeddata', () => {
       this.src = vid
       vid.play()
-      this.tex = this.regl.texture({ data: this.src, ...params})
+      const texParams = {
+        format: 'rgba',
+        mag: 'nearest',
+        min: 'nearest',
+        ...params
+      }
+      this.tex = new Texture(this.gl, { ...texParams, data: this.src })
       this.dynamic = true
     })
     vid.src = url
@@ -58,7 +80,13 @@ class HydraSource {
     img.onload = () => {
       this.src = img
       this.dynamic = false
-      this.tex = this.regl.texture({ data: this.src, ...params})
+      const texParams = {
+        format: 'rgba',
+        mag: 'nearest',
+        min: 'nearest',
+        ...params
+      }
+      this.tex = new Texture(this.gl, { ...texParams, data: this.src })
     }
   }
 
@@ -72,7 +100,13 @@ class HydraSource {
         if (nick === streamName) {
           self.src = video
           self.dynamic = true
-          self.tex = self.regl.texture({ data: self.src, ...params})
+          const texParams = {
+            format: 'rgba',
+            mag: 'nearest',
+            min: 'nearest',
+            ...params
+          }
+          self.tex = new Texture(self.gl, { ...texParams, data: self.src })
         }
       })
     }
@@ -84,7 +118,13 @@ class HydraSource {
     Screen()
       .then(function (response) {
         self.src = response.video
-        self.tex = self.regl.texture({ data: self.src, ...params})
+        const texParams = {
+          format: 'rgba',
+          mag: 'nearest',
+          min: 'nearest',
+          ...params
+        }
+        self.tex = new Texture(self.gl, { ...texParams, data: self.src })
         self.dynamic = true
         //  console.log("received screen input")
       })
@@ -129,7 +169,13 @@ class HydraSource {
       }
     }
     this.src = null
-    this.tex = this.regl.texture({ shape: [ 1, 1 ] })
+    this.tex = new Texture(this.gl, {
+      width: 1,
+      height: 1,
+      format: 'rgba',
+      mag: 'nearest',
+      min: 'nearest'
+    })
   }
 
   tick (time) {
