@@ -43,8 +43,10 @@ class HydraRenderer {
     regen = false,
     resetOut = true,
     extendTransforms = {}, // add your own functions on init
-    gpuDevice = null  // Optional shared GPUDevice for zero-copy texture sharing
+    gpuDevice = null,  // Optional shared GPUDevice for zero-copy texture sharing
+    preserveDrawingBuffer = false  // Enable for Syphon/pixel readback
   } = {}) {
+    this.preserveDrawingBuffer = preserveDrawingBuffer;
 
     ArrayUtils.init()
 
@@ -417,7 +419,10 @@ class HydraRenderer {
     this.regl = regl({
     //  profile: true,
       canvas: this.canvas,
-      pixelRatio: 1//,
+      pixelRatio: 1,
+      attributes: {
+        preserveDrawingBuffer: this.preserveDrawingBuffer
+      }
       // extensions: [
       //   'oes_texture_half_float',
       //   'oes_texture_half_float_linear'
