@@ -1,16 +1,64 @@
-//const transforms = require('./glsl-transforms.js')
+import VertexSource, { generateVertexGlsl } from './vertex-source.js'
+
+// Blend mode configurations for regl
+const BLEND_MODES = {
+  normal: {
+    enable: true,
+    func: {
+      srcRGB: 'src alpha',
+      srcAlpha: 1,
+      dstRGB: 'one minus src alpha',
+      dstAlpha: 'one minus src alpha'
+    }
+  },
+  add: {
+    enable: true,
+    func: {
+      srcRGB: 'src alpha',
+      srcAlpha: 1,
+      dstRGB: 'one',
+      dstAlpha: 'one'
+    }
+  },
+  multiply: {
+    enable: true,
+    func: {
+      srcRGB: 'dst color',
+      srcAlpha: 1,
+      dstRGB: 'zero',
+      dstAlpha: 'one'
+    }
+  },
+  screen: {
+    enable: true,
+    func: {
+      srcRGB: 'one',
+      srcAlpha: 1,
+      dstRGB: 'one minus src color',
+      dstAlpha: 'one'
+    }
+  }
+}
 
 var Output = function ({ regl, precision, label = "", chanNum, hydraSynth, width, height}) {
   this.regl = regl
   this.precision = precision
   this.label = label
   this.chanNum = chanNum
-  this.hydraSynth = hydraSynth;
-  this.positionBuffer = this.regl.buffer([
-    [-2, 0],
-    [0, -2],
-    [2, 2]
+  this.hydraSynth = hydraSynth
+
+  // Default fullscreen triangle (covers clip space with overdraw)
+  // Using vec3 for forward compatibility with 3D (z=0 for 2D)
+  this.defaultPositionBuffer = this.regl.buffer([
+    [-2, 0, 0],
+    [0, -2, 0],
+    [2, 2, 0]
   ])
+  // Keep for backwards compatibility
+  this.positionBuffer = this.defaultPositionBuffer
+
+  // Sprite registry: Map<spriteLevel, SpriteConfig>
+  this.sprites = new Map()
 
   this.draw = () => {}
   this.init()
@@ -60,14 +108,15 @@ Output.prototype.init = function () {
 
   this.fragBody = ``
 
+  // Vertex shader uses vec3 for forward compatibility with 3D
   this.vert = `
   precision ${this.precision} float;
-  attribute vec2 position;
+  attribute vec3 position;
   varying vec2 uv;
 
   void main () {
-    uv = position;
-    gl_Position = vec4(2.0 * position - 1.0, 0, 1);
+    uv = position.xy;
+    gl_Position = vec4(2.0 * position.xy - 1.0, 0, 1);
   }`
 
   this.attributes = {
@@ -88,39 +137,294 @@ Output.prototype.init = function () {
         gl_FragColor = c;
       }
   `
+
+  // Create copy command for persistence (no level 0 = keep previous frame)
+  this.copyCommand = this.regl({
+    frag: `
+      precision ${this.precision} float;
+      uniform sampler2D source;
+      varying vec2 uv;
+      void main () {
+        gl_FragColor = texture2D(source, uv);
+      }
+    `,
+    vert: this.vert,
+    attributes: {
+      position: this.defaultPositionBuffer
+    },
+    uniforms: {
+      source: this.regl.prop('source')
+    },
+    count: 3,
+    depth: { enable: false }
+  })
+
   return this
 }
 
 
-Output.prototype.render = function (passes) {
-  let pass = passes[0]
-  //console.log('pass', pass, this.pingPongIndex)
-  var self = this
-      var uniforms = Object.assign(pass.uniforms, { prevBuffer:  () =>  {
-             //var index = this.pingPongIndex ? 0 : 1
-          //   var index = self.pingPong[(passIndex+1)%2]
-          //  console.log('ping pong', self.pingPongIndex)
-            return self.fbos[self.pingPongIndex]
-          }
-        })
+// Reshape vertex data to vec3 format for forward compatibility with 3D
+// Input: flat array of 2D coords [x,y, x,y, ...] or 3D coords [x,y,z, x,y,z, ...]
+// Output: array of [x,y,z] triples
+function reshapeToVec3(flatArray) {
+  // Detect if input is 2D or 3D based on divisibility
+  // 2D: length divisible by 2 but not by 3, or explicitly 2 components per vertex
+  // 3D: length divisible by 3
+  const len = flatArray.length
+  const is3D = len % 3 === 0 && len % 2 !== 0
+  const stride = is3D ? 3 : 2
 
-  self.draw = self.regl({
-    frag: pass.frag,
-    vert: self.vert,
-    attributes: self.attributes,
-    uniforms: uniforms,
-    count: 3,
-    framebuffer: () => {
-      self.pingPongIndex = self.pingPongIndex ? 0 : 1
-      return self.fbos[self.pingPongIndex]
+  const verts = []
+  for (let i = 0; i < len; i += stride) {
+    if (is3D) {
+      verts.push([flatArray[i], flatArray[i + 1], flatArray[i + 2]])
+    } else {
+      // 2D input: add z=0
+      verts.push([flatArray[i], flatArray[i + 1], 0.0])
     }
+  }
+  return verts
+}
+
+// Helper to normalize vertex option values (handles scalars, arrays, and lambdas)
+function normalizeVertexOption(value, defaultValue) {
+  if (value === undefined || value === null) return defaultValue
+  return value
+}
+
+// Register a sprite at a given level
+// spriteLevel 0 clears the buffer before drawing
+// spriteLevel 1+ composites over previous content
+Output.prototype.registerSprite = function (spriteLevel, config) {
+  const { passes, vertexData, blendMode = 'normal', vertexOptions = null, primitive = 'triangles' } = config
+  const pass = passes[0]
+  const self = this
+
+  // Extract raw vertices and check for VertexSource
+  let rawVerts = null
+  let vertexSource = null
+
+  if (vertexData instanceof VertexSource) {
+    vertexSource = vertexData
+    rawVerts = vertexData.vertices
+  } else if (vertexData && Array.isArray(vertexData)) {
+    rawVerts = vertexData
+  }
+
+  // Create vertex buffer for this sprite
+  let positionBuffer, vertexCount
+  if (rawVerts && rawVerts.length >= 6) {
+    // Custom geometry: reshape to vec3 for 3D forward-compatibility
+    const verts = reshapeToVec3(rawVerts)
+    positionBuffer = this.regl.buffer(verts)
+    vertexCount = verts.length
+  } else {
+    // Default fullscreen triangle
+    positionBuffer = this.defaultPositionBuffer
+    vertexCount = 3
+  }
+
+  // Check if we need vertex transforms (from vertexOptions OR VertexSource chain)
+  const hasChainedTransforms = vertexSource && vertexSource.hasTransforms
+  const hasVertexOptions = rawVerts && vertexOptions && (
+    vertexOptions.scale !== undefined ||
+    vertexOptions.offset !== undefined ||
+    vertexOptions.rotation !== undefined
+  )
+  const hasVertexTransforms = hasChainedTransforms || hasVertexOptions
+
+  // Build uniforms with prevBuffer
+  const uniforms = Object.assign({}, pass.uniforms, {
+    prevBuffer: () => self.fbos[self.pingPongIndex]
+  })
+
+  // Add vertex transform uniforms if needed (Phase 3 style only)
+  // Phase 5 chained transforms get uniforms from generateVertexGlsl
+  if (hasVertexOptions) {
+    // Scale: can be number, [x,y] array, or lambda
+    const scaleOpt = normalizeVertexOption(vertexOptions.scale, [1, 1])
+    uniforms.u_scale = (context, props) => {
+      const val = typeof scaleOpt === 'function' ? scaleOpt() : scaleOpt
+      if (typeof val === 'number') return [val, val]
+      return val
+    }
+
+    // Offset: can be [x,y] array or lambda
+    const offsetOpt = normalizeVertexOption(vertexOptions.offset, [0, 0])
+    uniforms.u_offset = (context, props) => {
+      const val = typeof offsetOpt === 'function' ? offsetOpt() : offsetOpt
+      return val
+    }
+
+    // Rotation: can be number (radians) or lambda
+    const rotationOpt = normalizeVertexOption(vertexOptions.rotation, 0)
+    uniforms.u_rotation = (context, props) => {
+      const val = typeof rotationOpt === 'function' ? rotationOpt() : rotationOpt
+      return val
+    }
+  }
+
+  // Create vertex shader based on whether we have custom geometry
+  let vert
+  let vertexUniforms = {}
+
+  if (rawVerts) {
+    if (hasChainedTransforms) {
+      // Use generateVertexGlsl for chained transforms (Phase 5)
+      const generated = generateVertexGlsl(vertexSource, this.precision)
+      vert = generated.glsl
+      vertexUniforms = generated.uniforms
+    } else if (hasVertexOptions) {
+      // Custom geometry with vertexOptions (Phase 3 style)
+      vert = `
+      precision ${this.precision} float;
+      attribute vec3 position;
+      varying vec2 uv;
+
+      uniform vec2 u_scale;
+      uniform vec2 u_offset;
+      uniform float u_rotation;
+
+      void main () {
+        // UV from original position (before transforms)
+        uv = position.xy * 0.5 + 0.5;
+
+        // Apply transforms
+        vec2 pos = position.xy * u_scale;
+
+        // Rotation around origin
+        float c = cos(u_rotation);
+        float s = sin(u_rotation);
+        pos = vec2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+
+        // Offset
+        pos += u_offset;
+
+        gl_Position = vec4(pos, 0.0, 1.0);
+      }`
+    } else {
+      // Custom geometry without transforms: simple passthrough
+      vert = `
+      precision ${this.precision} float;
+      attribute vec3 position;
+      varying vec2 uv;
+
+      void main () {
+        uv = position.xy * 0.5 + 0.5;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }`
+    }
+  } else {
+    // Fullscreen: use original vertex shader
+    vert = this.vert
+  }
+
+  // Merge vertex uniforms with fragment uniforms
+  Object.assign(uniforms, vertexUniforms)
+
+  // Create the draw command
+  const drawCommand = this.regl({
+    frag: pass.frag,
+    vert: vert,
+    attributes: {
+      position: positionBuffer
+    },
+    uniforms: uniforms,
+    count: vertexCount,
+    primitive: primitive,
+    blend: BLEND_MODES[blendMode] || BLEND_MODES.normal,
+    depth: { enable: false }
+  })
+
+  // Store sprite config
+  this.sprites.set(spriteLevel, {
+    drawCommand,
+    positionBuffer,
+    blendMode
   })
 }
 
+// Clear all sprites (called by hush)
+Output.prototype.clearSprites = function () {
+  // Clean up any custom position buffers
+  for (const [level, sprite] of this.sprites) {
+    if (sprite.positionBuffer !== this.defaultPositionBuffer) {
+      sprite.positionBuffer.destroy()
+    }
+  }
+  this.sprites.clear()
+}
+
+// Legacy render method - registers at sprite level 0
+Output.prototype.render = function (passes) {
+  // Clear existing sprite at level 0 and register new one
+  if (this.sprites.has(0)) {
+    const oldSprite = this.sprites.get(0)
+    if (oldSprite.positionBuffer !== this.defaultPositionBuffer) {
+      oldSprite.positionBuffer.destroy()
+    }
+  }
+  this.registerSprite(0, { passes, vertexData: null, blendMode: 'normal' })
+
+  // For backwards compatibility, also set this.draw
+  const self = this
+  this.draw = function(props) {
+    self._renderSprites(props)
+  }
+}
+
+// Internal method to render all sprites in order
+Output.prototype._renderSprites = function (props) {
+  if (this.sprites.size === 0) return
+
+  // Sort sprite levels ascending
+  const levels = Array.from(this.sprites.keys()).sort((a, b) => a - b)
+
+  // Swap ping-pong index once at start of frame
+  this.pingPongIndex = this.pingPongIndex ? 0 : 1
+  const targetFbo = this.fbos[this.pingPongIndex]
+  const prevFbo = this.fbos[this.pingPongIndex ? 0 : 1]
+
+  // Check if we have a level 0 (which clears)
+  const hasLevel0 = levels.length > 0 && levels[0] === 0
+
+  // If no level 0, copy previous frame for persistence/trails
+  if (!hasLevel0) {
+    // Blit previous buffer to target (preserves content)
+    this.regl.clear({
+      color: [0, 0, 0, 0],
+      framebuffer: targetFbo
+    })
+    // Draw previous frame content to target
+    if (this.copyCommand) {
+      targetFbo.use(() => {
+        this.copyCommand({ source: prevFbo })
+      })
+    }
+  }
+
+  // Render each sprite level
+  for (let i = 0; i < levels.length; i++) {
+    const level = levels[i]
+    const sprite = this.sprites.get(level)
+
+    // Level 0 clears the framebuffer
+    if (level === 0) {
+      this.regl.clear({
+        color: [0, 0, 0, 1],
+        framebuffer: targetFbo
+      })
+    }
+
+    // Draw to framebuffer
+    targetFbo.use(() => {
+      sprite.drawCommand(props)
+    })
+  }
+}
 
 Output.prototype.tick = function (props) {
-//  console.log(props)
-  this.draw(props)
+  this._renderSprites(props)
 }
 
 export default Output

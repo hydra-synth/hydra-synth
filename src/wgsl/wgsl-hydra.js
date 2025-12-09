@@ -1,5 +1,6 @@
 import {FBOToCanvas} from "./FBOToCanvas.js";
 import {FBO4ToCanvas} from "./FBO4ToCanvas.js";
+import {BLEND_MODES} from "./outputWgsl.js";
 
 // Used to enable a single pass through the "animate" routine.
 // Used for testing to avoid a flood of console error messages.
@@ -47,35 +48,83 @@ const fragPrefix = `
     }
 `;
 
-// Per channel data for a channel render-pass.
-class RenderPassEntry {
-	constructor(chan) {
+// Per-sprite data for a sprite render pass
+class SpritePassEntry {
+	constructor(chan, level) {
 		this.chan = chan;
-	  this.channelTexInfo = [];
+		this.level = level;
 		this.reset();
 	}
 
 	reset() {
+		this.fragmentShaderSource = undefined;
+		this.fragmentShaderModule = undefined;
+		this.vertexShaderModule = undefined;
+		this.pipelineLayout = undefined;
+		this.pipeline = undefined;
 
+		this.uniformList = undefined;
+		this.channelUniforms = [];
+		this.textureUniforms = [];
+		this.valueUniforms = [];
+		this.bindGroupHeader = undefined;
+		this.bindGroupLayout = undefined;
+
+		this.hasValueUniforms = false;
+		this.structString = undefined;
+		this.valueStructView = undefined;
+		this.structUniformBuffer = undefined;
+
+		// Vertex buffer support
+		this.hasCustomGeometry = false;
+		this.vertexBuffer = undefined;
+		this.vertexCount = 0;
+		this.vertexWgsl = undefined;
+		this.vertexUniforms = [];
+		this.vertexUniformBuffer = undefined;
+		this.vertexUniformView = undefined;
+		this.vertexBindGroupLayout = undefined;
+		this.vertexBindGroup = undefined;
+
+		// Blend mode
+		this.blendMode = 'normal';
+	}
+}
+
+// Per channel data - now holds multiple sprites
+class RenderPassEntry {
+	constructor(chan) {
+		this.chan = chan;
+		this.channelTexInfo = [];
+		// Map<spriteLevel, SpritePassEntry>
+		this.sprites = new Map();
+		this.reset();
+	}
+
+	reset() {
 		this.pingPongs = 0;
 
-	  this.fragmentShaderSource = undefined;
-	  this.fragmentShaderModule = undefined
-	  this.pipelineLayout = undefined;
-	  this.pipeline = undefined;
+		// Legacy single-pipeline fields (for backward compat with setupHydraChain)
+		this.fragmentShaderSource = undefined;
+		this.fragmentShaderModule = undefined
+		this.pipelineLayout = undefined;
+		this.pipeline = undefined;
 
 		this.uniformList = undefined;
 		this.channelUniforms = []; // all listEntries
-	  this.textureUniforms = []; // all uniformTextureListEntries
-	  this.valueUniforms = [];	 // all uniformValueListEntries
-	  this.bindGroupHeader = undefined;
-	  this.bindGroupLayout = undefined;
+		this.textureUniforms = []; // all uniformTextureListEntries
+		this.valueUniforms = [];	 // all uniformValueListEntries
+		this.bindGroupHeader = undefined;
+		this.bindGroupLayout = undefined;
 
 		this.hasValueUniforms = false;
-	  this.structString = undefined;
-	  this.valueStructView = undefined;
-	  this.structUniformBuffer = undefined;
-		}
+		this.structString = undefined;
+		this.valueStructView = undefined;
+		this.structUniformBuffer = undefined;
+
+		// Clear sprites
+		this.sprites.clear();
+	}
 };
 
 // ------------------------------------------------------------------------------
@@ -319,6 +368,325 @@ class wgslHydra {
 	    if (trace) console.timeStamp("hydraChain", "setupHydraChain", undefined, "wgsl-hydra", "hydra", "secondary-light");
    }
 
+	// ------------------------------------------------------------------------------
+	// Setup a sprite render chain with optional custom geometry and vertex shader
+	//
+	async setupSpriteChain(chan, spriteLevel, config) {
+		if (trace) console.timeStamp("setupSpriteChain");
+		const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive } = config;
+
+		const rpe = this.renderPassInfo[chan];
+		rpe.outputObject = this.outputChannelObjects[chan];
+
+		// Create or get sprite entry
+		let spe = rpe.sprites.get(spriteLevel);
+		if (!spe) {
+			spe = new SpritePassEntry(chan, spriteLevel);
+			rpe.sprites.set(spriteLevel, spe);
+		} else {
+			spe.reset();
+		}
+
+		spe.uniformList = uniforms;
+		spe.blendMode = blendMode || 'normal';
+		spe.hasCustomGeometry = rawVerts !== null && rawVerts !== undefined;
+
+		// Generate uniform declarations for fragment shader
+		this.generateSpriteUniformDeclarations(spe);
+
+		// Build fragment shader source
+		spe.fragmentShaderSource = vertexPrefix + fragPrefix + spe.bindGroupHeader + fragShader;
+		spe.fragmentShaderModule = this.device.createShaderModule({
+			label: `frag_c${chan}_s${spriteLevel}`,
+			code: spe.fragmentShaderSource
+		});
+
+		// Setup vertex shader and buffer
+		if (spe.hasCustomGeometry && vertexWgsl) {
+			// Custom vertex shader with vertex buffer
+			spe.vertexWgsl = vertexWgsl;
+			spe.vertexUniforms = vertexUniforms || [];
+			spe.vertexShaderModule = this.device.createShaderModule({
+				label: `vert_c${chan}_s${spriteLevel}`,
+				code: vertexWgsl
+			});
+
+			// Create vertex buffer from raw vertices (reshape to vec3)
+			const verts = this.reshapeToVec3(rawVerts);
+			spe.vertexCount = verts.length;
+			const vertexData = new Float32Array(verts.flat());
+			spe.vertexBuffer = this.device.createBuffer({
+				label: `vertbuf_c${chan}_s${spriteLevel}`,
+				size: vertexData.byteLength,
+				usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+			});
+			this.device.queue.writeBuffer(spe.vertexBuffer, 0, vertexData);
+
+			// Setup vertex uniform buffer if needed
+			if (spe.vertexUniforms.length > 0) {
+				this.setupVertexUniforms(spe);
+			}
+		} else {
+			// Use default fullscreen vertex shader
+			spe.vertexShaderModule = this.vertexShaderModule;
+			spe.vertexCount = 6;
+		}
+
+		// Build pipeline layout
+		const bindGroupLayouts = [this.sharedBindGroupLayout, spe.bindGroupLayout];
+		if (spe.vertexBindGroupLayout) {
+			bindGroupLayouts.push(spe.vertexBindGroupLayout);
+		}
+		spe.pipelineLayout = this.device.createPipelineLayout({ bindGroupLayouts });
+
+		// Get blend state
+		const blendState = BLEND_MODES[spe.blendMode] || BLEND_MODES.normal;
+
+		// Create pipeline
+		const pipelineDescriptor = {
+			label: `pipeline_c${chan}_s${spriteLevel}`,
+			layout: spe.pipelineLayout,
+			vertex: {
+				module: spe.vertexShaderModule,
+				entryPoint: "main",
+			},
+			fragment: {
+				module: spe.fragmentShaderModule,
+				entryPoint: "main",
+				targets: [{
+					format: this.format,
+					blend: blendState
+				}],
+			},
+			primitive: {
+				topology: "triangle-list",
+			},
+		};
+
+		// Add vertex buffer layout if custom geometry
+		if (spe.hasCustomGeometry) {
+			pipelineDescriptor.vertex.buffers = [{
+				arrayStride: 12, // 3 floats * 4 bytes
+				attributes: [{
+					shaderLocation: 0,
+					offset: 0,
+					format: 'float32x3'
+				}]
+			}];
+		}
+
+		spe.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
+
+		// Create samplers/buffers for fragment uniforms
+		this.createSamplerOrBuffersForSprite(spe);
+
+		if (trace) console.timeStamp("spriteChain", "setupSpriteChain", undefined, "wgsl-hydra", "hydra", "secondary-light");
+	}
+
+	// Clear all sprite chains for a channel
+	clearSpriteChains(chan) {
+		const rpe = this.renderPassInfo[chan];
+		if (rpe.sprites) {
+			for (const [level, spe] of rpe.sprites) {
+				if (spe.vertexBuffer) {
+					spe.vertexBuffer.destroy();
+				}
+				if (spe.vertexUniformBuffer) {
+					spe.vertexUniformBuffer.destroy();
+				}
+			}
+			rpe.sprites.clear();
+		}
+	}
+
+	// Reshape 2D vertex data to vec3 format
+	reshapeToVec3(flatArray) {
+		const len = flatArray.length;
+		const is3D = len % 3 === 0 && len % 2 !== 0;
+		const stride = is3D ? 3 : 2;
+		const verts = [];
+		for (let i = 0; i < len; i += stride) {
+			if (is3D) {
+				verts.push([flatArray[i], flatArray[i + 1], flatArray[i + 2]]);
+			} else {
+				verts.push([flatArray[i], flatArray[i + 1], 0.0]);
+			}
+		}
+		return verts;
+	}
+
+	// Setup vertex uniform buffer
+	setupVertexUniforms(spe) {
+		// Calculate buffer size (f32 = 4 bytes, vec2f = 8 bytes)
+		let size = 0;
+		for (const u of spe.vertexUniforms) {
+			if (u.type === 'f32') size += 4;
+			else if (u.type === 'vec2f') size += 8;
+		}
+		// Align to 16 bytes
+		size = Math.ceil(size / 16) * 16;
+
+		spe.vertexUniformBuffer = this.device.createBuffer({
+			label: `vtxunif_c${spe.chan}_s${spe.level}`,
+			size: Math.max(size, 16),
+			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+		});
+
+		spe.vertexBindGroupLayout = this.device.createBindGroupLayout({
+			label: `vtxbgl_c${spe.chan}_s${spe.level}`,
+			entries: [{
+				binding: 0,
+				visibility: GPUShaderStage.VERTEX,
+				buffer: { type: "uniform" }
+			}]
+		});
+
+		spe.vertexBindGroup = this.device.createBindGroup({
+			label: `vtxbg_c${spe.chan}_s${spe.level}`,
+			layout: spe.vertexBindGroupLayout,
+			entries: [{
+				binding: 0,
+				resource: { buffer: spe.vertexUniformBuffer }
+			}]
+		});
+	}
+
+	// Generate uniform declarations for a sprite
+	generateSpriteUniformDeclarations(spe) {
+		let uniInfo = spe.uniformList;
+		let bindGroupEntry = "";
+		let i = 1;
+		let ui = 0;
+
+		spe.channelUniforms = [];
+
+		Object.keys(uniInfo).forEach(key => {
+			if (key === 'prevBuffer') return;
+			let uniEntry;
+			if (key.startsWith("tex")) {
+				uniEntry = new uniformTextureListEntry(spe.chan, i, key, uniInfo[key]);
+				spe.textureUniforms.push(uniEntry);
+				i += uniEntry.indexesUsed;
+			} else {
+				uniEntry = new uniformValueListEntry(spe.chan, ui, key, uniInfo[key], uniInfo);
+				spe.valueUniforms.push(uniEntry);
+				ui++;
+			}
+			spe.channelUniforms.push(uniEntry);
+		});
+
+		let ourValues = spe.valueUniforms;
+		spe.hasValueUniforms = ourValues.length > 0;
+		let bindings = "";
+		let bgLayoutentries = [];
+
+		if (spe.hasValueUniforms) {
+			let struct = `struct UF {\n`;
+			for (let j = 0; j < ourValues.length; ++j) {
+				struct = struct + ourValues[j].getStructLineItem();
+			}
+			struct = struct + `};\n@group(1) @binding(0) var<uniform> uf : UF;\n`;
+			spe.structString = struct;
+			bindings = struct;
+			bgLayoutentries = [{
+				binding: 0,
+				visibility: GPUShaderStage.FRAGMENT,
+				buffer: { type: "uniform" }
+			}];
+		}
+
+		let ourTextureUniforms = spe.textureUniforms;
+		for (let j = 0; j < ourTextureUniforms.length; ++j) {
+			let aUnif = ourTextureUniforms[j];
+			let bgs = aUnif.bindGroupString();
+			bindings = bindings + bgs;
+			bgLayoutentries.push(...aUnif.getBindGroupLayoutEntries());
+		}
+
+		spe.bindGroupLayout = this.device.createBindGroupLayout({
+			label: "sprite bg layout " + spe.chan + "_" + spe.level,
+			entries: bgLayoutentries
+		});
+		spe.bindGroupHeader = bindings;
+	}
+
+	// Create samplers/buffers for sprite
+	createSamplerOrBuffersForSprite(spe) {
+		if (spe.hasValueUniforms) {
+			spe.valueStructView = new Float32Array(spe.valueUniforms.length);
+			spe.valueStructBuffer = this.device.createBuffer({
+				size: spe.valueStructView.byteLength,
+				usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+			});
+		}
+		let ourUniforms = spe.textureUniforms;
+		for (let i = 0; i < ourUniforms.length; ++i) {
+			ourUniforms[i].createSamplerOrBuffers(this.device);
+		}
+	}
+
+	// Fill bind group for sprite
+	fillSpriteBindGroup(spe) {
+		let allUniforms = spe.channelUniforms;
+		if (!allUniforms || allUniforms.length === 0) {
+			return {
+				label: "spritebg" + spe.chan + "_" + spe.level,
+				layout: spe.bindGroupLayout,
+				entries: []
+			};
+		}
+
+		let bga;
+		if (spe.hasValueUniforms) {
+			this.setSpriteValueUniformValues(spe, this.time);
+			this.device.queue.writeBuffer(spe.valueStructBuffer, 0, spe.valueStructView);
+			bga = [{ binding: 0, resource: { buffer: spe.valueStructBuffer } }];
+		} else {
+			bga = [];
+		}
+
+		let ourUniforms = spe.textureUniforms;
+		for (let i = 0; i < ourUniforms.length; ++i) {
+			let aUniform = ourUniforms[i];
+			bga.push(...aUniform.getBindGroupEntries(this, this.time));
+		}
+
+		return {
+			label: "spritebg" + spe.chan + "_" + spe.level,
+			layout: spe.bindGroupLayout,
+			entries: bga
+		};
+	}
+
+	setSpriteValueUniformValues(spe, time) {
+		let ourUniforms = spe.valueUniforms;
+		for (let i = 0; i < ourUniforms.length; ++i) {
+			ourUniforms[i].setUniformValues(spe, time);
+		}
+	}
+
+	// Update vertex uniforms for a sprite
+	updateVertexUniforms(spe) {
+		if (!spe.vertexUniforms || spe.vertexUniforms.length === 0) return;
+
+		const data = [];
+		for (const u of spe.vertexUniforms) {
+			let val = typeof u.value === 'function' ? u.value() : u.value;
+			if (Array.isArray(val)) {
+				// Handle arrays that may contain lambdas
+				data.push(...val.map(v => typeof v === 'function' ? v() : v));
+			} else {
+				data.push(val);
+			}
+		}
+
+		// Pad to 4 floats minimum
+		while (data.length < 4) data.push(0);
+
+		const floatData = new Float32Array(data);
+		this.device.queue.writeBuffer(spe.vertexUniformBuffer, 0, floatData);
+	}
+
 		// ------------------------------------------------------------------------------
 		// animate function
 		//
@@ -348,33 +716,95 @@ class wgslHydra {
 		// For each active channel...
     for (let chan = 0; chan < this.numChannels; ++chan) {
  			const rpe = this.renderPassInfo[chan];
-			if (!rpe.pipeline) continue;
+
+			// Check if we have sprites or legacy pipeline
+			const hasSprites = rpe.sprites && rpe.sprites.size > 0;
+			const hasLegacyPipeline = rpe.pipeline;
+
+			if (!hasSprites && !hasLegacyPipeline) continue;
+
 		  rpe.outputObject.flipPingPong();
-      const renderPassDescriptor = {
-      	label: "renderPassDescriptor",
-        colorAttachments: [{
-          label: "canvas textureView attachment " + chan,
-          view: rpe.outputObject.getCurrentTextureView(),
-          clearValue: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
-          loadOp: "clear",
-          storeOp: "store",
-        }],
-      };
 
-			// Set the user defined uniforms for this channel.
-			//
-			let ubgData = await this.fillBindGroup(chan);
-		  let ubg = await this.device.createBindGroup(ubgData);
+			if (hasSprites) {
+				// Render sprites in level order
+				const levels = Array.from(rpe.sprites.keys()).sort((a, b) => a - b);
 
-			if (trace) console.timeStamp("pass");
-      const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-      passEncoder.setPipeline(rpe.pipeline);
-  		passEncoder.setBindGroup(0, this.sharedBindGroup);
-  		passEncoder.setBindGroup(1, ubg);
-      passEncoder.draw(6);  // call our vertex shader 6 times to make a box.
-      passEncoder.end();
-      
-	    if (trace) console.timeStamp("draw pass", "pass", undefined, "wgsl-hydra", "hydra", "tertiary");
+				for (let i = 0; i < levels.length; i++) {
+					const level = levels[i];
+					const spe = rpe.sprites.get(level);
+
+					// Level 0 clears, others load
+					const loadOp = level === 0 ? "clear" : "load";
+
+					const renderPassDescriptor = {
+						label: `renderPass_c${chan}_s${level}`,
+						colorAttachments: [{
+							label: `attachment_c${chan}_s${level}`,
+							view: rpe.outputObject.getCurrentTextureView(),
+							clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+							loadOp: loadOp,
+							storeOp: "store",
+						}],
+					};
+
+					// Fill bind group for fragment uniforms
+					let ubgData = this.fillSpriteBindGroup(spe);
+					let ubg = this.device.createBindGroup(ubgData);
+
+					// Update vertex uniforms if needed
+					if (spe.vertexUniforms && spe.vertexUniforms.length > 0) {
+						this.updateVertexUniforms(spe);
+					}
+
+					if (trace) console.timeStamp("spritepass");
+					const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+					passEncoder.setPipeline(spe.pipeline);
+					passEncoder.setBindGroup(0, this.sharedBindGroup);
+					passEncoder.setBindGroup(1, ubg);
+
+					// Set vertex bind group if we have vertex uniforms
+					if (spe.vertexBindGroup) {
+						passEncoder.setBindGroup(2, spe.vertexBindGroup);
+					}
+
+					// Set vertex buffer if custom geometry
+					if (spe.hasCustomGeometry && spe.vertexBuffer) {
+						passEncoder.setVertexBuffer(0, spe.vertexBuffer);
+						passEncoder.draw(spe.vertexCount);
+					} else {
+						passEncoder.draw(6);
+					}
+
+					passEncoder.end();
+
+					if (trace) console.timeStamp("sprite draw", "spritepass", undefined, "wgsl-hydra", "hydra", "tertiary");
+				}
+			} else {
+				// Legacy single pipeline rendering
+				const renderPassDescriptor = {
+					label: "renderPassDescriptor",
+					colorAttachments: [{
+						label: "canvas textureView attachment " + chan,
+						view: rpe.outputObject.getCurrentTextureView(),
+						clearValue: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
+						loadOp: "clear",
+						storeOp: "store",
+					}],
+				};
+
+				let ubgData = await this.fillBindGroup(chan);
+				let ubg = await this.device.createBindGroup(ubgData);
+
+				if (trace) console.timeStamp("pass");
+				const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+				passEncoder.setPipeline(rpe.pipeline);
+				passEncoder.setBindGroup(0, this.sharedBindGroup);
+				passEncoder.setBindGroup(1, ubg);
+				passEncoder.draw(6);
+				passEncoder.end();
+
+				if (trace) console.timeStamp("draw pass", "pass", undefined, "wgsl-hydra", "hydra", "tertiary");
+			}
    } // end "chan" loop.
    // Do all the channels now.
     this.device.queue.submit([commandEncoder.finish()]);

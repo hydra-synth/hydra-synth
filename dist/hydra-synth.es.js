@@ -1,17 +1,316 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+class VertexSource {
+  constructor(vertices) {
+    this.vertices = vertices;
+    this.transforms = [];
+  }
+  // Get raw vertices (for backward compat or direct access)
+  get verts() {
+    return this.vertices;
+  }
+  // Check if this has any transforms
+  get hasTransforms() {
+    return this.transforms.length > 0;
+  }
+  // Add a transform to the chain
+  _addTransform(type, args) {
+    this.transforms.push({ type, args });
+    return this;
+  }
+  // Chainable transforms
+  rotate(angle = 0) {
+    return this._addTransform("rotate", { angle });
+  }
+  scale(x2 = 1, y) {
+    if (y === void 0) y = x2;
+    return this._addTransform("scale", { x: x2, y });
+  }
+  offset(x2 = 0, y = 0) {
+    return this._addTransform("offset", { x: x2, y });
+  }
+  // Alias for offset
+  translate(x2 = 0, y = 0) {
+    return this.offset(x2, y);
+  }
+  // ========== Immediate transforms (CPU, modify vertex array) ==========
+  // Mirror geometry across an axis
+  // axis: 'x', 'y', or 'xy' (both)
+  mirror(axis = "x") {
+    const orig = this.vertices;
+    const mirrored = [];
+    const stride = 2;
+    for (let i = 0; i < orig.length; i += stride) {
+      const x2 = orig[i];
+      const y = orig[i + 1];
+      if (axis === "x" || axis === "xy") {
+        mirrored.push(-x2, y);
+      }
+      if (axis === "y") {
+        mirrored.push(x2, -y);
+      }
+    }
+    if (axis === "xy") {
+      for (let i = 0; i < orig.length; i += stride) {
+        mirrored.push(orig[i], -orig[i + 1]);
+      }
+      for (let i = 0; i < orig.length; i += stride) {
+        mirrored.push(-orig[i], -orig[i + 1]);
+      }
+    }
+    this.vertices = [...orig, ...mirrored];
+    return this;
+  }
+  // Repeat geometry in a grid pattern
+  // nx, ny: number of copies in x and y directions
+  // spacing: distance between copies (in NDC)
+  repeat(nx = 2, ny = 1, spacing = 0.5) {
+    const orig = this.vertices;
+    const repeated = [];
+    const stride = 2;
+    const offsetX = -((nx - 1) * spacing) / 2;
+    const offsetY = -((ny - 1) * spacing) / 2;
+    for (let iy = 0; iy < ny; iy++) {
+      for (let ix = 0; ix < nx; ix++) {
+        const dx = offsetX + ix * spacing;
+        const dy = offsetY + iy * spacing;
+        for (let i = 0; i < orig.length; i += stride) {
+          repeated.push(orig[i] + dx, orig[i + 1] + dy);
+        }
+      }
+    }
+    this.vertices = repeated;
+    return this;
+  }
+}
+function generateVertexGlsl(vertexSource, precision) {
+  if (!vertexSource.hasTransforms) {
+    return {
+      glsl: `
+        precision ${precision} float;
+        attribute vec3 position;
+        varying vec2 uv;
+
+        void main () {
+          uv = position.xy * 0.5 + 0.5;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `,
+      uniforms: {}
+    };
+  }
+  const uniforms = {};
+  const uniformDecls = [];
+  const transformCode = [];
+  vertexSource.transforms.forEach((transform, i) => {
+    const suffix = i;
+    switch (transform.type) {
+      case "rotate": {
+        const uniformName = `u_rotate_${suffix}`;
+        uniformDecls.push(`uniform float ${uniformName};`);
+        uniforms[uniformName] = makeUniformAccessor(transform.args.angle);
+        transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+          }
+        `);
+        break;
+      }
+      case "scale": {
+        const uniformName = `u_scale_${suffix}`;
+        uniformDecls.push(`uniform vec2 ${uniformName};`);
+        uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y]);
+        transformCode.push(`
+          pos *= ${uniformName};
+        `);
+        break;
+      }
+      case "offset": {
+        const uniformName = `u_offset_${suffix}`;
+        uniformDecls.push(`uniform vec2 ${uniformName};`);
+        uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y]);
+        transformCode.push(`
+          pos += ${uniformName};
+        `);
+        break;
+      }
+    }
+  });
+  const glsl = `
+    precision ${precision} float;
+    attribute vec3 position;
+    varying vec2 uv;
+
+    ${uniformDecls.join("\n    ")}
+
+    void main () {
+      // UV from original position (before transforms)
+      uv = position.xy * 0.5 + 0.5;
+
+      // Apply transforms
+      vec2 pos = position.xy;
+      ${transformCode.join("\n      ")}
+
+      gl_Position = vec4(pos, 0.0, 1.0);
+    }
+  `;
+  return { glsl, uniforms };
+}
+function makeUniformAccessor(value) {
+  return (context, props) => {
+    if (Array.isArray(value)) {
+      return value.map((v) => typeof v === "function" ? v() : v);
+    }
+    if (typeof value === "function") {
+      return value();
+    }
+    return value;
+  };
+}
+function generateVertexWgsl(vertexSource) {
+  const uniforms = [];
+  const transformCode = [];
+  if (vertexSource.hasTransforms) {
+    vertexSource.transforms.forEach((transform, i) => {
+      const suffix = i;
+      switch (transform.type) {
+        case "rotate": {
+          const uniformName = `u_rotate_${suffix}`;
+          uniforms.push({ name: uniformName, type: "f32", value: transform.args.angle });
+          transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec2f(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+      }`);
+          break;
+        }
+        case "scale": {
+          const uniformName = `u_scale_${suffix}`;
+          uniforms.push({ name: uniformName, type: "vec2f", value: [transform.args.x, transform.args.y] });
+          transformCode.push(`
+      pos *= vtx.${uniformName};`);
+          break;
+        }
+        case "offset": {
+          const uniformName = `u_offset_${suffix}`;
+          uniforms.push({ name: uniformName, type: "vec2f", value: [transform.args.x, transform.args.y] });
+          transformCode.push(`
+      pos += vtx.${uniformName};`);
+          break;
+        }
+      }
+    });
+  }
+  let uniformStruct = "";
+  if (uniforms.length > 0) {
+    const structFields = uniforms.map((u) => `  ${u.name}: ${u.type},`).join("\n");
+    uniformStruct = `struct VertexUniforms {
+${structFields}
+};
+@group(2) @binding(0) var<uniform> vtx: VertexUniforms;
+`;
+  }
+  const wgsl = `struct VertexInput {
+  @location(0) position: vec3f,
+};
+
+struct VertexOutput {
+  @builtin(position) position: vec4f,
+  @location(0) texcoord: vec2f,
+};
+
+${uniformStruct}
+@vertex
+fn main(input: VertexInput) -> VertexOutput {
+  var output: VertexOutput;
+
+  // UV from original position (before transforms)
+  output.texcoord = input.position.xy * 0.5 + 0.5;
+
+  // Apply transforms
+  var pos = input.position.xy;
+${transformCode.join("\n")}
+
+  output.position = vec4f(pos, 0.0, 1.0);
+  return output;
+}
+`;
+  return { wgsl, uniforms };
+}
+function getPassthroughVertexWgsl() {
+  return `struct VertexInput {
+  @location(0) position: vec3f,
+};
+
+struct VertexOutput {
+  @builtin(position) position: vec4f,
+  @location(0) texcoord: vec2f,
+};
+
+@vertex
+fn main(input: VertexInput) -> VertexOutput {
+  var output: VertexOutput;
+  output.texcoord = input.position.xy * 0.5 + 0.5;
+  output.position = vec4f(input.position.xy, 0.0, 1.0);
+  return output;
+}
+`;
+}
+const BLEND_MODES$1 = {
+  normal: {
+    enable: true,
+    func: {
+      srcRGB: "src alpha",
+      srcAlpha: 1,
+      dstRGB: "one minus src alpha",
+      dstAlpha: "one minus src alpha"
+    }
+  },
+  add: {
+    enable: true,
+    func: {
+      srcRGB: "src alpha",
+      srcAlpha: 1,
+      dstRGB: "one",
+      dstAlpha: "one"
+    }
+  },
+  multiply: {
+    enable: true,
+    func: {
+      srcRGB: "dst color",
+      srcAlpha: 1,
+      dstRGB: "zero",
+      dstAlpha: "one"
+    }
+  },
+  screen: {
+    enable: true,
+    func: {
+      srcRGB: "one",
+      srcAlpha: 1,
+      dstRGB: "one minus src color",
+      dstAlpha: "one"
+    }
+  }
+};
 var Output = function({ regl: regl2, precision, label = "", chanNum, hydraSynth, width, height }) {
   this.regl = regl2;
   this.precision = precision;
   this.label = label;
   this.chanNum = chanNum;
   this.hydraSynth = hydraSynth;
-  this.positionBuffer = this.regl.buffer([
-    [-2, 0],
-    [0, -2],
-    [2, 2]
+  this.defaultPositionBuffer = this.regl.buffer([
+    [-2, 0, 0],
+    [0, -2, 0],
+    [2, 2, 0]
   ]);
+  this.positionBuffer = this.defaultPositionBuffer;
+  this.sprites = /* @__PURE__ */ new Map();
   this.draw = () => {
   };
   this.init();
@@ -49,12 +348,12 @@ Output.prototype.init = function() {
   this.fragBody = ``;
   this.vert = `
   precision ${this.precision} float;
-  attribute vec2 position;
+  attribute vec3 position;
   varying vec2 uv;
 
   void main () {
-    uv = position;
-    gl_Position = vec4(2.0 * position - 1.0, 0, 1);
+    uv = position.xy;
+    gl_Position = vec4(2.0 * position.xy - 1.0, 0, 1);
   }`;
   this.attributes = {
     position: this.positionBuffer
@@ -73,30 +372,261 @@ Output.prototype.init = function() {
         gl_FragColor = c;
       }
   `;
+  this.copyCommand = this.regl({
+    frag: `
+      precision ${this.precision} float;
+      uniform sampler2D source;
+      varying vec2 uv;
+      void main () {
+        gl_FragColor = texture2D(source, uv);
+      }
+    `,
+    vert: this.vert,
+    attributes: {
+      position: this.defaultPositionBuffer
+    },
+    uniforms: {
+      source: this.regl.prop("source")
+    },
+    count: 3,
+    depth: { enable: false }
+  });
   return this;
 };
-Output.prototype.render = function(passes) {
-  let pass = passes[0];
-  var self2 = this;
-  var uniforms = Object.assign(pass.uniforms, {
-    prevBuffer: () => {
-      return self2.fbos[self2.pingPongIndex];
+function reshapeToVec3(flatArray) {
+  const len = flatArray.length;
+  const is3D = len % 3 === 0 && len % 2 !== 0;
+  const stride = is3D ? 3 : 2;
+  const verts = [];
+  for (let i = 0; i < len; i += stride) {
+    if (is3D) {
+      verts.push([flatArray[i], flatArray[i + 1], flatArray[i + 2]]);
+    } else {
+      verts.push([flatArray[i], flatArray[i + 1], 0]);
     }
+  }
+  return verts;
+}
+function normalizeVertexOption(value, defaultValue) {
+  if (value === void 0 || value === null) return defaultValue;
+  return value;
+}
+Output.prototype.registerSprite = function(spriteLevel, config) {
+  const { passes, vertexData, blendMode = "normal", vertexOptions = null, primitive = "triangles" } = config;
+  const pass = passes[0];
+  const self2 = this;
+  let rawVerts = null;
+  let vertexSource = null;
+  if (vertexData instanceof VertexSource) {
+    vertexSource = vertexData;
+    rawVerts = vertexData.vertices;
+  } else if (vertexData && Array.isArray(vertexData)) {
+    rawVerts = vertexData;
+  }
+  let positionBuffer, vertexCount;
+  if (rawVerts && rawVerts.length >= 6) {
+    const verts = reshapeToVec3(rawVerts);
+    positionBuffer = this.regl.buffer(verts);
+    vertexCount = verts.length;
+  } else {
+    positionBuffer = this.defaultPositionBuffer;
+    vertexCount = 3;
+  }
+  const hasChainedTransforms = vertexSource && vertexSource.hasTransforms;
+  const hasVertexOptions = rawVerts && vertexOptions && (vertexOptions.scale !== void 0 || vertexOptions.offset !== void 0 || vertexOptions.rotation !== void 0);
+  const uniforms = Object.assign({}, pass.uniforms, {
+    prevBuffer: () => self2.fbos[self2.pingPongIndex]
   });
-  self2.draw = self2.regl({
-    frag: pass.frag,
-    vert: self2.vert,
-    attributes: self2.attributes,
-    uniforms,
-    count: 3,
-    framebuffer: () => {
-      self2.pingPongIndex = self2.pingPongIndex ? 0 : 1;
-      return self2.fbos[self2.pingPongIndex];
+  if (hasVertexOptions) {
+    const scaleOpt = normalizeVertexOption(vertexOptions.scale, [1, 1]);
+    uniforms.u_scale = (context, props) => {
+      const val = typeof scaleOpt === "function" ? scaleOpt() : scaleOpt;
+      if (typeof val === "number") return [val, val];
+      return val;
+    };
+    const offsetOpt = normalizeVertexOption(vertexOptions.offset, [0, 0]);
+    uniforms.u_offset = (context, props) => {
+      const val = typeof offsetOpt === "function" ? offsetOpt() : offsetOpt;
+      return val;
+    };
+    const rotationOpt = normalizeVertexOption(vertexOptions.rotation, 0);
+    uniforms.u_rotation = (context, props) => {
+      const val = typeof rotationOpt === "function" ? rotationOpt() : rotationOpt;
+      return val;
+    };
+  }
+  let vert;
+  let vertexUniforms = {};
+  if (rawVerts) {
+    if (hasChainedTransforms) {
+      const generated = generateVertexGlsl(vertexSource, this.precision);
+      vert = generated.glsl;
+      vertexUniforms = generated.uniforms;
+    } else if (hasVertexOptions) {
+      vert = `
+      precision ${this.precision} float;
+      attribute vec3 position;
+      varying vec2 uv;
+
+      uniform vec2 u_scale;
+      uniform vec2 u_offset;
+      uniform float u_rotation;
+
+      void main () {
+        // UV from original position (before transforms)
+        uv = position.xy * 0.5 + 0.5;
+
+        // Apply transforms
+        vec2 pos = position.xy * u_scale;
+
+        // Rotation around origin
+        float c = cos(u_rotation);
+        float s = sin(u_rotation);
+        pos = vec2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+
+        // Offset
+        pos += u_offset;
+
+        gl_Position = vec4(pos, 0.0, 1.0);
+      }`;
+    } else {
+      vert = `
+      precision ${this.precision} float;
+      attribute vec3 position;
+      varying vec2 uv;
+
+      void main () {
+        uv = position.xy * 0.5 + 0.5;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }`;
     }
+  } else {
+    vert = this.vert;
+  }
+  Object.assign(uniforms, vertexUniforms);
+  const drawCommand = this.regl({
+    frag: pass.frag,
+    vert,
+    attributes: {
+      position: positionBuffer
+    },
+    uniforms,
+    count: vertexCount,
+    primitive,
+    blend: BLEND_MODES$1[blendMode] || BLEND_MODES$1.normal,
+    depth: { enable: false }
+  });
+  this.sprites.set(spriteLevel, {
+    drawCommand,
+    positionBuffer,
+    blendMode
   });
 };
+Output.prototype.clearSprites = function() {
+  for (const [level, sprite] of this.sprites) {
+    if (sprite.positionBuffer !== this.defaultPositionBuffer) {
+      sprite.positionBuffer.destroy();
+    }
+  }
+  this.sprites.clear();
+};
+Output.prototype.render = function(passes) {
+  if (this.sprites.has(0)) {
+    const oldSprite = this.sprites.get(0);
+    if (oldSprite.positionBuffer !== this.defaultPositionBuffer) {
+      oldSprite.positionBuffer.destroy();
+    }
+  }
+  this.registerSprite(0, { passes, vertexData: null, blendMode: "normal" });
+  const self2 = this;
+  this.draw = function(props) {
+    self2._renderSprites(props);
+  };
+};
+Output.prototype._renderSprites = function(props) {
+  if (this.sprites.size === 0) return;
+  const levels = Array.from(this.sprites.keys()).sort((a2, b) => a2 - b);
+  this.pingPongIndex = this.pingPongIndex ? 0 : 1;
+  const targetFbo = this.fbos[this.pingPongIndex];
+  const prevFbo = this.fbos[this.pingPongIndex ? 0 : 1];
+  const hasLevel0 = levels.length > 0 && levels[0] === 0;
+  if (!hasLevel0) {
+    this.regl.clear({
+      color: [0, 0, 0, 0],
+      framebuffer: targetFbo
+    });
+    if (this.copyCommand) {
+      targetFbo.use(() => {
+        this.copyCommand({ source: prevFbo });
+      });
+    }
+  }
+  for (let i = 0; i < levels.length; i++) {
+    const level = levels[i];
+    const sprite = this.sprites.get(level);
+    if (level === 0) {
+      this.regl.clear({
+        color: [0, 0, 0, 1],
+        framebuffer: targetFbo
+      });
+    }
+    targetFbo.use(() => {
+      sprite.drawCommand(props);
+    });
+  }
+};
 Output.prototype.tick = function(props) {
-  this.draw(props);
+  this._renderSprites(props);
+};
+const BLEND_MODES = {
+  normal: {
+    color: {
+      srcFactor: "src-alpha",
+      dstFactor: "one-minus-src-alpha",
+      operation: "add"
+    },
+    alpha: {
+      srcFactor: "one",
+      dstFactor: "one-minus-src-alpha",
+      operation: "add"
+    }
+  },
+  add: {
+    color: {
+      srcFactor: "src-alpha",
+      dstFactor: "one",
+      operation: "add"
+    },
+    alpha: {
+      srcFactor: "one",
+      dstFactor: "one",
+      operation: "add"
+    }
+  },
+  multiply: {
+    color: {
+      srcFactor: "dst",
+      dstFactor: "zero",
+      operation: "add"
+    },
+    alpha: {
+      srcFactor: "one",
+      dstFactor: "one",
+      operation: "add"
+    }
+  },
+  screen: {
+    color: {
+      srcFactor: "one",
+      dstFactor: "one-minus-src",
+      operation: "add"
+    },
+    alpha: {
+      srcFactor: "one",
+      dstFactor: "one",
+      operation: "add"
+    }
+  }
 };
 class OutputWgsl {
   constructor({ wgslHydra: wgslHydra2, hydraSynth, chanNum, label = "", width, height }) {
@@ -104,13 +634,14 @@ class OutputWgsl {
     this.hydraSynth = hydraSynth;
     this.chanNum = chanNum;
     this.label = label;
+    this.precision = "mediump";
     this.draw = () => {
     };
+    this.sprites = /* @__PURE__ */ new Map();
     this.init();
   }
   resize(width, height) {
   }
-  // Can simplify:
   getCurrent() {
     let tex = this.getCurrentTextureView();
     return tex;
@@ -120,17 +651,65 @@ class OutputWgsl {
     return tex;
   }
   init() {
+    this.pingPongs = 0;
     return this;
   }
-  async render(passes) {
-    let pass = passes[0];
-    var self2 = this;
-    var uniforms = Object.assign(pass.uniforms, {
-      prevBuffer: () => {
-        return self2.getCurrentTextureView();
+  // Register a sprite at a given level (parallel to WebGL Output.registerSprite)
+  async registerSprite(spriteLevel, config) {
+    const { passes, vertexData, blendMode = "normal", primitive = "triangles" } = config;
+    const pass = passes[0];
+    let rawVerts = null;
+    let vertexSource = null;
+    if (vertexData instanceof VertexSource) {
+      vertexSource = vertexData;
+      rawVerts = vertexData.vertices;
+    } else if (vertexData && Array.isArray(vertexData)) {
+      rawVerts = vertexData;
+    }
+    let vertexWgsl = null;
+    let vertexUniforms = [];
+    const hasChainedTransforms = vertexSource && vertexSource.hasTransforms;
+    if (rawVerts) {
+      if (hasChainedTransforms) {
+        const generated = generateVertexWgsl(vertexSource);
+        vertexWgsl = generated.wgsl;
+        vertexUniforms = generated.uniforms;
+      } else {
+        vertexWgsl = getPassthroughVertexWgsl();
       }
+    }
+    this.sprites.set(spriteLevel, {
+      passes,
+      vertexData,
+      rawVerts,
+      vertexSource,
+      blendMode,
+      primitive,
+      vertexWgsl,
+      vertexUniforms,
+      hasCustomGeometry: rawVerts !== null
     });
-    this.hydraChan = await this.wgslHydra.setupHydraChain(this.chanNum, uniforms, pass.frag);
+    await this.wgslHydra.setupSpriteChain(this.chanNum, spriteLevel, {
+      uniforms: pass.uniforms,
+      fragShader: pass.frag,
+      vertexWgsl,
+      vertexUniforms,
+      rawVerts,
+      blendMode,
+      primitive
+    });
+  }
+  // Legacy render method - registers at sprite level 0
+  async render(passes) {
+    this.clearSprites();
+    await this.registerSprite(0, { passes, vertexData: null, blendMode: "normal" });
+  }
+  // Clear all sprites
+  clearSprites() {
+    this.sprites.clear();
+    if (this.wgslHydra.clearSpriteChains) {
+      this.wgslHydra.clearSpriteChains(this.chanNum);
+    }
   }
   tick(props) {
   }
@@ -2087,12 +2666,69 @@ var GlslSource = function(obj) {
 GlslSource.prototype.addTransform = function(obj) {
   this.transforms.push(obj);
 };
-GlslSource.prototype.out = function(_output) {
-  var output = _output || this.defaultOutput;
+function isGeometry(arg) {
+  if (!arg) return false;
+  if (Array.isArray(arg)) return true;
+  if (arg.vertices) return true;
+  return false;
+}
+function isConfig(arg) {
+  if (!arg) return false;
+  if (typeof arg !== "object") return false;
+  if (Array.isArray(arg)) return false;
+  if (arg.vertices) return false;
+  return "level" in arg || "blend" in arg || "primitive" in arg;
+}
+function isOutput(arg) {
+  return arg && typeof arg === "object" && "registerSprite" in arg;
+}
+GlslSource.prototype.out = function(arg1, arg2, arg3, arg4) {
+  let output, geometry, config;
+  if (isGeometry(arg1)) {
+    output = this.defaultOutput;
+    geometry = arg1;
+    config = isConfig(arg2) ? arg2 : {};
+    if (typeof arg2 === "number") {
+      config = { level: arg2, blend: arg3 || "normal" };
+    }
+  } else if (isOutput(arg1) || arg1 === void 0 || arg1 === null) {
+    output = arg1 || this.defaultOutput;
+    if (isGeometry(arg2)) {
+      geometry = arg2;
+      config = isConfig(arg3) ? arg3 : {};
+      if (typeof arg3 === "number") {
+        config = { level: arg3, blend: arg4 || "normal" };
+      }
+    } else if (isConfig(arg2)) {
+      geometry = null;
+      config = arg2;
+    } else {
+      geometry = null;
+      config = {};
+    }
+  } else {
+    output = arg1 || this.defaultOutput;
+    geometry = null;
+    config = {};
+  }
+  const level = config.level !== void 0 ? config.level : 0;
+  const blend = config.blend || "normal";
+  const primitive = config.primitive || "triangles";
   if (output) try {
     var glsl = this.glsl(output);
     this.synth.currentFunctions = [];
-    output.render(glsl);
+    if (output.sprites && output.sprites.has(level) && output.defaultPositionBuffer) {
+      const oldSprite = output.sprites.get(level);
+      if (oldSprite.positionBuffer && oldSprite.positionBuffer !== output.defaultPositionBuffer) {
+        oldSprite.positionBuffer.destroy();
+      }
+    }
+    output.registerSprite(level, {
+      passes: glsl,
+      vertexData: geometry,
+      blendMode: blend,
+      primitive
+    });
   } catch (error) {
     console.warn("shader could not compile", error);
   }
@@ -3611,9 +4247,9 @@ function requireRegl() {
         this.index = {};
         this.hasErrors = false;
       }
-      function ShaderLine(number, line2) {
+      function ShaderLine(number, line22) {
         this.number = number;
-        this.line = line2;
+        this.line = line22;
         this.errors = [];
       }
       function ShaderError(fileNumber, lineNumber, message) {
@@ -3658,8 +4294,8 @@ function requireRegl() {
         files.unknown.name = files[0].name = command || guessCommand();
         files.unknown.lines.push(new ShaderLine(0, ""));
         for (var i = 0; i < lines2.length; ++i) {
-          var line2 = lines2[i];
-          var parts = /^\s*#\s*(\w+)\s+(.+)\s*$/.exec(line2);
+          var line22 = lines2[i];
+          var parts = /^\s*#\s*(\w+)\s+(.+)\s*$/.exec(line22);
           if (parts) {
             switch (parts[1]) {
               case "line":
@@ -3682,7 +4318,7 @@ function requireRegl() {
                 break;
             }
           }
-          files[fileNumber].lines.push(new ShaderLine(lineNumber++, line2));
+          files[fileNumber].lines.push(new ShaderLine(lineNumber++, line22));
         }
         Object.keys(files).forEach(function(fileNumber2) {
           var file = files[fileNumber2];
@@ -3715,9 +4351,9 @@ function requireRegl() {
         errors.forEach(function(error) {
           var file = files[error.file];
           if (file) {
-            var line2 = file.index[error.line];
-            if (line2) {
-              line2.errors.push(error);
+            var line22 = file.index[error.line];
+            if (line22) {
+              line22.errors.push(error);
               file.hasErrors = true;
               return;
             }
@@ -3746,12 +4382,12 @@ function requireRegl() {
               styles.push(style || "");
             }
             push("file number " + fileNumber + ": " + file.name + "\n", "color:red;text-decoration:underline;font-weight:bold");
-            file.lines.forEach(function(line2) {
-              if (line2.errors.length > 0) {
-                push(leftPad(line2.number, 4) + "|  ", "background-color:yellow; font-weight:bold");
-                push(line2.line + endl, "color:red; background-color:yellow; font-weight:bold");
+            file.lines.forEach(function(line22) {
+              if (line22.errors.length > 0) {
+                push(leftPad(line22.number, 4) + "|  ", "background-color:yellow; font-weight:bold");
+                push(line22.line + endl, "color:red; background-color:yellow; font-weight:bold");
                 var offset2 = 0;
-                line2.errors.forEach(function(error) {
+                line22.errors.forEach(function(error) {
                   var message = error.message;
                   var token = /^\s*'(.*)'\s*:\s*(.*)$/.exec(message);
                   if (token) {
@@ -3762,7 +4398,7 @@ function requireRegl() {
                         tokenPat = "=";
                         break;
                     }
-                    offset2 = Math.max(line2.line.indexOf(tokenPat, offset2), 0);
+                    offset2 = Math.max(line22.line.indexOf(tokenPat, offset2), 0);
                   } else {
                     offset2 = 0;
                   }
@@ -3773,8 +4409,8 @@ function requireRegl() {
                 });
                 push(leftPad("| ", 6) + endl);
               } else {
-                push(leftPad(line2.number, 4) + "|  ");
-                push(line2.line + endl, "color:red");
+                push(leftPad(line22.number, 4) + "|  ");
+                push(line22.line + endl, "color:red");
               }
             });
             if (typeof document !== "undefined" && !window.chrome) {
@@ -5110,14 +5746,14 @@ function requireRegl() {
       var points = 0;
       var point = 0;
       var lines = 1;
-      var line = 1;
+      var line2 = 1;
       var triangles = 4;
       var triangle = 4;
       var primTypes = {
         points,
         point,
         lines,
-        line,
+        line: line2,
         triangles,
         triangle,
         "line loop": 2,
@@ -13660,10 +14296,45 @@ const vertexShaderCode = vertexPrefix + `
      return output;
     }
 `;
+class SpritePassEntry {
+  constructor(chan, level) {
+    this.chan = chan;
+    this.level = level;
+    this.reset();
+  }
+  reset() {
+    this.fragmentShaderSource = void 0;
+    this.fragmentShaderModule = void 0;
+    this.vertexShaderModule = void 0;
+    this.pipelineLayout = void 0;
+    this.pipeline = void 0;
+    this.uniformList = void 0;
+    this.channelUniforms = [];
+    this.textureUniforms = [];
+    this.valueUniforms = [];
+    this.bindGroupHeader = void 0;
+    this.bindGroupLayout = void 0;
+    this.hasValueUniforms = false;
+    this.structString = void 0;
+    this.valueStructView = void 0;
+    this.structUniformBuffer = void 0;
+    this.hasCustomGeometry = false;
+    this.vertexBuffer = void 0;
+    this.vertexCount = 0;
+    this.vertexWgsl = void 0;
+    this.vertexUniforms = [];
+    this.vertexUniformBuffer = void 0;
+    this.vertexUniformView = void 0;
+    this.vertexBindGroupLayout = void 0;
+    this.vertexBindGroup = void 0;
+    this.blendMode = "normal";
+  }
+}
 class RenderPassEntry {
   constructor(chan) {
     this.chan = chan;
     this.channelTexInfo = [];
+    this.sprites = /* @__PURE__ */ new Map();
     this.reset();
   }
   reset() {
@@ -13682,6 +14353,7 @@ class RenderPassEntry {
     this.structString = void 0;
     this.valueStructView = void 0;
     this.structUniformBuffer = void 0;
+    this.sprites.clear();
   }
 }
 class wgslHydra {
@@ -13873,6 +14545,270 @@ class wgslHydra {
     this.createSamplerOrBuffersForChan(chan);
   }
   // ------------------------------------------------------------------------------
+  // Setup a sprite render chain with optional custom geometry and vertex shader
+  //
+  async setupSpriteChain(chan, spriteLevel, config) {
+    const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive } = config;
+    const rpe = this.renderPassInfo[chan];
+    rpe.outputObject = this.outputChannelObjects[chan];
+    let spe = rpe.sprites.get(spriteLevel);
+    if (!spe) {
+      spe = new SpritePassEntry(chan, spriteLevel);
+      rpe.sprites.set(spriteLevel, spe);
+    } else {
+      spe.reset();
+    }
+    spe.uniformList = uniforms;
+    spe.blendMode = blendMode || "normal";
+    spe.hasCustomGeometry = rawVerts !== null && rawVerts !== void 0;
+    this.generateSpriteUniformDeclarations(spe);
+    spe.fragmentShaderSource = vertexPrefix + fragPrefix + spe.bindGroupHeader + fragShader;
+    spe.fragmentShaderModule = this.device.createShaderModule({
+      label: `frag_c${chan}_s${spriteLevel}`,
+      code: spe.fragmentShaderSource
+    });
+    if (spe.hasCustomGeometry && vertexWgsl) {
+      spe.vertexWgsl = vertexWgsl;
+      spe.vertexUniforms = vertexUniforms || [];
+      spe.vertexShaderModule = this.device.createShaderModule({
+        label: `vert_c${chan}_s${spriteLevel}`,
+        code: vertexWgsl
+      });
+      const verts = this.reshapeToVec3(rawVerts);
+      spe.vertexCount = verts.length;
+      const vertexData = new Float32Array(verts.flat());
+      spe.vertexBuffer = this.device.createBuffer({
+        label: `vertbuf_c${chan}_s${spriteLevel}`,
+        size: vertexData.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
+      this.device.queue.writeBuffer(spe.vertexBuffer, 0, vertexData);
+      if (spe.vertexUniforms.length > 0) {
+        this.setupVertexUniforms(spe);
+      }
+    } else {
+      spe.vertexShaderModule = this.vertexShaderModule;
+      spe.vertexCount = 6;
+    }
+    const bindGroupLayouts = [this.sharedBindGroupLayout, spe.bindGroupLayout];
+    if (spe.vertexBindGroupLayout) {
+      bindGroupLayouts.push(spe.vertexBindGroupLayout);
+    }
+    spe.pipelineLayout = this.device.createPipelineLayout({ bindGroupLayouts });
+    const blendState = BLEND_MODES[spe.blendMode] || BLEND_MODES.normal;
+    const pipelineDescriptor = {
+      label: `pipeline_c${chan}_s${spriteLevel}`,
+      layout: spe.pipelineLayout,
+      vertex: {
+        module: spe.vertexShaderModule,
+        entryPoint: "main"
+      },
+      fragment: {
+        module: spe.fragmentShaderModule,
+        entryPoint: "main",
+        targets: [{
+          format: this.format,
+          blend: blendState
+        }]
+      },
+      primitive: {
+        topology: "triangle-list"
+      }
+    };
+    if (spe.hasCustomGeometry) {
+      pipelineDescriptor.vertex.buffers = [{
+        arrayStride: 12,
+        // 3 floats * 4 bytes
+        attributes: [{
+          shaderLocation: 0,
+          offset: 0,
+          format: "float32x3"
+        }]
+      }];
+    }
+    spe.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
+    this.createSamplerOrBuffersForSprite(spe);
+  }
+  // Clear all sprite chains for a channel
+  clearSpriteChains(chan) {
+    const rpe = this.renderPassInfo[chan];
+    if (rpe.sprites) {
+      for (const [level, spe] of rpe.sprites) {
+        if (spe.vertexBuffer) {
+          spe.vertexBuffer.destroy();
+        }
+        if (spe.vertexUniformBuffer) {
+          spe.vertexUniformBuffer.destroy();
+        }
+      }
+      rpe.sprites.clear();
+    }
+  }
+  // Reshape 2D vertex data to vec3 format
+  reshapeToVec3(flatArray) {
+    const len = flatArray.length;
+    const is3D = len % 3 === 0 && len % 2 !== 0;
+    const stride = is3D ? 3 : 2;
+    const verts = [];
+    for (let i = 0; i < len; i += stride) {
+      if (is3D) {
+        verts.push([flatArray[i], flatArray[i + 1], flatArray[i + 2]]);
+      } else {
+        verts.push([flatArray[i], flatArray[i + 1], 0]);
+      }
+    }
+    return verts;
+  }
+  // Setup vertex uniform buffer
+  setupVertexUniforms(spe) {
+    let size = 0;
+    for (const u of spe.vertexUniforms) {
+      if (u.type === "f32") size += 4;
+      else if (u.type === "vec2f") size += 8;
+    }
+    size = Math.ceil(size / 16) * 16;
+    spe.vertexUniformBuffer = this.device.createBuffer({
+      label: `vtxunif_c${spe.chan}_s${spe.level}`,
+      size: Math.max(size, 16),
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+    spe.vertexBindGroupLayout = this.device.createBindGroupLayout({
+      label: `vtxbgl_c${spe.chan}_s${spe.level}`,
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: "uniform" }
+      }]
+    });
+    spe.vertexBindGroup = this.device.createBindGroup({
+      label: `vtxbg_c${spe.chan}_s${spe.level}`,
+      layout: spe.vertexBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: { buffer: spe.vertexUniformBuffer }
+      }]
+    });
+  }
+  // Generate uniform declarations for a sprite
+  generateSpriteUniformDeclarations(spe) {
+    let uniInfo = spe.uniformList;
+    let i = 1;
+    let ui = 0;
+    spe.channelUniforms = [];
+    Object.keys(uniInfo).forEach((key) => {
+      if (key === "prevBuffer") return;
+      let uniEntry;
+      if (key.startsWith("tex")) {
+        uniEntry = new uniformTextureListEntry(spe.chan, i, key, uniInfo[key]);
+        spe.textureUniforms.push(uniEntry);
+        i += uniEntry.indexesUsed;
+      } else {
+        uniEntry = new uniformValueListEntry(spe.chan, ui, key, uniInfo[key], uniInfo);
+        spe.valueUniforms.push(uniEntry);
+        ui++;
+      }
+      spe.channelUniforms.push(uniEntry);
+    });
+    let ourValues = spe.valueUniforms;
+    spe.hasValueUniforms = ourValues.length > 0;
+    let bindings = "";
+    let bgLayoutentries = [];
+    if (spe.hasValueUniforms) {
+      let struct = `struct UF {
+`;
+      for (let j = 0; j < ourValues.length; ++j) {
+        struct = struct + ourValues[j].getStructLineItem();
+      }
+      struct = struct + `};
+@group(1) @binding(0) var<uniform> uf : UF;
+`;
+      spe.structString = struct;
+      bindings = struct;
+      bgLayoutentries = [{
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: { type: "uniform" }
+      }];
+    }
+    let ourTextureUniforms = spe.textureUniforms;
+    for (let j = 0; j < ourTextureUniforms.length; ++j) {
+      let aUnif = ourTextureUniforms[j];
+      let bgs = aUnif.bindGroupString();
+      bindings = bindings + bgs;
+      bgLayoutentries.push(...aUnif.getBindGroupLayoutEntries());
+    }
+    spe.bindGroupLayout = this.device.createBindGroupLayout({
+      label: "sprite bg layout " + spe.chan + "_" + spe.level,
+      entries: bgLayoutentries
+    });
+    spe.bindGroupHeader = bindings;
+  }
+  // Create samplers/buffers for sprite
+  createSamplerOrBuffersForSprite(spe) {
+    if (spe.hasValueUniforms) {
+      spe.valueStructView = new Float32Array(spe.valueUniforms.length);
+      spe.valueStructBuffer = this.device.createBuffer({
+        size: spe.valueStructView.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      });
+    }
+    let ourUniforms = spe.textureUniforms;
+    for (let i = 0; i < ourUniforms.length; ++i) {
+      ourUniforms[i].createSamplerOrBuffers(this.device);
+    }
+  }
+  // Fill bind group for sprite
+  fillSpriteBindGroup(spe) {
+    let allUniforms = spe.channelUniforms;
+    if (!allUniforms || allUniforms.length === 0) {
+      return {
+        label: "spritebg" + spe.chan + "_" + spe.level,
+        layout: spe.bindGroupLayout,
+        entries: []
+      };
+    }
+    let bga;
+    if (spe.hasValueUniforms) {
+      this.setSpriteValueUniformValues(spe, this.time);
+      this.device.queue.writeBuffer(spe.valueStructBuffer, 0, spe.valueStructView);
+      bga = [{ binding: 0, resource: { buffer: spe.valueStructBuffer } }];
+    } else {
+      bga = [];
+    }
+    let ourUniforms = spe.textureUniforms;
+    for (let i = 0; i < ourUniforms.length; ++i) {
+      let aUniform = ourUniforms[i];
+      bga.push(...aUniform.getBindGroupEntries(this, this.time));
+    }
+    return {
+      label: "spritebg" + spe.chan + "_" + spe.level,
+      layout: spe.bindGroupLayout,
+      entries: bga
+    };
+  }
+  setSpriteValueUniformValues(spe, time) {
+    let ourUniforms = spe.valueUniforms;
+    for (let i = 0; i < ourUniforms.length; ++i) {
+      ourUniforms[i].setUniformValues(spe, time);
+    }
+  }
+  // Update vertex uniforms for a sprite
+  updateVertexUniforms(spe) {
+    if (!spe.vertexUniforms || spe.vertexUniforms.length === 0) return;
+    const data2 = [];
+    for (const u of spe.vertexUniforms) {
+      let val = typeof u.value === "function" ? u.value() : u.value;
+      if (Array.isArray(val)) {
+        data2.push(...val.map((v) => typeof v === "function" ? v() : v));
+      } else {
+        data2.push(val);
+      }
+    }
+    while (data2.length < 4) data2.push(0);
+    const floatData = new Float32Array(data2);
+    this.device.queue.writeBuffer(spe.vertexUniformBuffer, 0, floatData);
+  }
+  // ------------------------------------------------------------------------------
   // animate function
   //
   async animate(dT) {
@@ -13887,26 +14823,66 @@ class wgslHydra {
     this.device.queue.writeBuffer(this.mouseUniformBuffer, 0, this.mouseUniformValues);
     for (let chan = 0; chan < this.numChannels; ++chan) {
       const rpe = this.renderPassInfo[chan];
-      if (!rpe.pipeline) continue;
+      const hasSprites = rpe.sprites && rpe.sprites.size > 0;
+      const hasLegacyPipeline = rpe.pipeline;
+      if (!hasSprites && !hasLegacyPipeline) continue;
       rpe.outputObject.flipPingPong();
-      const renderPassDescriptor = {
-        label: "renderPassDescriptor",
-        colorAttachments: [{
-          label: "canvas textureView attachment " + chan,
-          view: rpe.outputObject.getCurrentTextureView(),
-          clearValue: { r: 1, g: 1, b: 1, a: 1 },
-          loadOp: "clear",
-          storeOp: "store"
-        }]
-      };
-      let ubgData = await this.fillBindGroup(chan);
-      let ubg = await this.device.createBindGroup(ubgData);
-      const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-      passEncoder.setPipeline(rpe.pipeline);
-      passEncoder.setBindGroup(0, this.sharedBindGroup);
-      passEncoder.setBindGroup(1, ubg);
-      passEncoder.draw(6);
-      passEncoder.end();
+      if (hasSprites) {
+        const levels = Array.from(rpe.sprites.keys()).sort((a2, b) => a2 - b);
+        for (let i = 0; i < levels.length; i++) {
+          const level = levels[i];
+          const spe = rpe.sprites.get(level);
+          const loadOp = level === 0 ? "clear" : "load";
+          const renderPassDescriptor = {
+            label: `renderPass_c${chan}_s${level}`,
+            colorAttachments: [{
+              label: `attachment_c${chan}_s${level}`,
+              view: rpe.outputObject.getCurrentTextureView(),
+              clearValue: { r: 0, g: 0, b: 0, a: 1 },
+              loadOp,
+              storeOp: "store"
+            }]
+          };
+          let ubgData = this.fillSpriteBindGroup(spe);
+          let ubg = this.device.createBindGroup(ubgData);
+          if (spe.vertexUniforms && spe.vertexUniforms.length > 0) {
+            this.updateVertexUniforms(spe);
+          }
+          const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+          passEncoder.setPipeline(spe.pipeline);
+          passEncoder.setBindGroup(0, this.sharedBindGroup);
+          passEncoder.setBindGroup(1, ubg);
+          if (spe.vertexBindGroup) {
+            passEncoder.setBindGroup(2, spe.vertexBindGroup);
+          }
+          if (spe.hasCustomGeometry && spe.vertexBuffer) {
+            passEncoder.setVertexBuffer(0, spe.vertexBuffer);
+            passEncoder.draw(spe.vertexCount);
+          } else {
+            passEncoder.draw(6);
+          }
+          passEncoder.end();
+        }
+      } else {
+        const renderPassDescriptor = {
+          label: "renderPassDescriptor",
+          colorAttachments: [{
+            label: "canvas textureView attachment " + chan,
+            view: rpe.outputObject.getCurrentTextureView(),
+            clearValue: { r: 1, g: 1, b: 1, a: 1 },
+            loadOp: "clear",
+            storeOp: "store"
+          }]
+        };
+        let ubgData = await this.fillBindGroup(chan);
+        let ubg = await this.device.createBindGroup(ubgData);
+        const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+        passEncoder.setPipeline(rpe.pipeline);
+        passEncoder.setBindGroup(0, this.sharedBindGroup);
+        passEncoder.setBindGroup(1, ubg);
+        passEncoder.draw(6);
+        passEncoder.end();
+      }
     }
     this.device.queue.submit([commandEncoder.finish()]);
     await this.device.queue.onSubmittedWorkDone();
@@ -14347,8 +15323,8 @@ function codePointToString(code) {
   return String.fromCharCode((code >> 10) + 55296, (code & 1023) + 56320);
 }
 var loneSurrogate = /(?:[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])/;
-var Position = function Position2(line, col) {
-  this.line = line;
+var Position = function Position2(line2, col) {
+  this.line = line2;
   this.column = col;
 };
 Position.prototype.offset = function offset(n) {
@@ -14362,12 +15338,12 @@ var SourceLocation = function SourceLocation2(p, start, end) {
   }
 };
 function getLineInfo(input, offset2) {
-  for (var line = 1, cur = 0; ; ) {
+  for (var line2 = 1, cur = 0; ; ) {
     var nextBreak = nextLineBreak(input, cur, offset2);
     if (nextBreak < 0) {
-      return new Position(line, offset2 - cur);
+      return new Position(line2, offset2 - cur);
     }
-    ++line;
+    ++line2;
     cur = nextBreak;
   }
 }
@@ -20628,17 +21604,17 @@ class State {
       }
       if (type[0] === "T" && type[8] === "E" || type[0] === "L" && type[1] === "i" && typeof node.value === "string") {
         const { length: length2 } = code;
-        let { column, line } = this;
+        let { column, line: line2 } = this;
         for (let i = 0; i < length2; i++) {
           if (code[i] === "\n") {
             column = 0;
-            line++;
+            line2++;
           } else {
             column++;
           }
         }
         this.column = column;
-        this.line = line;
+        this.line = line2;
         return;
       }
     }
@@ -21229,6 +22205,90 @@ function stripOutStuff(inp) {
   let outp = inp.substring(firstX + 1, lastX);
   return outp;
 }
+function tri(size = 1, centerX = 0, centerY = 0) {
+  const h = size * Math.sqrt(3) / 2;
+  const verts = [
+    centerX,
+    centerY + h * 2 / 3,
+    centerX - size / 2,
+    centerY - h / 3,
+    centerX + size / 2,
+    centerY - h / 3
+  ];
+  return new VertexSource(verts);
+}
+function quad(width = 1, height = 1, centerX = 0, centerY = 0) {
+  const hw = width / 2, hh = height / 2;
+  const verts = [
+    // Triangle 1
+    centerX - hw,
+    centerY - hh,
+    centerX + hw,
+    centerY - hh,
+    centerX + hw,
+    centerY + hh,
+    // Triangle 2
+    centerX - hw,
+    centerY - hh,
+    centerX + hw,
+    centerY + hh,
+    centerX - hw,
+    centerY + hh
+  ];
+  return new VertexSource(verts);
+}
+function poly(sides, radius = 1, centerX = 0, centerY = 0) {
+  const verts = [];
+  for (let i = 0; i < sides; i++) {
+    const a1 = i / sides * Math.PI * 2 - Math.PI / 2;
+    const a2 = (i + 1) / sides * Math.PI * 2 - Math.PI / 2;
+    verts.push(centerX, centerY);
+    verts.push(centerX + Math.cos(a1) * radius, centerY + Math.sin(a1) * radius);
+    verts.push(centerX + Math.cos(a2) * radius, centerY + Math.sin(a2) * radius);
+  }
+  return new VertexSource(verts);
+}
+function circle(radius = 1, centerX = 0, centerY = 0, segments = 32) {
+  return poly(segments, radius, centerX, centerY);
+}
+function line(x1, y1, x2, y2, thickness = 0.02) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const nx = -dy / len * thickness / 2;
+  const ny = dx / len * thickness / 2;
+  const verts = [
+    x1 + nx,
+    y1 + ny,
+    x1 - nx,
+    y1 - ny,
+    x2 - nx,
+    y2 - ny,
+    x1 + nx,
+    y1 + ny,
+    x2 - nx,
+    y2 - ny,
+    x2 + nx,
+    y2 + ny
+  ];
+  return new VertexSource(verts);
+}
+function ring(outerRadius = 1, innerRadius = 0.5, centerX = 0, centerY = 0, segments = 32) {
+  const verts = [];
+  for (let i = 0; i < segments; i++) {
+    const a1 = i / segments * Math.PI * 2;
+    const a2 = (i + 1) / segments * Math.PI * 2;
+    const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
+    const cos2 = Math.cos(a2), sin2 = Math.sin(a2);
+    verts.push(centerX + cos1 * innerRadius, centerY + sin1 * innerRadius);
+    verts.push(centerX + cos1 * outerRadius, centerY + sin1 * outerRadius);
+    verts.push(centerX + cos2 * outerRadius, centerY + sin2 * outerRadius);
+    verts.push(centerX + cos1 * innerRadius, centerY + sin1 * innerRadius);
+    verts.push(centerX + cos2 * outerRadius, centerY + sin2 * outerRadius);
+    verts.push(centerX + cos2 * innerRadius, centerY + sin2 * innerRadius);
+  }
+  return new VertexSource(verts);
+}
 const GeneratorFunction = (function* () {
 }).constructor;
 let Mouse;
@@ -21257,9 +22317,12 @@ class HydraRenderer {
     resetOut = true,
     extendTransforms = {},
     // add your own functions on init
-    gpuDevice = null
+    gpuDevice = null,
     // Optional shared GPUDevice for zero-copy texture sharing
+    preserveDrawingBuffer = false
+    // Enable for Syphon/pixel readback
   } = {}) {
+    this.preserveDrawingBuffer = preserveDrawingBuffer;
     ArrayUtils.init();
     this.pb = pb;
     this.width = width;
@@ -21292,7 +22355,14 @@ class HydraRenderer {
       },
       // user defined update function
       hush: this.hush.bind(this),
-      tick: this.tick.bind(this)
+      tick: this.tick.bind(this),
+      // Geometry helpers for vertex shaders
+      tri,
+      quad,
+      poly,
+      circle,
+      line,
+      ring
     };
     if (makeGlobal) window.loadScript = this.loadScript;
     this.timeSinceLastUpdate = 0;
@@ -21442,6 +22512,9 @@ class HydraRenderer {
       source.clear();
     });
     this.o.forEach((output) => {
+      if (output.clearSprites) {
+        output.clearSprites();
+      }
       this.synth.solid(0, 0, 0, 0).out(output);
     });
     this.synth.render(this.o[0]);
@@ -21559,8 +22632,10 @@ class HydraRenderer {
     this.regl = regl({
       //  profile: true,
       canvas: this.canvas,
-      pixelRatio: 1
-      //,
+      pixelRatio: 1,
+      attributes: {
+        preserveDrawingBuffer: this.preserveDrawingBuffer
+      }
       // extensions: [
       //   'oes_texture_half_float',
       //   'oes_texture_half_float_linear'

@@ -13,6 +13,7 @@ import regl from 'regl'
 // const window = global.window
 import {wgslHydra} from './wgsl/wgsl-hydra.js';
 import {Deglobalize} from './Deglobalize.js';
+import { tri, quad, poly, circle, line, ring } from './lib/geometry.js';
 
 const GeneratorFunction = function* () {}.constructor;
 
@@ -83,6 +84,13 @@ class HydraRenderer {
       update: (dt) => {},// user defined update function
       hush: this.hush.bind(this),
       tick: this.tick.bind(this),
+      // Geometry helpers for vertex shaders
+      tri: tri,
+      quad: quad,
+      poly: poly,
+      circle: circle,
+      line: line,
+      ring: ring,
     }
 
     if (makeGlobal) window.loadScript = this.loadScript
@@ -290,6 +298,10 @@ class HydraRenderer {
       source.clear()
     })
     this.o.forEach((output) => {
+      // Clear all sprite levels before resetting
+      if (output.clearSprites) {
+        output.clearSprites()
+      }
       this.synth.solid(0, 0, 0, 0).out(output)
     })
     this.synth.render(this.o[0])

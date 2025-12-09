@@ -20,18 +20,112 @@ GlslSource.prototype.addTransform = function (obj)  {
     this.transforms.push(obj)
 }
 
-GlslSource.prototype.out = function (_output) {
-  var output = _output || this.defaultOutput
- 
- // output.renderPasses(glsl)
-  if(output) try{
-     var glsl = this.glsl(output)
+// Extended out() signature with config object:
+// out(output?, geometry?, config?)
+//
+// New API (config object):
+//   osc(10).out(o0, tri(0.3), { level: 1, blend: 'add', primitive: 'triangles' })
+//   osc(10).out(o0, tri(0.3))           // geometry with defaults
+//   osc(10).out(o0)                      // fullscreen
+//   osc(10).out()                        // fullscreen to default output
+//
+// Config options:
+//   level: Integer for painter's algorithm (0 clears, 1+ composites) - default: 0
+//   blend: 'normal', 'add', 'multiply', 'screen' - default: 'normal'
+//   primitive: 'triangles', 'triangle strip', 'lines', etc. - default: 'triangles'
+//
+// Legacy positional API (still supported):
+//   osc(10).out(o0, vertices, 1, 'add')
+//
+function isGeometry(arg) {
+  if (!arg) return false
+  if (Array.isArray(arg)) return true
+  if (arg.vertices) return true  // VertexSource
+  return false
+}
+
+function isConfig(arg) {
+  if (!arg) return false
+  if (typeof arg !== 'object') return false
+  if (Array.isArray(arg)) return false
+  if (arg.vertices) return false  // VertexSource
+  // Check for config keys
+  return 'level' in arg || 'blend' in arg || 'primitive' in arg
+}
+
+function isOutput(arg) {
+  // Check if arg looks like an output object (works for both WebGL and WebGPU)
+  return arg && typeof arg === 'object' && 'registerSprite' in arg
+}
+
+GlslSource.prototype.out = function (arg1, arg2, arg3, arg4) {
+  let output, geometry, config
+
+  // Parse arguments flexibly
+  if (isGeometry(arg1)) {
+    // out(geometry, config?) - no output specified
+    output = this.defaultOutput
+    geometry = arg1
+    config = isConfig(arg2) ? arg2 : {}
+    // Legacy: out(geometry, level, blend)
+    if (typeof arg2 === 'number') {
+      config = { level: arg2, blend: arg3 || 'normal' }
+    }
+  } else if (isOutput(arg1) || arg1 === undefined || arg1 === null) {
+    // out(output?, geometry?, config?)
+    output = arg1 || this.defaultOutput
+
+    if (isGeometry(arg2)) {
+      geometry = arg2
+      config = isConfig(arg3) ? arg3 : {}
+      // Legacy: out(output, geometry, level, blend)
+      if (typeof arg3 === 'number') {
+        config = { level: arg3, blend: arg4 || 'normal' }
+      }
+    } else if (isConfig(arg2)) {
+      // out(output, config) - fullscreen with config
+      geometry = null
+      config = arg2
+    } else {
+      // out(output) or out() - fullscreen
+      geometry = null
+      config = {}
+    }
+  } else {
+    // Fallback: treat arg1 as output
+    output = arg1 || this.defaultOutput
+    geometry = null
+    config = {}
+  }
+
+  // Extract config values with defaults
+  const level = config.level !== undefined ? config.level : 0
+  const blend = config.blend || 'normal'
+  const primitive = config.primitive || 'triangles'
+
+  if(output) try {
+    var glsl = this.glsl(output)
     this.synth.currentFunctions = []
-    output.render(glsl)
+
+    // Clean up existing sprite at this level if it exists (WebGL only)
+    if (output.sprites && output.sprites.has(level) && output.defaultPositionBuffer) {
+      const oldSprite = output.sprites.get(level)
+      if (oldSprite.positionBuffer && oldSprite.positionBuffer !== output.defaultPositionBuffer) {
+        oldSprite.positionBuffer.destroy()
+      }
+    }
+
+    // Register sprite at the specified level
+    output.registerSprite(level, {
+      passes: glsl,
+      vertexData: geometry,
+      blendMode: blend,
+      primitive: primitive
+    })
   } catch (error) {
     console.warn('shader could not compile', error)
   }
-  
+
   regenerate(this, output);
 }
 
