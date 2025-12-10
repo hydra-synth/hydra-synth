@@ -213,11 +213,20 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
 
   // Create vertex buffer for this sprite
   let positionBuffer, vertexCount
+  let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 }  // default fullscreen bounds
   if (rawVerts && rawVerts.length >= 6) {
     // Custom geometry: reshape to vec3 for 3D forward-compatibility
     const verts = reshapeToVec3(rawVerts)
     positionBuffer = this.regl.buffer(verts)
     vertexCount = verts.length
+    // Compute bounds for UV normalization
+    bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+    for (const v of verts) {
+      bounds.minX = Math.min(bounds.minX, v[0])
+      bounds.maxX = Math.max(bounds.maxX, v[0])
+      bounds.minY = Math.min(bounds.minY, v[1])
+      bounds.maxY = Math.max(bounds.maxY, v[1])
+    }
   } else {
     // Default fullscreen triangle
     positionBuffer = this.defaultPositionBuffer
@@ -237,6 +246,12 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   const uniforms = Object.assign({}, pass.uniforms, {
     prevBuffer: () => self.fbos[self.pingPongIndex]
   })
+
+  // Add bounds uniforms for UV normalization (custom geometry only)
+  if (rawVerts) {
+    uniforms.u_boundsMin = [bounds.minX, bounds.minY]
+    uniforms.u_boundsMax = [bounds.maxX, bounds.maxY]
+  }
 
   // Add vertex transform uniforms if needed (Phase 3 style only)
   // Phase 5 chained transforms get uniforms from generateVertexGlsl
@@ -284,10 +299,12 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
       uniform vec2 u_scale;
       uniform vec2 u_offset;
       uniform float u_rotation;
+      uniform vec2 u_boundsMin;
+      uniform vec2 u_boundsMax;
 
       void main () {
-        // UV from original position (before transforms)
-        uv = position.xy * 0.5 + 0.5;
+        // UV normalized to shape bounds (texture fills the shape)
+        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
 
         // Apply transforms
         vec2 pos = position.xy * u_scale;
@@ -309,8 +326,12 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
       attribute vec3 position;
       varying vec2 uv;
 
+      uniform vec2 u_boundsMin;
+      uniform vec2 u_boundsMax;
+
       void main () {
-        uv = position.xy * 0.5 + 0.5;
+        // UV normalized to shape bounds (texture fills the shape)
+        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
         gl_Position = vec4(position.xy, 0.0, 1.0);
       }`
     }

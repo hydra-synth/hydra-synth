@@ -96,8 +96,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         attribute vec3 position;
         varying vec2 uv;
 
+        uniform vec2 u_boundsMin;
+        uniform vec2 u_boundsMax;
+
         void main () {
-          uv = position.xy * 0.5 + 0.5;
+          // UV normalized to shape bounds (texture fills the shape)
+          uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
           gl_Position = vec4(position.xy, 0.0, 1.0);
         }
       `,
@@ -148,11 +152,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     attribute vec3 position;
     varying vec2 uv;
 
+    uniform vec2 u_boundsMin;
+    uniform vec2 u_boundsMax;
     ${uniformDecls.join("\n    ")}
 
     void main () {
-      // UV from original position (before transforms)
-      uv = position.xy * 0.5 + 0.5;
+      // UV normalized to shape bounds (texture fills the shape)
+      uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
 
       // Apply transforms
       vec2 pos = position.xy;
@@ -428,10 +434,18 @@ fn main(input: VertexInput) -> VertexOutput {
       rawVerts = vertexData;
     }
     let positionBuffer, vertexCount;
+    let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
     if (rawVerts && rawVerts.length >= 6) {
       const verts = reshapeToVec3(rawVerts);
       positionBuffer = this.regl.buffer(verts);
       vertexCount = verts.length;
+      bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+      for (const v of verts) {
+        bounds.minX = Math.min(bounds.minX, v[0]);
+        bounds.maxX = Math.max(bounds.maxX, v[0]);
+        bounds.minY = Math.min(bounds.minY, v[1]);
+        bounds.maxY = Math.max(bounds.maxY, v[1]);
+      }
     } else {
       positionBuffer = this.defaultPositionBuffer;
       vertexCount = 3;
@@ -441,6 +455,10 @@ fn main(input: VertexInput) -> VertexOutput {
     const uniforms = Object.assign({}, pass.uniforms, {
       prevBuffer: () => self2.fbos[self2.pingPongIndex]
     });
+    if (rawVerts) {
+      uniforms.u_boundsMin = [bounds.minX, bounds.minY];
+      uniforms.u_boundsMax = [bounds.maxX, bounds.maxY];
+    }
     if (hasVertexOptions) {
       const scaleOpt = normalizeVertexOption(vertexOptions.scale, [1, 1]);
       uniforms.u_scale = (context, props) => {
@@ -475,10 +493,12 @@ fn main(input: VertexInput) -> VertexOutput {
       uniform vec2 u_scale;
       uniform vec2 u_offset;
       uniform float u_rotation;
+      uniform vec2 u_boundsMin;
+      uniform vec2 u_boundsMax;
 
       void main () {
-        // UV from original position (before transforms)
-        uv = position.xy * 0.5 + 0.5;
+        // UV normalized to shape bounds (texture fills the shape)
+        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
 
         // Apply transforms
         vec2 pos = position.xy * u_scale;
@@ -499,8 +519,12 @@ fn main(input: VertexInput) -> VertexOutput {
       attribute vec3 position;
       varying vec2 uv;
 
+      uniform vec2 u_boundsMin;
+      uniform vec2 u_boundsMax;
+
       void main () {
-        uv = position.xy * 0.5 + 0.5;
+        // UV normalized to shape bounds (texture fills the shape)
+        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
         gl_Position = vec4(position.xy, 0.0, 1.0);
       }`;
       }
@@ -2810,7 +2834,7 @@ fn main(input: VertexInput) -> VertexOutput {
       }).join("")}
 
   void main () {
-    vec2 st = gl_FragCoord.xy/resolution.xy;
+    vec2 st = uv;
 
     gl_FragColor = ${shaderInfo.fragColor};
   }

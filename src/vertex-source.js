@@ -116,15 +116,19 @@ class VertexSource {
 // Returns { glsl: string, uniforms: object }
 export function generateVertexGlsl(vertexSource, precision) {
   if (!vertexSource.hasTransforms) {
-    // No transforms - use simple passthrough
+    // No transforms - use simple passthrough with bounds
     return {
       glsl: `
         precision ${precision} float;
         attribute vec3 position;
         varying vec2 uv;
 
+        uniform vec2 u_boundsMin;
+        uniform vec2 u_boundsMax;
+
         void main () {
-          uv = position.xy * 0.5 + 0.5;
+          // UV normalized to shape bounds (texture fills the shape)
+          uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
           gl_Position = vec4(position.xy, 0.0, 1.0);
         }
       `,
@@ -182,11 +186,13 @@ export function generateVertexGlsl(vertexSource, precision) {
     attribute vec3 position;
     varying vec2 uv;
 
+    uniform vec2 u_boundsMin;
+    uniform vec2 u_boundsMax;
     ${uniformDecls.join('\n    ')}
 
     void main () {
-      // UV from original position (before transforms)
-      uv = position.xy * 0.5 + 0.5;
+      // UV normalized to shape bounds (texture fills the shape)
+      uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
 
       // Apply transforms
       vec2 pos = position.xy;
