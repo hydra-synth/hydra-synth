@@ -102,18 +102,39 @@ class OutputWgsl {
       rawVerts = vertexData
     }
 
+    // Compute bounds for UV normalization
+    let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 }
+    if (rawVerts && rawVerts.length >= 6) {
+      bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+      // rawVerts is flat array [x,y, x,y, ...] or [x,y,z, ...]
+      const stride = rawVerts.length % 3 === 0 && rawVerts.length % 2 !== 0 ? 3 : 2
+      for (let i = 0; i < rawVerts.length; i += stride) {
+        bounds.minX = Math.min(bounds.minX, rawVerts[i])
+        bounds.maxX = Math.max(bounds.maxX, rawVerts[i])
+        bounds.minY = Math.min(bounds.minY, rawVerts[i + 1])
+        bounds.maxY = Math.max(bounds.maxY, rawVerts[i + 1])
+      }
+    }
+
     // Determine vertex shader and uniforms
     let vertexWgsl = null
     let vertexUniforms = []
     const hasChainedTransforms = vertexSource && vertexSource.hasTransforms
 
     if (rawVerts) {
+      // Add bounds uniforms for UV normalization
+      const boundsUniforms = [
+        { name: 'u_boundsMin', type: 'vec2f', value: [bounds.minX, bounds.minY] },
+        { name: 'u_boundsMax', type: 'vec2f', value: [bounds.maxX, bounds.maxY] }
+      ]
+
       if (hasChainedTransforms) {
         const generated = generateVertexWgsl(vertexSource)
         vertexWgsl = generated.wgsl
-        vertexUniforms = generated.uniforms
+        vertexUniforms = [...boundsUniforms, ...generated.uniforms]
       } else {
         vertexWgsl = getPassthroughVertexWgsl()
+        vertexUniforms = boundsUniforms
       }
     }
 

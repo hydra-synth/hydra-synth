@@ -187,7 +187,7 @@ GlslSource.prototype.compile = function (transforms) {
   @fragment
   	 fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
      let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
-     let st : vec2<f32> = ourIn.position.xy / resolution.xy;
+     let st : vec2<f32> = ourIn.texcoord;
      return ${shaderInfo.fragColor};
   }
 		`;

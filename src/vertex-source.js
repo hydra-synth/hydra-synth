@@ -264,16 +264,18 @@ export function generateVertexWgsl(vertexSource) {
     })
   }
 
-  // Build the uniform struct if we have any
-  let uniformStruct = ''
-  if (uniforms.length > 0) {
-    const structFields = uniforms.map(u => `  ${u.name}: ${u.type},`).join('\n')
-    uniformStruct = `struct VertexUniforms {
-${structFields}
+  // Build the uniform struct - always include bounds, plus any transform uniforms
+  // Note: bounds uniforms (u_boundsMin, u_boundsMax) are prepended by outputWgsl.js
+  const allUniformFields = [
+    '  u_boundsMin: vec2f,',
+    '  u_boundsMax: vec2f,',
+    ...uniforms.map(u => `  ${u.name}: ${u.type},`)
+  ]
+  const uniformStruct = `struct VertexUniforms {
+${allUniformFields.join('\n')}
 };
 @group(2) @binding(0) var<uniform> vtx: VertexUniforms;
 `
-  }
 
   // Build the vertex shader
   const wgsl = `struct VertexInput {
@@ -290,8 +292,8 @@ ${uniformStruct}
 fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
 
-  // UV from original position (before transforms)
-  output.texcoord = input.position.xy * 0.5 + 0.5;
+  // UV normalized to shape bounds (texture fills the shape)
+  output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
 
   // Apply transforms
   var pos = input.position.xy;
@@ -306,6 +308,7 @@ ${transformCode.join('\n')}
 }
 
 // Generate passthrough WGSL vertex shader (no transforms)
+// Note: bounds uniforms are added by outputWgsl.js
 export function getPassthroughVertexWgsl() {
   return `struct VertexInput {
   @location(0) position: vec3f,
@@ -316,10 +319,17 @@ struct VertexOutput {
   @location(0) texcoord: vec2f,
 };
 
+struct VertexUniforms {
+  u_boundsMin: vec2f,
+  u_boundsMax: vec2f,
+};
+@group(2) @binding(0) var<uniform> vtx: VertexUniforms;
+
 @vertex
 fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
-  output.texcoord = input.position.xy * 0.5 + 0.5;
+  // UV normalized to shape bounds (texture fills the shape)
+  output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
   output.position = vec4f(input.position.xy, 0.0, 1.0);
   return output;
 }

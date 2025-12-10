@@ -211,15 +211,16 @@ function generateVertexWgsl(vertexSource) {
       }
     });
   }
-  let uniformStruct = "";
-  if (uniforms.length > 0) {
-    const structFields = uniforms.map((u) => `  ${u.name}: ${u.type},`).join("\n");
-    uniformStruct = `struct VertexUniforms {
-${structFields}
+  const allUniformFields = [
+    "  u_boundsMin: vec2f,",
+    "  u_boundsMax: vec2f,",
+    ...uniforms.map((u) => `  ${u.name}: ${u.type},`)
+  ];
+  const uniformStruct = `struct VertexUniforms {
+${allUniformFields.join("\n")}
 };
 @group(2) @binding(0) var<uniform> vtx: VertexUniforms;
 `;
-  }
   const wgsl = `struct VertexInput {
   @location(0) position: vec3f,
 };
@@ -234,8 +235,8 @@ ${uniformStruct}
 fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
 
-  // UV from original position (before transforms)
-  output.texcoord = input.position.xy * 0.5 + 0.5;
+  // UV normalized to shape bounds (texture fills the shape)
+  output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
 
   // Apply transforms
   var pos = input.position.xy;
@@ -257,10 +258,17 @@ struct VertexOutput {
   @location(0) texcoord: vec2f,
 };
 
+struct VertexUniforms {
+  u_boundsMin: vec2f,
+  u_boundsMax: vec2f,
+};
+@group(2) @binding(0) var<uniform> vtx: VertexUniforms;
+
 @vertex
 fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
-  output.texcoord = input.position.xy * 0.5 + 0.5;
+  // UV normalized to shape bounds (texture fills the shape)
+  output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
   output.position = vec4f(input.position.xy, 0.0, 1.0);
   return output;
 }
@@ -690,16 +698,32 @@ class OutputWgsl {
     } else if (vertexData && Array.isArray(vertexData)) {
       rawVerts = vertexData;
     }
+    let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    if (rawVerts && rawVerts.length >= 6) {
+      bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+      const stride = rawVerts.length % 3 === 0 && rawVerts.length % 2 !== 0 ? 3 : 2;
+      for (let i = 0; i < rawVerts.length; i += stride) {
+        bounds.minX = Math.min(bounds.minX, rawVerts[i]);
+        bounds.maxX = Math.max(bounds.maxX, rawVerts[i]);
+        bounds.minY = Math.min(bounds.minY, rawVerts[i + 1]);
+        bounds.maxY = Math.max(bounds.maxY, rawVerts[i + 1]);
+      }
+    }
     let vertexWgsl = null;
     let vertexUniforms = [];
     const hasChainedTransforms = vertexSource && vertexSource.hasTransforms;
     if (rawVerts) {
+      const boundsUniforms = [
+        { name: "u_boundsMin", type: "vec2f", value: [bounds.minX, bounds.minY] },
+        { name: "u_boundsMax", type: "vec2f", value: [bounds.maxX, bounds.maxY] }
+      ];
       if (hasChainedTransforms) {
         const generated = generateVertexWgsl(vertexSource);
         vertexWgsl = generated.wgsl;
-        vertexUniforms = generated.uniforms;
+        vertexUniforms = [...boundsUniforms, ...generated.uniforms];
       } else {
         vertexWgsl = getPassthroughVertexWgsl();
+        vertexUniforms = boundsUniforms;
       }
     }
     this.sprites.set(spriteLevel, {
@@ -2795,7 +2819,7 @@ GlslSource.prototype.compile = function(transforms) {
   @fragment
   	 fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
      let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
-     let st : vec2<f32> = ourIn.position.xy / resolution.xy;
+     let st : vec2<f32> = ourIn.texcoord;
      return ${shaderInfo.fragColor};
   }
 		`;
