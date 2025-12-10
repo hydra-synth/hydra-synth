@@ -1,12 +1,14 @@
 {
-  "name": "hydra-synth",
-  "version": "1.4.0",
-  "description": "base synth for hydra-editor",
+  "name": "@jamiefaye/hydra-synth-vertex",
+  "version": "1.4.0-vertex.1",
+  "description": "base synth for hydra-editor with mods for vertex shaders",
+  "license": "AGPL-3.0",
   "type": "module",
   "main": "./dist/hydra-synth.umd.js",
   "module": "./dist/hydra-synth.es.js",
   "files": [
-    "dist"
+    "dist",
+    "src/glsl"
   ],
   "exports": {
     ".": {
