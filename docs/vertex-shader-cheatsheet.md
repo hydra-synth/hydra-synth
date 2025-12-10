@@ -104,6 +104,26 @@ gradient().out(o0, poly(6, 0.3), { level: 2, blend: 'screen' }) // L2: hexagon
 
 ---
 
+## Texture Behavior
+
+Textures **fill the shape** - UV coordinates are normalized to the geometry bounds.
+
+| Behavior | Description |
+|----------|-------------|
+| Texture fills shape | Full texture visible within geometry |
+| Transforms affect both | Rotating geometry rotates the texture with it |
+| Screen-independent | Texture doesn't depend on screen position |
+
+### Example: Webcam in rotating triangle
+
+```javascript
+s0.initCam()
+src(s0).out(o0, tri(0.5).rotate(() => time), { level: 1 })
+// Face rotates WITH the triangle
+```
+
+---
+
 ## Quick Recipes
 
 ### Orbiting Shape

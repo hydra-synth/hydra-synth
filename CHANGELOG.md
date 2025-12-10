@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0-vertex.2] - 2024-12-10
+### Added
+- **Vertex shader support** - Custom geometry rendering with sprite levels
+- Geometry helpers: `tri()`, `quad()`, `poly()`, `circle()`, `ring()`, `line()`
+- Chainable GPU transforms: `.rotate()`, `.scale()`, `.offset()`, `.translate()`
+- CPU transforms: `.mirror()`, `.repeat()`
+- Sprite compositing with blend modes: `normal`, `add`, `multiply`, `screen`
+- Extended `out()` API with config object: `{ level, blend, primitive }`
+- WebGPU/WGSL backend support for vertex shapes
+
+### Changed
+- **Textures now fill shapes** - UV coordinates normalized to geometry bounds
+- Geometry transforms affect texture (rotate shape = rotate texture)
+- Fragment shaders use vertex-interpolated UV instead of screen-space coordinates
+
 ## [1.4] - 2025-09-24
 ### Fixed
 - hard crashing when inputting invalid texture, fixed by @ojack and @ffd8
