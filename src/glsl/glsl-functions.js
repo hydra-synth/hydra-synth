@@ -91,6 +91,69 @@ export default () => [
   needs: ["_noise"]
 },
 {
+  name: 'whiteNoise',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 10,
+    },
+    {
+      type: 'float',
+      name: 'speed',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return vec4(vec3(_hash(vec3(floor(_st*scale), time*speed))), 1.0);`,
+  wgsl:
+`   return vec4<f32>(vec3<f32>(_hash(vec3<f32>(floor(_st*scale), time*speed))), 1.0);`,
+  needs: ["_hash"]
+},
+{
+  name: 'pinkNoise',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 10,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0.1,
+    }
+  ],
+  glsl:
+`   return vec4(vec3(_pinkNoise(vec3(_st*scale, offset*time))), 1.0);`,
+  wgsl:
+`   return vec4<f32>(vec3<f32>(_pinkNoise(vec3<f32>(_st*scale, offset*time))), 1.0);`,
+  needs: ["_pinkNoise", "_noise"]
+},
+{
+  name: 'brownNoise',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 10,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0.1,
+    }
+  ],
+  glsl:
+`   return vec4(vec3(_brownNoise(vec3(_st*scale, offset*time))), 1.0);`,
+  wgsl:
+`   return vec4<f32>(vec3<f32>(_brownNoise(vec3<f32>(_st*scale, offset*time))), 1.0);`,
+  needs: ["_brownNoise", "_noise"]
+},
+{
   name: 'voronoi',
   type: 'src',
   inputs: [
@@ -1342,5 +1405,115 @@ wgsl:
 `   return vec4(_c0.a * scale + offset);`,
   wgsl:
 `   return vec4<f32>(_c0.a * scale + offset);`
+},
+{
+  name: 'luminance',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   float l = dot(_c0.rgb, vec3(0.2126, 0.7152, 0.0722)) * scale + offset;
+   return vec4(l, l, l, _c0.a);`,
+  wgsl:
+`   let l = dot(_c0.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) * scale + offset;
+   return vec4<f32>(l, l, l, _c0.a);`
+},
+{
+  name: 'avg',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   float a = ((_c0.r + _c0.g + _c0.b) / 3.0) * scale + offset;
+   return vec4(a, a, a, _c0.a);`,
+  wgsl:
+`   let a = ((_c0.r + _c0.g + _c0.b) / 3.0) * scale + offset;
+   return vec4<f32>(a, a, a, _c0.a);`
+},
+{
+  name: 'cmax',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   float m = max(_c0.r, max(_c0.g, _c0.b)) * scale + offset;
+   return vec4(m, m, m, _c0.a);`,
+  wgsl:
+`   let m = max(_c0.r, max(_c0.g, _c0.b)) * scale + offset;
+   return vec4<f32>(m, m, m, _c0.a);`
+},
+{
+  name: 'cmin',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   float m = min(_c0.r, min(_c0.g, _c0.b)) * scale + offset;
+   return vec4(m, m, m, _c0.a);`,
+  wgsl:
+`   let m = min(_c0.r, min(_c0.g, _c0.b)) * scale + offset;
+   return vec4<f32>(m, m, m, _c0.a);`
+},
+{
+  name: 'clength',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   float l = length(_c0.rgb) * scale + offset;
+   return vec4(l, l, l, _c0.a);`,
+  wgsl:
+`   let l = length(_c0.rgb) * scale + offset;
+   return vec4<f32>(l, l, l, _c0.a);`
 }
 ]

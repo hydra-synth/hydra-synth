@@ -104,19 +104,10 @@ export default function formatArguments(transform, startIndex, synthContext) {
     if (startIndex < 0) {
     } else {
       if (typedArg.value && typedArg.value.transforms) {
-        const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1]
-
-        if (final_transform.transform.glsl_return_type !== input.type) {
-          const defaults = DEFAULT_CONVERSIONS[input.type]
-          if (typeof defaults !== 'undefined') {
-            const default_def = defaults[final_transform.transform.glsl_return_type]
-            if (typeof default_def !== 'undefined') {
-              const { name, args } = default_def
-              typedArg.value = typedArg.value[name](...args)
-            }
-          }
-        }
-
+        // Type coercion (vec4 → float) is now handled inline in generate-glsl.js
+        // by extracting .r channel. The old DEFAULT_CONVERSIONS approach using
+        // .sum() didn't work because sum is a 'color' type function that expects
+        // _c0 in a chain context.
         typedArg.isUniform = false
       } else if (typedArg.type === 'float' && typeof typedArg.value === 'number') {
         typedArg.value = ensure_decimal_dot(typedArg.value)

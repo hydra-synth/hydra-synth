@@ -107,5 +107,41 @@ export default {
         vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
     }`
+  },
+  _hash: {
+    type: 'util',
+    glsl: `float _hash(vec3 p){
+        return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+    }`
+  },
+  _pinkNoise: {
+    type: 'util',
+    glsl: `float _pinkNoise(vec3 p){
+        float value = 0.0;
+        float amplitude = 0.5;
+        float frequency = 1.0;
+        // 5 octaves with 1/f amplitude falloff
+        for (int i = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.707; // 1/sqrt(2) for pink spectrum
+            frequency *= 2.0;
+        }
+        return value;
+    }`
+  },
+  _brownNoise: {
+    type: 'util',
+    glsl: `float _brownNoise(vec3 p){
+        float value = 0.0;
+        float amplitude = 0.5;
+        float frequency = 1.0;
+        // 5 octaves with 1/f^2 amplitude falloff
+        for (int i = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.5; // 1/f^2 for brown spectrum
+            frequency *= 2.0;
+        }
+        return value;
+    }`
   }
 }

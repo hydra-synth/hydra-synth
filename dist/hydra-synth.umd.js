@@ -2222,12 +2222,6 @@ fn main(input: VertexInput) -> VertexOutput {
       this.sandbox.eval(code);
     }
   }
-  const DEFAULT_CONVERSIONS = {
-    float: {
-      "vec4": { name: "sum", args: [[1, 1, 1, 1]] },
-      "vec2": { name: "sum", args: [[1, 1]] }
-    }
-  };
   const ensure_decimal_dot = (val) => {
     val = val.toString();
     if (val.indexOf(".") < 0) {
@@ -2289,17 +2283,6 @@ fn main(input: VertexInput) -> VertexOutput {
       if (startIndex < 0) ;
       else {
         if (typedArg.value && typedArg.value.transforms) {
-          const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1];
-          if (final_transform.transform.glsl_return_type !== input.type) {
-            const defaults = DEFAULT_CONVERSIONS[input.type];
-            if (typeof defaults !== "undefined") {
-              const default_def = defaults[final_transform.transform.glsl_return_type];
-              if (typeof default_def !== "undefined") {
-                const { name, args } = default_def;
-                typedArg.value = typedArg.value[name](...args);
-              }
-            }
-          }
           typedArg.isUniform = false;
         } else if (typedArg.type === "float" && typeof typedArg.value === "number") {
           typedArg.value = ensure_decimal_dot(typedArg.value);
@@ -2382,7 +2365,17 @@ fn main(input: VertexInput) -> VertexOutput {
       if (input.isUniform) {
         return shaderParams.wgsl ? "uf." + input.name : input.name;
       } else if (input.value && input.value.transforms) {
-        return `${generateGlsl$1(input.value.transforms, shaderParams)("st")}`;
+        const srcCode = `${generateGlsl$1(input.value.transforms, shaderParams)("st")}`;
+        if (input.type === "float") {
+          const hasColorOutput = input.value.transforms.some((t) => {
+            const type = t.transform.type;
+            return type === "src" || type === "color" || type === "combine";
+          });
+          if (hasColorOutput) {
+            return `(${srcCode}).r`;
+          }
+        }
+        return srcCode;
       }
       return input.value;
     }).reduce((p, c) => `${p}, ${c}`, "");
@@ -2579,6 +2572,42 @@ fn main(input: VertexInput) -> VertexOutput {
         vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
     }`
+    },
+    _hash: {
+      type: "util",
+      glsl: `float _hash(vec3 p){
+        return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+    }`
+    },
+    _pinkNoise: {
+      type: "util",
+      glsl: `float _pinkNoise(vec3 p){
+        float value = 0.0;
+        float amplitude = 0.5;
+        float frequency = 1.0;
+        // 5 octaves with 1/f amplitude falloff
+        for (int i = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.707; // 1/sqrt(2) for pink spectrum
+            frequency *= 2.0;
+        }
+        return value;
+    }`
+    },
+    _brownNoise: {
+      type: "util",
+      glsl: `float _brownNoise(vec3 p){
+        float value = 0.0;
+        float amplitude = 0.5;
+        float frequency = 1.0;
+        // 5 octaves with 1/f^2 amplitude falloff
+        for (int i = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.5; // 1/f^2 for brown spectrum
+            frequency *= 2.0;
+        }
+        return value;
+    }`
     }
   };
   const utilityWgsl = {
@@ -2702,6 +2731,42 @@ fn main(input: VertexInput) -> VertexOutput {
         let cvmin =  vec3<f32>(0.0, 0.0, 0.0);
         let cvmax =  vec3<f32>(1.0, 1.0, 1.0);
         return  vec3<f32> (c.z * mix(K.xxx, clamp(cv, cvmin, cvmax), c.y));
+    }`
+    },
+    _hash: {
+      type: "util",
+      wgsl: `fn _hash(p: vec3<f32>) -> f32 {
+        return fract(sin(dot(p, vec3<f32>(127.1, 311.7, 74.7))) * 43758.5453);
+    }`
+    },
+    _pinkNoise: {
+      type: "util",
+      wgsl: `fn _pinkNoise(p: vec3<f32>) -> f32 {
+        var value: f32 = 0.0;
+        var amplitude: f32 = 0.5;
+        var frequency: f32 = 1.0;
+        // 5 octaves with 1/f amplitude falloff
+        for (var i: i32 = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.707; // 1/sqrt(2) for pink spectrum
+            frequency *= 2.0;
+        }
+        return value;
+    }`
+    },
+    _brownNoise: {
+      type: "util",
+      wgsl: `fn _brownNoise(p: vec3<f32>) -> f32 {
+        var value: f32 = 0.0;
+        var amplitude: f32 = 0.5;
+        var frequency: f32 = 1.0;
+        // 5 octaves with 1/f^2 amplitude falloff
+        for (var i: i32 = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.5; // 1/f^2 for brown spectrum
+            frequency *= 2.0;
+        }
+        return value;
     }`
     }
   };
@@ -2888,6 +2953,63 @@ fn main(input: VertexInput) -> VertexOutput {
       glsl: `   return vec4(vec3(_noise(vec3(_st*scale, offset*time))), 1.0);`,
       wgsl: `   return vec4<f32>(vec3<f32>(_noise(vec3(_st*scale, offset*time))), 1.0);`,
       needs: ["_noise"]
+    },
+    {
+      name: "whiteNoise",
+      type: "src",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 10
+        },
+        {
+          type: "float",
+          name: "speed",
+          default: 1
+        }
+      ],
+      glsl: `   return vec4(vec3(_hash(vec3(floor(_st*scale), time*speed))), 1.0);`,
+      wgsl: `   return vec4<f32>(vec3<f32>(_hash(vec3<f32>(floor(_st*scale), time*speed))), 1.0);`,
+      needs: ["_hash"]
+    },
+    {
+      name: "pinkNoise",
+      type: "src",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 10
+        },
+        {
+          type: "float",
+          name: "offset",
+          default: 0.1
+        }
+      ],
+      glsl: `   return vec4(vec3(_pinkNoise(vec3(_st*scale, offset*time))), 1.0);`,
+      wgsl: `   return vec4<f32>(vec3<f32>(_pinkNoise(vec3<f32>(_st*scale, offset*time))), 1.0);`,
+      needs: ["_pinkNoise", "_noise"]
+    },
+    {
+      name: "brownNoise",
+      type: "src",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 10
+        },
+        {
+          type: "float",
+          name: "offset",
+          default: 0.1
+        }
+      ],
+      glsl: `   return vec4(vec3(_brownNoise(vec3(_st*scale, offset*time))), 1.0);`,
+      wgsl: `   return vec4<f32>(vec3<f32>(_brownNoise(vec3<f32>(_st*scale, offset*time))), 1.0);`,
+      needs: ["_brownNoise", "_noise"]
     },
     {
       name: "voronoi",
@@ -4025,6 +4147,106 @@ fn main(input: VertexInput) -> VertexOutput {
       ],
       glsl: `   return vec4(_c0.a * scale + offset);`,
       wgsl: `   return vec4<f32>(_c0.a * scale + offset);`
+    },
+    {
+      name: "luminance",
+      type: "color",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 1
+        },
+        {
+          type: "float",
+          name: "offset",
+          default: 0
+        }
+      ],
+      glsl: `   float l = dot(_c0.rgb, vec3(0.2126, 0.7152, 0.0722)) * scale + offset;
+   return vec4(l, l, l, _c0.a);`,
+      wgsl: `   let l = dot(_c0.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) * scale + offset;
+   return vec4<f32>(l, l, l, _c0.a);`
+    },
+    {
+      name: "avg",
+      type: "color",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 1
+        },
+        {
+          type: "float",
+          name: "offset",
+          default: 0
+        }
+      ],
+      glsl: `   float a = ((_c0.r + _c0.g + _c0.b) / 3.0) * scale + offset;
+   return vec4(a, a, a, _c0.a);`,
+      wgsl: `   let a = ((_c0.r + _c0.g + _c0.b) / 3.0) * scale + offset;
+   return vec4<f32>(a, a, a, _c0.a);`
+    },
+    {
+      name: "cmax",
+      type: "color",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 1
+        },
+        {
+          type: "float",
+          name: "offset",
+          default: 0
+        }
+      ],
+      glsl: `   float m = max(_c0.r, max(_c0.g, _c0.b)) * scale + offset;
+   return vec4(m, m, m, _c0.a);`,
+      wgsl: `   let m = max(_c0.r, max(_c0.g, _c0.b)) * scale + offset;
+   return vec4<f32>(m, m, m, _c0.a);`
+    },
+    {
+      name: "cmin",
+      type: "color",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 1
+        },
+        {
+          type: "float",
+          name: "offset",
+          default: 0
+        }
+      ],
+      glsl: `   float m = min(_c0.r, min(_c0.g, _c0.b)) * scale + offset;
+   return vec4(m, m, m, _c0.a);`,
+      wgsl: `   let m = min(_c0.r, min(_c0.g, _c0.b)) * scale + offset;
+   return vec4<f32>(m, m, m, _c0.a);`
+    },
+    {
+      name: "clength",
+      type: "color",
+      inputs: [
+        {
+          type: "float",
+          name: "scale",
+          default: 1
+        },
+        {
+          type: "float",
+          name: "offset",
+          default: 0
+        }
+      ],
+      glsl: `   float l = length(_c0.rgb) * scale + offset;
+   return vec4(l, l, l, _c0.a);`,
+      wgsl: `   let l = length(_c0.rgb) * scale + offset;
+   return vec4<f32>(l, l, l, _c0.a);`
     }
   ];
   class GeneratorFactory {

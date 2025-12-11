@@ -92,7 +92,20 @@ function shaderString (uv, method, inputs, shaderParams) {
       return shaderParams.wgsl ? 'uf.' + input.name : input.name // 'uf.' needed for value struct in wgsl.
     } else if (input.value && input.value.transforms) {
       // this by definition needs to be a generator, hence we start with 'st' as the initial value for generating the glsl fragment
-      return `${generateGlsl(input.value.transforms, shaderParams)('st')}`
+      const srcCode = `${generateGlsl(input.value.transforms, shaderParams)('st')}`
+      // Auto-coerce vec4 source to float if needed (extract .r channel)
+      if (input.type === 'float') {
+        // Check if chain produces vec4 - any src/color/combine transform means vec4 output
+        // (coord/combineCoord just transform UVs, don't change output type)
+        const hasColorOutput = input.value.transforms.some(t => {
+          const type = t.transform.type
+          return type === 'src' || type === 'color' || type === 'combine'
+        })
+        if (hasColorOutput) {
+          return `(${srcCode}).r`
+        }
+      }
+      return srcCode
     }
     return input.value
   }).reduce((p, c) => `${p}, ${c}`, '')

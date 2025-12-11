@@ -124,5 +124,41 @@ _luminance: {
         let cvmax =  vec3<f32>(1.0, 1.0, 1.0);
         return  vec3<f32> (c.z * mix(K.xxx, clamp(cv, cvmin, cvmax), c.y));
     }`
+  },
+  _hash: {
+    type: 'util',
+    wgsl: `fn _hash(p: vec3<f32>) -> f32 {
+        return fract(sin(dot(p, vec3<f32>(127.1, 311.7, 74.7))) * 43758.5453);
+    }`
+  },
+  _pinkNoise: {
+    type: 'util',
+    wgsl: `fn _pinkNoise(p: vec3<f32>) -> f32 {
+        var value: f32 = 0.0;
+        var amplitude: f32 = 0.5;
+        var frequency: f32 = 1.0;
+        // 5 octaves with 1/f amplitude falloff
+        for (var i: i32 = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.707; // 1/sqrt(2) for pink spectrum
+            frequency *= 2.0;
+        }
+        return value;
+    }`
+  },
+  _brownNoise: {
+    type: 'util',
+    wgsl: `fn _brownNoise(p: vec3<f32>) -> f32 {
+        var value: f32 = 0.0;
+        var amplitude: f32 = 0.5;
+        var frequency: f32 = 1.0;
+        // 5 octaves with 1/f^2 amplitude falloff
+        for (var i: i32 = 0; i < 5; i++) {
+            value += amplitude * _noise(p * frequency);
+            amplitude *= 0.5; // 1/f^2 for brown spectrum
+            frequency *= 2.0;
+        }
+        return value;
+    }`
   }
 }
