@@ -8,6 +8,73 @@ Vertex shader support is in progress with geometry helpers (tri, quad, poly, cir
 
 ---
 
+## Recently Implemented: Source-as-Parameter & Noise Variants
+
+### Auto Type Coercion (vec4 → float)
+
+Sources can now be used directly as parameters to any function expecting a float. The `.r` channel is automatically extracted:
+
+```javascript
+// Basic: noise drives oscillator frequency
+osc(noise(10)).out(o0)
+
+// Deep nesting (FM synthesis style)
+osc(40).scale(voronoi(osc(noise(10)))).out(o0)
+
+// Works with chains including coord transforms
+osc(src(o0).scale(0.5)).out(o0)
+```
+
+**How it works:** In `generate-glsl.js`, when a GlslSource is passed to a float parameter, the generated code wraps it with `.r` extraction. The coercion checks if any transform in the chain produces vec4 (src, color, combine types).
+
+### Channel Extractors
+
+Explicit control over which channel to use:
+
+| Function | Extracts | Use Case |
+|----------|----------|----------|
+| `.r()`, `.g()`, `.b()`, `.a()` | Single channel | Pick specific channel |
+| `.luminance()` | Perceptual brightness | Rec. 709 weighted grayscale |
+| `.avg()` | `(r+g+b)/3` | Mathematical mean |
+| `.cmax()` | `max(r,g,b)` | Brightest channel |
+| `.cmin()` | `min(r,g,b)` | Darkest channel |
+| `.clength()` | `length(rgb)` | Vector magnitude |
+
+All extractors have optional `scale` and `offset` parameters:
+
+```javascript
+osc(noise(10).luminance(2, 0.5)).out(o0)  // amplified + offset
+```
+
+### Noise Variants
+
+Four noise types with different spectral characteristics:
+
+| Function | Spectrum | Character |
+|----------|----------|-----------|
+| `noise(scale, offset)` | Single octave Simplex | Smooth, blobby |
+| `whiteNoise(scale, speed)` | Flat (random) | Harsh static, chunky blocks |
+| `pinkNoise(scale, offset)` | 1/f | Natural, organic turbulence |
+| `brownNoise(scale, offset)` | 1/f² | Very smooth, clouds/smoke |
+
+**Comparison view:**
+
+```javascript
+whiteNoise().out(o0)     // flat - harsh, static
+pinkNoise(10).out(o1)    // 1/f - softer, natural
+brownNoise(10).out(o2)   // 1/f² - very smooth, clouds
+noise().out(o3)          // simplex - single octave, blobby
+render()
+```
+
+**Implementation notes:**
+- White noise uses `floor()` on spatial coords for chunky blocks, smooth time
+- Pink noise: 5 octaves with amplitude *= 0.707 (1/√2) per octave
+- Brown noise: 5 octaves with amplitude *= 0.5 per octave
+- All use sin-based hash for clean randomness (no moiré artifacts)
+
+---
+
 ## Tier 1: Both Backends (WebGL + WebGPU)
 
 | Feature | Status | Notes |
