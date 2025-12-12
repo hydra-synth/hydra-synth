@@ -65,6 +65,8 @@ var Output = function ({ regl, precision, label = "", chanNum, hydraSynth, width
   this.pingPongIndex = 0
 
   // for each output, create two fbos for pingponging
+  // Depth buffer added lazily when 3D geometry is first used
+  this.hasDepthBuffer = false
   this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
     color: this.regl.texture({
       mag: 'nearest',
@@ -86,6 +88,31 @@ Output.prototype.resize = function(width, height) {
 //  console.log(this)
 }
 
+// Lazily enable depth buffer for 3D rendering
+// Called automatically when 3D geometry is first registered
+Output.prototype.enableDepthBuffer = function() {
+  if (this.hasDepthBuffer) return  // Already enabled
+
+  // Get current dimensions from existing fbo
+  const width = this.fbos[0].width
+  const height = this.fbos[0].height
+
+  // Destroy old framebuffers
+  this.fbos.forEach(fbo => fbo.destroy())
+
+  // Create new framebuffers with depth
+  this.fbos = (Array(2)).fill().map(() => this.regl.framebuffer({
+    color: this.regl.texture({
+      mag: 'nearest',
+      width: width,
+      height: height,
+      format: 'rgba'
+    }),
+    depth: true
+  }))
+
+  this.hasDepthBuffer = true
+}
 
 Output.prototype.getCurrent = function () {
   return this.fbos[this.pingPongIndex]
@@ -113,9 +140,11 @@ Output.prototype.init = function () {
   precision ${this.precision} float;
   attribute vec3 position;
   varying vec2 uv;
+  varying float v_faceId;
 
   void main () {
     uv = position.xy;
+    v_faceId = 0.0;
     gl_Position = vec4(2.0 * position.xy - 1.0, 0, 1);
   }`
 
@@ -166,12 +195,9 @@ Output.prototype.init = function () {
 // Reshape vertex data to vec3 format for forward compatibility with 3D
 // Input: flat array of 2D coords [x,y, x,y, ...] or 3D coords [x,y,z, x,y,z, ...]
 // Output: array of [x,y,z] triples
-function reshapeToVec3(flatArray) {
-  // Detect if input is 2D or 3D based on divisibility
-  // 2D: length divisible by 2 but not by 3, or explicitly 2 components per vertex
-  // 3D: length divisible by 3
+// is3D: explicit flag indicating 3D data (required for ambiguous lengths like 108 which is divisible by both 2 and 3)
+function reshapeToVec3(flatArray, is3D = false) {
   const len = flatArray.length
-  const is3D = len % 3 === 0 && len % 2 !== 0
   const stride = is3D ? 3 : 2
 
   const verts = []
@@ -203,29 +229,57 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   // Extract raw vertices and check for VertexSource
   let rawVerts = null
   let vertexSource = null
+  let has3D = false
 
   if (vertexData instanceof VertexSource) {
     vertexSource = vertexData
     rawVerts = vertexData.vertices
+    has3D = vertexData.is3D || false
   } else if (vertexData && Array.isArray(vertexData)) {
     rawVerts = vertexData
   }
 
+  // Enable depth buffer lazily for 3D geometry
+  if (has3D) {
+    this.enableDepthBuffer()
+  }
+
   // Create vertex buffer for this sprite
-  let positionBuffer, vertexCount
+  let positionBuffer, uvBuffer, faceIdBuffer, vertexCount
   let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 }  // default fullscreen bounds
+  let hasExplicitUVs = false
+  let hasFaceIds = false
+
   if (rawVerts && rawVerts.length >= 6) {
     // Custom geometry: reshape to vec3 for 3D forward-compatibility
-    const verts = reshapeToVec3(rawVerts)
+    const verts = reshapeToVec3(rawVerts, has3D)
     positionBuffer = this.regl.buffer(verts)
     vertexCount = verts.length
-    // Compute bounds for UV normalization
-    bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
-    for (const v of verts) {
-      bounds.minX = Math.min(bounds.minX, v[0])
-      bounds.maxX = Math.max(bounds.maxX, v[0])
-      bounds.minY = Math.min(bounds.minY, v[1])
-      bounds.maxY = Math.max(bounds.maxY, v[1])
+
+    // Check for explicit UVs from VertexSource (e.g., cube)
+    if (vertexSource && vertexSource.uvs && vertexSource.uvs.length > 0) {
+      hasExplicitUVs = true
+      // Reshape UVs to vec2 array
+      const uvData = []
+      for (let i = 0; i < vertexSource.uvs.length; i += 2) {
+        uvData.push([vertexSource.uvs[i], vertexSource.uvs[i + 1]])
+      }
+      uvBuffer = this.regl.buffer(uvData)
+    } else {
+      // Compute bounds for UV normalization
+      bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+      for (const v of verts) {
+        bounds.minX = Math.min(bounds.minX, v[0])
+        bounds.maxX = Math.max(bounds.maxX, v[0])
+        bounds.minY = Math.min(bounds.minY, v[1])
+        bounds.maxY = Math.max(bounds.maxY, v[1])
+      }
+    }
+
+    // Check for face IDs from VertexSource (e.g., cube for per-face materials)
+    if (vertexSource && vertexSource.faceIds && vertexSource.faceIds.length > 0) {
+      hasFaceIds = true
+      faceIdBuffer = this.regl.buffer(vertexSource.faceIds)
     }
   } else {
     // Default fullscreen triangle
@@ -257,6 +311,14 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   } else {
     // No sprite picking - use full texture
     uniforms.u_spriteUV = [0, 0, 1, 1]
+  }
+
+  // Add sprite grid uniform for faceId-based picking
+  // If sprite has grid info, use it; otherwise default to [1, 1] (single cell)
+  if (sprite && sprite.cols && sprite.rows) {
+    uniforms.u_spriteGrid = [sprite.cols, sprite.rows]
+  } else {
+    uniforms.u_spriteGrid = [1, 1]
   }
 
   // Add bounds uniforms for UV normalization (custom geometry only)
@@ -298,15 +360,24 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   if (rawVerts) {
     if (hasChainedTransforms) {
       // Use generateVertexGlsl for chained transforms (Phase 5)
-      const generated = generateVertexGlsl(vertexSource, this.precision)
+      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds })
       vert = generated.glsl
       vertexUniforms = generated.uniforms
     } else if (hasVertexOptions) {
       // Custom geometry with vertexOptions (Phase 3 style)
+      const uvAttrDecl = hasExplicitUVs ? 'attribute vec2 texcoord;' : ''
+      const faceIdAttrDecl = hasFaceIds ? 'attribute float faceId;' : ''
+      const uvCode = hasExplicitUVs
+        ? 'uv = texcoord;'
+        : 'uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);'
+      const faceIdCode = hasFaceIds ? 'v_faceId = faceId;' : 'v_faceId = 0.0;'
       vert = `
       precision ${this.precision} float;
       attribute vec3 position;
+      ${uvAttrDecl}
+      ${faceIdAttrDecl}
       varying vec2 uv;
+      varying float v_faceId;
 
       uniform vec2 u_scale;
       uniform vec2 u_offset;
@@ -315,8 +386,9 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
       uniform vec2 u_boundsMax;
 
       void main () {
-        // UV normalized to shape bounds (texture fills the shape)
-        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+        // UV ${hasExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
+        ${uvCode}
+        ${faceIdCode}
 
         // Apply transforms
         vec2 pos = position.xy * u_scale;
@@ -333,17 +405,27 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
       }`
     } else {
       // Custom geometry without transforms: simple passthrough
+      const uvAttrDecl = hasExplicitUVs ? 'attribute vec2 texcoord;' : ''
+      const faceIdAttrDecl = hasFaceIds ? 'attribute float faceId;' : ''
+      const uvCode = hasExplicitUVs
+        ? 'uv = texcoord;'
+        : 'uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);'
+      const faceIdCode = hasFaceIds ? 'v_faceId = faceId;' : 'v_faceId = 0.0;'
       vert = `
       precision ${this.precision} float;
       attribute vec3 position;
+      ${uvAttrDecl}
+      ${faceIdAttrDecl}
       varying vec2 uv;
+      varying float v_faceId;
 
       uniform vec2 u_boundsMin;
       uniform vec2 u_boundsMax;
 
       void main () {
-        // UV normalized to shape bounds (texture fills the shape)
-        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+        // UV ${hasExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
+        ${uvCode}
+        ${faceIdCode}
         gl_Position = vec4(position.xy, 0.0, 1.0);
       }`
     }
@@ -355,25 +437,35 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   // Merge vertex uniforms with fragment uniforms
   Object.assign(uniforms, vertexUniforms)
 
+  // Build attributes object
+  const attributes = {
+    position: positionBuffer
+  }
+  if (hasExplicitUVs && uvBuffer) {
+    attributes.texcoord = uvBuffer
+  }
+  if (hasFaceIds && faceIdBuffer) {
+    attributes.faceId = faceIdBuffer
+  }
+
   // Create the draw command
   const drawCommand = this.regl({
     frag: pass.frag,
     vert: vert,
-    attributes: {
-      position: positionBuffer
-    },
+    attributes: attributes,
     uniforms: uniforms,
     count: vertexCount,
     primitive: primitive,
     blend: BLEND_MODES[blendMode] || BLEND_MODES.normal,
-    depth: { enable: false }
+    depth: { enable: has3D, func: 'less' }
   })
 
   // Store sprite config
   this.sprites.set(spriteLevel, {
     drawCommand,
     positionBuffer,
-    blendMode
+    blendMode,
+    has3D
   })
 }
 
@@ -421,11 +513,15 @@ Output.prototype._renderSprites = function (props) {
   // Check if we have a level 0 (which clears)
   const hasLevel0 = levels.length > 0 && levels[0] === 0
 
+  // Check if any sprite uses 3D (needs depth clearing)
+  const needs3D = Array.from(this.sprites.values()).some(s => s.has3D)
+
   // If no level 0, copy previous frame for persistence/trails
   if (!hasLevel0) {
     // Blit previous buffer to target (preserves content)
     this.regl.clear({
       color: [0, 0, 0, 0],
+      depth: needs3D ? 1 : undefined,
       framebuffer: targetFbo
     })
     // Draw previous frame content to target
@@ -441,10 +537,11 @@ Output.prototype._renderSprites = function (props) {
     const level = levels[i]
     const sprite = this.sprites.get(level)
 
-    // Level 0 clears the framebuffer
+    // Level 0 clears the framebuffer (and depth if 3D)
     if (level === 0) {
       this.regl.clear({
         color: [0, 0, 0, 1],
+        depth: needs3D ? 1 : undefined,
         framebuffer: targetFbo
       })
     }

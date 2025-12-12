@@ -82,3 +82,50 @@ export function ring(outerRadius = 1.0, innerRadius = 0.5, centerX = 0, centerY 
   }
   return new VertexSource(verts)
 }
+
+// 3D Cube - 6 faces, 12 triangles
+// Returns 3D vertices with per-face UVs and faceIds
+// Face order: front, back, top, bottom, right, left (indices 0-5)
+export function cube(size = 0.5) {
+  const s = size
+  // 8 corners of the cube
+  const corners = [
+    [-s, -s,  s],  // 0: front-bottom-left
+    [ s, -s,  s],  // 1: front-bottom-right
+    [ s,  s,  s],  // 2: front-top-right
+    [-s,  s,  s],  // 3: front-top-left
+    [-s, -s, -s],  // 4: back-bottom-left
+    [ s, -s, -s],  // 5: back-bottom-right
+    [ s,  s, -s],  // 6: back-top-right
+    [-s,  s, -s],  // 7: back-top-left
+  ]
+
+  // 6 faces, each as 2 triangles (CCW winding for front-facing)
+  // Each face has vertex indices and corresponding UVs
+  const faces = [
+    { indices: [0, 1, 2, 0, 2, 3], uvs: [[0,0], [1,0], [1,1], [0,0], [1,1], [0,1]] },  // front (0)
+    { indices: [5, 4, 7, 5, 7, 6], uvs: [[0,0], [1,0], [1,1], [0,0], [1,1], [0,1]] },  // back (1)
+    { indices: [3, 2, 6, 3, 6, 7], uvs: [[0,0], [1,0], [1,1], [0,0], [1,1], [0,1]] },  // top (2)
+    { indices: [4, 5, 1, 4, 1, 0], uvs: [[0,0], [1,0], [1,1], [0,0], [1,1], [0,1]] },  // bottom (3)
+    { indices: [1, 5, 6, 1, 6, 2], uvs: [[0,0], [1,0], [1,1], [0,0], [1,1], [0,1]] },  // right (4)
+    { indices: [4, 0, 3, 4, 3, 7], uvs: [[0,0], [1,0], [1,1], [0,0], [1,1], [0,1]] },  // left (5)
+  ]
+
+  const verts = []
+  const uvs = []
+  const faceIds = []
+  for (let faceIdx = 0; faceIdx < faces.length; faceIdx++) {
+    const face = faces[faceIdx]
+    for (let i = 0; i < face.indices.length; i++) {
+      verts.push(...corners[face.indices[i]])
+      uvs.push(...face.uvs[i])
+      faceIds.push(faceIdx)  // Each vertex knows which face it belongs to
+    }
+  }
+
+  const vs = new VertexSource(verts)
+  vs.uvs = uvs  // Store UVs for later use
+  vs.faceIds = faceIds  // Store face IDs for per-face materials
+  vs.is3D = true
+  return vs
+}

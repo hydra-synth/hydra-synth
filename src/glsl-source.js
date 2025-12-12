@@ -214,8 +214,10 @@ GlslSource.prototype.compile = function (transforms) {
   uniform float time;
   uniform vec2 resolution;
   varying vec2 uv;
+  varying float v_faceId;
   uniform sampler2D prevBuffer;
-  uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax
+  uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax (fallback when no faceId)
+  uniform vec2 u_spriteGrid;  // cols, rows for faceId-based sprite picking
 
   ${Object.values(utilityGlsl).map((transform) => {
   //  console.log(transform.glsl)
@@ -231,9 +233,18 @@ GlslSource.prototype.compile = function (transforms) {
   }).join('')}
 
   void main () {
-    // Transform UV for sprite sheet picking
-    // u_spriteUV: x=uMin, y=vMin, z=uMax, w=vMax (default 0,0,1,1 = full texture)
-    vec2 st = u_spriteUV.xy + uv * (u_spriteUV.zw - u_spriteUV.xy);
+    vec2 st;
+    // If using sprite grid (cols > 1 or rows > 1), use faceId to pick cell
+    if (u_spriteGrid.x > 1.0 || u_spriteGrid.y > 1.0) {
+      // faceId maps to cell in row-major order
+      float cellX = mod(v_faceId, u_spriteGrid.x);
+      float cellY = floor(v_faceId / u_spriteGrid.x);
+      vec2 cellSize = vec2(1.0 / u_spriteGrid.x, 1.0 / u_spriteGrid.y);
+      st = uv * cellSize + vec2(cellX, cellY) * cellSize;
+    } else {
+      // Fallback to u_spriteUV for single sprite picking
+      st = u_spriteUV.xy + uv * (u_spriteUV.zw - u_spriteUV.xy);
+    }
 
     gl_FragColor = ${shaderInfo.fragColor};
   }

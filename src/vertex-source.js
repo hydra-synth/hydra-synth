@@ -32,19 +32,38 @@ class VertexSource {
     return this._addTransform('rotate', { angle })
   }
 
-  scale(x = 1, y) {
-    // If only one arg, use for both x and y
-    if (y === undefined) y = x
-    return this._addTransform('scale', { x, y })
+  // 3D rotations
+  rotateX(angle = 0) {
+    return this._addTransform('rotateX', { angle })
   }
 
-  offset(x = 0, y = 0) {
-    return this._addTransform('offset', { x, y })
+  rotateY(angle = 0) {
+    return this._addTransform('rotateY', { angle })
+  }
+
+  rotateZ(angle = 0) {
+    return this._addTransform('rotateZ', { angle })
+  }
+
+  scale(x = 1, y, z) {
+    // If only one arg, use for all axes
+    if (y === undefined) y = x
+    if (z === undefined) z = 1
+    return this._addTransform('scale', { x, y, z })
+  }
+
+  offset(x = 0, y = 0, z = 0) {
+    return this._addTransform('offset', { x, y, z })
   }
 
   // Alias for offset
-  translate(x = 0, y = 0) {
-    return this.offset(x, y)
+  translate(x = 0, y = 0, z = 0) {
+    return this.offset(x, y, z)
+  }
+
+  // Set perspective projection
+  perspective(fov = 45, near = 0.1, far = 100) {
+    return this._addTransform('perspective', { fov, near, far })
   }
 
   // ========== Immediate transforms (CPU, modify vertex array) ==========
@@ -114,21 +133,40 @@ class VertexSource {
 
 // Generate vertex shader GLSL from transforms
 // Returns { glsl: string, uniforms: object }
-export function generateVertexGlsl(vertexSource, precision) {
+// Options: { useExplicitUVs: boolean, useFaceIds: boolean }
+export function generateVertexGlsl(vertexSource, precision, options = {}) {
+  const { useExplicitUVs = false, useFaceIds = false } = options
+
+  // UV source code - either from attribute or computed from bounds
+  const uvAttributeDecl = useExplicitUVs ? 'attribute vec2 texcoord;' : ''
+  const uvComputation = useExplicitUVs
+    ? 'uv = texcoord;'
+    : 'uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);'
+
+  // FaceId for per-face materials (used with sprite sheets)
+  // Always declare varying, but only declare attribute if faceIds are provided
+  const faceIdAttributeDecl = useFaceIds ? 'attribute float faceId;' : ''
+  const faceIdVaryingDecl = 'varying float v_faceId;'  // Always declare for fragment shader compatibility
+  const faceIdPassthrough = useFaceIds ? 'v_faceId = faceId;' : 'v_faceId = 0.0;'
+
   if (!vertexSource.hasTransforms) {
     // No transforms - use simple passthrough with bounds
     return {
       glsl: `
         precision ${precision} float;
         attribute vec3 position;
+        ${uvAttributeDecl}
+        ${faceIdAttributeDecl}
         varying vec2 uv;
+        ${faceIdVaryingDecl}
 
         uniform vec2 u_boundsMin;
         uniform vec2 u_boundsMax;
 
         void main () {
-          // UV normalized to shape bounds (texture fills the shape)
-          uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+          // UV ${useExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
+          ${uvComputation}
+          ${faceIdPassthrough}
           gl_Position = vec4(position.xy, 0.0, 1.0);
         }
       `,
@@ -141,6 +179,15 @@ export function generateVertexGlsl(vertexSource, precision) {
   const uniformDecls = []
   const transformCode = []
 
+  // Check if any 3D transforms are used
+  const has3D = vertexSource.transforms.some(t =>
+    ['rotateX', 'rotateY', 'rotateZ', 'perspective'].includes(t.type) ||
+    (t.type === 'offset' && t.args.z !== 0)
+  )
+
+  let hasPerspective = false
+  let perspectiveUniform = null
+
   vertexSource.transforms.forEach((transform, i) => {
     const suffix = i // Unique suffix for each transform's uniforms
 
@@ -149,58 +196,182 @@ export function generateVertexGlsl(vertexSource, precision) {
         const uniformName = `u_rotate_${suffix}`
         uniformDecls.push(`uniform float ${uniformName};`)
         uniforms[uniformName] = makeUniformAccessor(transform.args.angle)
-        transformCode.push(`
+        if (has3D) {
+          // 2D rotate = rotate around Z axis
+          transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`)
+        } else {
+          transformCode.push(`
           {
             float c = cos(${uniformName});
             float s = sin(${uniformName});
             pos = vec2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
-          }
-        `)
+          }`)
+        }
+        break
+      }
+
+      case 'rotateX': {
+        const uniformName = `u_rotateX_${suffix}`
+        uniformDecls.push(`uniform float ${uniformName};`)
+        uniforms[uniformName] = makeUniformAccessor(transform.args.angle)
+        transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
+          }`)
+        break
+      }
+
+      case 'rotateY': {
+        const uniformName = `u_rotateY_${suffix}`
+        uniformDecls.push(`uniform float ${uniformName};`)
+        uniforms[uniformName] = makeUniformAccessor(transform.args.angle)
+        transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
+          }`)
+        break
+      }
+
+      case 'rotateZ': {
+        const uniformName = `u_rotateZ_${suffix}`
+        uniformDecls.push(`uniform float ${uniformName};`)
+        uniforms[uniformName] = makeUniformAccessor(transform.args.angle)
+        transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`)
         break
       }
 
       case 'scale': {
         const uniformName = `u_scale_${suffix}`
-        uniformDecls.push(`uniform vec2 ${uniformName};`)
-        uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y])
-        transformCode.push(`
-          pos *= ${uniformName};
-        `)
+        if (has3D) {
+          uniformDecls.push(`uniform vec3 ${uniformName};`)
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y, transform.args.z || 1])
+          transformCode.push(`
+          pos *= ${uniformName};`)
+        } else {
+          uniformDecls.push(`uniform vec2 ${uniformName};`)
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y])
+          transformCode.push(`
+          pos *= ${uniformName};`)
+        }
         break
       }
 
       case 'offset': {
         const uniformName = `u_offset_${suffix}`
-        uniformDecls.push(`uniform vec2 ${uniformName};`)
-        uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y])
-        transformCode.push(`
-          pos += ${uniformName};
-        `)
+        if (has3D) {
+          uniformDecls.push(`uniform vec3 ${uniformName};`)
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y, transform.args.z || 0])
+          transformCode.push(`
+          pos += ${uniformName};`)
+        } else {
+          uniformDecls.push(`uniform vec2 ${uniformName};`)
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y])
+          transformCode.push(`
+          pos += ${uniformName};`)
+        }
+        break
+      }
+
+      case 'perspective': {
+        hasPerspective = true
+        perspectiveUniform = `u_perspective_${suffix}`
+        uniformDecls.push(`uniform vec3 ${perspectiveUniform};`) // fov, near, far
+        uniforms[perspectiveUniform] = makeUniformAccessor([
+          transform.args.fov, transform.args.near, transform.args.far
+        ])
         break
       }
     }
   })
 
-  const glsl = `
+  let glsl
+  if (has3D) {
+    const projectionCode = hasPerspective ? `
+      // Perspective projection
+      float fov = ${perspectiveUniform}.x;
+      float near = ${perspectiveUniform}.y;
+      float far = ${perspectiveUniform}.z;
+      float f = 1.0 / tan(radians(fov) / 2.0);
+      float rangeInv = 1.0 / (near - far);
+
+      // Move camera back
+      pos.z -= 2.0;
+
+      // Apply perspective
+      float w = -pos.z;
+      gl_Position = vec4(
+        pos.x * f,
+        pos.y * f,
+        (pos.z * (near + far) + 2.0 * near * far) * rangeInv,
+        w
+      );` : `
+      // Simple projection - just use z for depth, no perspective divide
+      gl_Position = vec4(pos.xy, pos.z * 0.1, 1.0);`
+
+    glsl = `
     precision ${precision} float;
     attribute vec3 position;
+    ${uvAttributeDecl}
+    ${faceIdAttributeDecl}
     varying vec2 uv;
+    ${faceIdVaryingDecl}
 
     uniform vec2 u_boundsMin;
     uniform vec2 u_boundsMax;
     ${uniformDecls.join('\n    ')}
 
     void main () {
-      // UV normalized to shape bounds (texture fills the shape)
-      uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+      // UV ${useExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
+      ${uvComputation}
+      ${faceIdPassthrough}
 
-      // Apply transforms
+      // Apply transforms (3D)
+      vec3 pos = position;
+      ${transformCode.join('\n      ')}
+
+      ${projectionCode}
+    }
+  `
+  } else {
+    glsl = `
+    precision ${precision} float;
+    attribute vec3 position;
+    ${uvAttributeDecl}
+    ${faceIdAttributeDecl}
+    varying vec2 uv;
+    ${faceIdVaryingDecl}
+
+    uniform vec2 u_boundsMin;
+    uniform vec2 u_boundsMax;
+    ${uniformDecls.join('\n    ')}
+
+    void main () {
+      // UV ${useExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
+      ${uvComputation}
+      ${faceIdPassthrough}
+
+      // Apply transforms (2D)
       vec2 pos = position.xy;
       ${transformCode.join('\n      ')}
 
       gl_Position = vec4(pos, 0.0, 1.0);
     }
   `
+  }
 
   return { glsl, uniforms }
 }

@@ -43,24 +43,13 @@ fitCanvas();  // Initial sizing
 // *******************************************
 // test code follows:
 
-// Sprite Sheet Test
+// 3D Cube Test - Die with per-face textures
 s0.initImage('test-grid-4x4.png')
 
-// Create 4x4 sprite sheet
-const sheet = spriteSheet(s0, 4, 4)
+// Create spinning die cube with 4x4 sprite grid (faces 0-5 map to first 6 cells)
+src(s0).out(o0, cube(0.4).rotateY(() => time).rotateX(() => time * 0.7).perspective(45), { sprite: { cols: 4, rows: 4 } })
 
-// Test 1: Full grid (no sprite picking)
-// src(s0).out(o0)
-
-// Test 2: Static pick - show cell 5 (second row, second col)
-// src(s0).out(o0, null, { sprite: sheet.pick(5) })
-
-// Test 3: Animated pick - cycle through cells
-src(s0).out(o0, null, { sprite: sheet.pick(() => Math.floor(time * 4) % 16) })
-
-console.log('Sprite sheet test - should show cell 5 (numbered "5")')
-console.log('spriteSheet:', sheet)
-console.log('pick(5):', sheet.pick(5))
+console.log('3D Die test - each face should show different cell from sprite grid')
 
 
 
