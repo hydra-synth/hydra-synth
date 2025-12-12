@@ -16,6 +16,7 @@ const vertexPrefix = `
 	 struct VertexOutput {
   	@builtin(position) position : vec4f,
   	@location(0) texcoord : vec2f,
+  	@location(1) faceId : f32,
 	 };
 `;
 
@@ -23,6 +24,8 @@ const fragPrefix = `
    @group(0) @binding(0) var<uniform> time: f32;
    @group(0) @binding(1) var<uniform> resolution: vec2<f32>;
    @group(0) @binding(2) var<uniform> mouse: vec2<f32>;
+   @group(0) @binding(3) var<uniform> u_spriteUV: vec4<f32>;
+   @group(0) @binding(4) var<uniform> u_spriteGrid: vec2<f32>;
 `;
 
 // ------------------------------------------------------------------------------
@@ -43,7 +46,8 @@ const fragPrefix = `
 
      var output : VertexOutput;
      output.position = vec4<f32>( positions[vertexIndex], 0.0, 1.0);
-     output.texcoord = positions[vertexIndex] / 2.0 + 0.5; // positions are -1 to 1, texcoords are 0 
+     output.texcoord = positions[vertexIndex] / 2.0 + 0.5; // positions are -1 to 1, texcoords are 0
+     output.faceId = 0.0;
      return output;
     }
 `;
@@ -235,7 +239,7 @@ class wgslHydra {
   });
 
 		// ------------------------------------------------------------------------------
-		// create shared bind group layout for time, resolution, mouse.
+		// create shared bind group layout for time, resolution, mouse, spriteUV, spriteGrid.
 		this.sharedBindGroupLayout = this.device.createBindGroupLayout({
 			label: "",
   		entries: [
@@ -253,6 +257,16 @@ class wgslHydra {
       	binding: 2, // Binding index "mouse"
      	  visibility: GPUShaderStage.FRAGMENT, // Shader stages where this binding is used
       	buffer: { type: "uniform" }, // Resource type
+    	},
+    	{
+      	binding: 3, // Binding index "u_spriteUV"
+     	  visibility: GPUShaderStage.FRAGMENT,
+      	buffer: { type: "uniform" },
+    	},
+    	{
+      	binding: 4, // Binding index "u_spriteGrid"
+     	  visibility: GPUShaderStage.FRAGMENT,
+      	buffer: { type: "uniform" },
     	},
   		],
 		});
@@ -283,6 +297,22 @@ class wgslHydra {
 		});
 		this.mouseUniformValues = new Float32Array(2); // Array of 2 float
 
+// Create the shared uniform buffer for spriteUV (vec4)
+		this.spriteUVUniformBuffer = this.device.createBuffer({
+  			label: "spriteUV uniform buffer",
+  			size: 16, // 4 x 32-bit float
+  			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+		});
+		this.spriteUVUniformValues = new Float32Array([0, 0, 1, 1]); // Default: full texture
+
+// Create the shared uniform buffer for spriteGrid (vec2)
+		this.spriteGridUniformBuffer = this.device.createBuffer({
+  			label: "spriteGrid uniform buffer",
+  			size: 8, // 2 x 32-bit float
+  			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+		});
+		this.spriteGridUniformValues = new Float32Array([1, 1]); // Default: 1x1 grid
+
 		this.sharedBindGroup = this.device.createBindGroup({
 			 label: "shared bind group",
   	   layout: this.sharedBindGroupLayout,
@@ -298,6 +328,14 @@ class wgslHydra {
       {
       binding: 2,
       resource: { buffer: this.mouseUniformBuffer }, // Resource for the binding
+    	},
+      {
+      binding: 3,
+      resource: { buffer: this.spriteUVUniformBuffer },
+    	},
+      {
+      binding: 4,
+      resource: { buffer: this.spriteGridUniformBuffer },
     	}
      ],
 		});
@@ -712,6 +750,9 @@ class wgslHydra {
 		this.mouseUniformValues[1] = this.mousePos.y;
 		this.device.queue.writeBuffer(this.mouseUniformBuffer, 0, this.mouseUniformValues);
 
+		// Write sprite uniforms (defaults - could be updated per-sprite later)
+		this.device.queue.writeBuffer(this.spriteUVUniformBuffer, 0, this.spriteUVUniformValues);
+		this.device.queue.writeBuffer(this.spriteGridUniformBuffer, 0, this.spriteGridUniformValues);
 
 		// For each active channel...
     for (let chan = 0; chan < this.numChannels; ++chan) {

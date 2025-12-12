@@ -88,26 +88,36 @@ class OutputWgsl {
 
   // Register a sprite at a given level (parallel to WebGL Output.registerSprite)
   async registerSprite(spriteLevel, config) {
-    const { passes, vertexData, blendMode = 'normal', primitive = 'triangles' } = config
+    const { passes, vertexData, blendMode = 'normal', primitive = 'triangles', sprite = null } = config
     const pass = passes[0]
 
     // Extract raw vertices and check for VertexSource
     let rawVerts = null
     let vertexSource = null
+    let has3D = false
 
     if (vertexData instanceof VertexSource) {
       vertexSource = vertexData
       rawVerts = vertexData.vertices
+      has3D = vertexData.is3D || false
     } else if (vertexData && Array.isArray(vertexData)) {
       rawVerts = vertexData
     }
 
+    // Check for explicit UVs and faceIds
+    let hasExplicitUVs = false
+    let hasFaceIds = false
+    if (vertexSource) {
+      hasExplicitUVs = vertexSource.uvs && vertexSource.uvs.length > 0
+      hasFaceIds = vertexSource.faceIds && vertexSource.faceIds.length > 0
+    }
+
     // Compute bounds for UV normalization
     let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 }
-    if (rawVerts && rawVerts.length >= 6) {
+    if (rawVerts && rawVerts.length >= 6 && !hasExplicitUVs) {
       bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
       // rawVerts is flat array [x,y, x,y, ...] or [x,y,z, ...]
-      const stride = rawVerts.length % 3 === 0 && rawVerts.length % 2 !== 0 ? 3 : 2
+      const stride = has3D ? 3 : 2
       for (let i = 0; i < rawVerts.length; i += stride) {
         bounds.minX = Math.min(bounds.minX, rawVerts[i])
         bounds.maxX = Math.max(bounds.maxX, rawVerts[i])
@@ -129,7 +139,7 @@ class OutputWgsl {
       ]
 
       if (hasChainedTransforms) {
-        const generated = generateVertexWgsl(vertexSource)
+        const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds })
         vertexWgsl = generated.wgsl
         vertexUniforms = [...boundsUniforms, ...generated.uniforms]
       } else {
@@ -148,7 +158,11 @@ class OutputWgsl {
       primitive,
       vertexWgsl,
       vertexUniforms,
-      hasCustomGeometry: rawVerts !== null
+      hasCustomGeometry: rawVerts !== null,
+      has3D,
+      hasExplicitUVs,
+      hasFaceIds,
+      sprite
     })
 
     // Setup the pipeline in wgslHydra
@@ -159,7 +173,13 @@ class OutputWgsl {
       vertexUniforms,
       rawVerts,
       blendMode,
-      primitive
+      primitive,
+      has3D,
+      hasExplicitUVs,
+      hasFaceIds,
+      uvs: vertexSource?.uvs,
+      faceIds: vertexSource?.faceIds,
+      sprite
     })
   }
 

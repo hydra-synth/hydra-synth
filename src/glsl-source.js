@@ -191,10 +191,23 @@ GlslSource.prototype.compile = function (transforms) {
   }).join('')}
 
   @fragment
-  	 fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
-     let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
-     let st : vec2<f32> = ourIn.texcoord;
-     return ${shaderInfo.fragColor};
+  fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
+    let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
+    var st : vec2<f32>;
+
+    // If using sprite grid (cols > 1 or rows > 1), use faceId to pick cell
+    if (u_spriteGrid.x > 1.0 || u_spriteGrid.y > 1.0) {
+      // faceId maps to cell in row-major order
+      let cellX = ourIn.faceId % u_spriteGrid.x;
+      let cellY = floor(ourIn.faceId / u_spriteGrid.x);
+      let cellSize = vec2f(1.0 / u_spriteGrid.x, 1.0 / u_spriteGrid.y);
+      st = ourIn.texcoord * cellSize + vec2f(cellX, cellY) * cellSize;
+    } else {
+      // Fallback to u_spriteUV for single sprite picking
+      st = u_spriteUV.xy + ourIn.texcoord * (u_spriteUV.zw - u_spriteUV.xy);
+    }
+
+    return ${shaderInfo.fragColor};
   }
 		`;
 	} else {

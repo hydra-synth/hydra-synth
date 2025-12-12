@@ -394,10 +394,22 @@ function makeUniformAccessor(value) {
 
 // Generate WGSL vertex shader from transforms
 // Returns { wgsl: string, uniforms: array of {name, type, value} }
-export function generateVertexWgsl(vertexSource) {
+// Options: { useExplicitUVs: boolean, useFaceIds: boolean }
+export function generateVertexWgsl(vertexSource, options = {}) {
+  const { useExplicitUVs = false, useFaceIds = false } = options
+
   // Collect uniforms and build transform code
   const uniforms = []
   const transformCode = []
+
+  // Check if any 3D transforms are used
+  const has3D = vertexSource.hasTransforms && vertexSource.transforms.some(t =>
+    ['rotateX', 'rotateY', 'rotateZ', 'perspective'].includes(t.type) ||
+    (t.type === 'offset' && t.args.z !== 0)
+  )
+
+  let hasPerspective = false
+  let perspectiveUniform = null
 
   if (vertexSource.hasTransforms) {
     vertexSource.transforms.forEach((transform, i) => {
@@ -407,18 +419,67 @@ export function generateVertexWgsl(vertexSource) {
         case 'rotate': {
           const uniformName = `u_rotate_${suffix}`
           uniforms.push({ name: uniformName, type: 'f32', value: transform.args.angle })
-          transformCode.push(`
+          if (has3D) {
+            transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+      }`)
+          } else {
+            transformCode.push(`
       {
         let c = cos(vtx.${uniformName});
         let s = sin(vtx.${uniformName});
         pos = vec2f(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+      }`)
+          }
+          break
+        }
+
+        case 'rotateX': {
+          const uniformName = `u_rotateX_${suffix}`
+          uniforms.push({ name: uniformName, type: 'f32', value: transform.args.angle })
+          transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
+      }`)
+          break
+        }
+
+        case 'rotateY': {
+          const uniformName = `u_rotateY_${suffix}`
+          uniforms.push({ name: uniformName, type: 'f32', value: transform.args.angle })
+          transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
+      }`)
+          break
+        }
+
+        case 'rotateZ': {
+          const uniformName = `u_rotateZ_${suffix}`
+          uniforms.push({ name: uniformName, type: 'f32', value: transform.args.angle })
+          transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
       }`)
           break
         }
 
         case 'scale': {
           const uniformName = `u_scale_${suffix}`
-          uniforms.push({ name: uniformName, type: 'vec2f', value: [transform.args.x, transform.args.y] })
+          if (has3D) {
+            uniforms.push({ name: uniformName, type: 'vec3f', value: [transform.args.x, transform.args.y, transform.args.z || 1] })
+          } else {
+            uniforms.push({ name: uniformName, type: 'vec2f', value: [transform.args.x, transform.args.y] })
+          }
           transformCode.push(`
       pos *= vtx.${uniformName};`)
           break
@@ -426,9 +487,20 @@ export function generateVertexWgsl(vertexSource) {
 
         case 'offset': {
           const uniformName = `u_offset_${suffix}`
-          uniforms.push({ name: uniformName, type: 'vec2f', value: [transform.args.x, transform.args.y] })
+          if (has3D) {
+            uniforms.push({ name: uniformName, type: 'vec3f', value: [transform.args.x, transform.args.y, transform.args.z || 0] })
+          } else {
+            uniforms.push({ name: uniformName, type: 'vec2f', value: [transform.args.x, transform.args.y] })
+          }
           transformCode.push(`
       pos += vtx.${uniformName};`)
+          break
+        }
+
+        case 'perspective': {
+          hasPerspective = true
+          perspectiveUniform = `u_perspective_${suffix}`
+          uniforms.push({ name: perspectiveUniform, type: 'vec3f', value: [transform.args.fov, transform.args.near, transform.args.far] })
           break
         }
       }
@@ -436,7 +508,6 @@ export function generateVertexWgsl(vertexSource) {
   }
 
   // Build the uniform struct - always include bounds, plus any transform uniforms
-  // Note: bounds uniforms (u_boundsMin, u_boundsMax) are prepended by outputWgsl.js
   const allUniformFields = [
     '  u_boundsMin: vec2f,',
     '  u_boundsMax: vec2f,',
@@ -448,14 +519,61 @@ ${allUniformFields.join('\n')}
 @group(2) @binding(0) var<uniform> vtx: VertexUniforms;
 `
 
+  // Build vertex input struct - only include attributes that have buffers
+  const inputFields = ['  @location(0) position: vec3f,']
+  if (useExplicitUVs) {
+    inputFields.push('  @location(1) texcoord: vec2f,')
+  }
+  if (useFaceIds) {
+    inputFields.push('  @location(2) faceId: f32,')
+  }
+
+  // Build vertex output struct - always include faceId for fragment compatibility
+  const outputFields = [
+    '  @builtin(position) position: vec4f,',
+    '  @location(0) texcoord: vec2f,',
+    '  @location(1) faceId: f32,'
+  ]
+
+  // FaceId passthrough - use attribute if available, else default to 0
+  const faceIdCode = useFaceIds ? 'output.faceId = input.faceId;' : 'output.faceId = 0.0;'
+
+  // UV computation
+  const uvCode = useExplicitUVs
+    ? 'output.texcoord = input.texcoord;'
+    : 'output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);'
+
   // Build the vertex shader
-  const wgsl = `struct VertexInput {
-  @location(0) position: vec3f,
+  let wgsl
+  if (has3D) {
+    const projectionCode = hasPerspective ? `
+      // Perspective projection
+      let fov = vtx.${perspectiveUniform}.x;
+      let near = vtx.${perspectiveUniform}.y;
+      let far = vtx.${perspectiveUniform}.z;
+      let f = 1.0 / tan(radians(fov) / 2.0);
+      let rangeInv = 1.0 / (near - far);
+
+      // Move camera back
+      pos.z -= 2.0;
+
+      // Apply perspective
+      let w = -pos.z;
+      output.position = vec4f(
+        pos.x * f,
+        pos.y * f,
+        (pos.z * (near + far) + 2.0 * near * far) * rangeInv,
+        w
+      );` : `
+      // Simple projection - just use z for depth, no perspective divide
+      output.position = vec4f(pos.xy, pos.z * 0.1, 1.0);`
+
+    wgsl = `struct VertexInput {
+${inputFields.join('\n')}
 };
 
 struct VertexOutput {
-  @builtin(position) position: vec4f,
-  @location(0) texcoord: vec2f,
+${outputFields.join('\n')}
 };
 
 ${uniformStruct}
@@ -463,10 +581,37 @@ ${uniformStruct}
 fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
 
-  // UV normalized to shape bounds (texture fills the shape)
-  output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
+  // UV
+  ${uvCode}
+  ${faceIdCode}
 
-  // Apply transforms
+  // Apply transforms (3D)
+  var pos = input.position;
+${transformCode.join('\n')}
+
+  ${projectionCode}
+  return output;
+}
+`
+  } else {
+    wgsl = `struct VertexInput {
+${inputFields.join('\n')}
+};
+
+struct VertexOutput {
+${outputFields.join('\n')}
+};
+
+${uniformStruct}
+@vertex
+fn main(input: VertexInput) -> VertexOutput {
+  var output: VertexOutput;
+
+  // UV
+  ${uvCode}
+  ${faceIdCode}
+
+  // Apply transforms (2D)
   var pos = input.position.xy;
 ${transformCode.join('\n')}
 
@@ -474,6 +619,7 @@ ${transformCode.join('\n')}
   return output;
 }
 `
+  }
 
   return { wgsl, uniforms }
 }
@@ -488,6 +634,7 @@ export function getPassthroughVertexWgsl() {
 struct VertexOutput {
   @builtin(position) position: vec4f,
   @location(0) texcoord: vec2f,
+  @location(1) faceId: f32,
 };
 
 struct VertexUniforms {
@@ -501,6 +648,7 @@ fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
   // UV normalized to shape bounds (texture fills the shape)
   output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
+  output.faceId = 0.0;
   output.position = vec4f(input.position.xy, 0.0, 1.0);
   return output;
 }
