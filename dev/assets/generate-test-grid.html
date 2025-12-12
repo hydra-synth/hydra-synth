@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sprite Sheet Test Grid Generator</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    canvas { border: 1px solid #ccc; margin: 10px 0; }
+    .info { color: #666; margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <h1>Sprite Sheet Test Grid Generator</h1>
+
+  <div>
+    <label>Columns: <input type="number" id="cols" value="4" min="1" max="16"></label>
+    <label>Rows: <input type="number" id="rows" value="4" min="1" max="16"></label>
+    <label>Cell Size: <input type="number" id="cellSize" value="64" min="16" max="256"></label>
+    <button onclick="generate()">Generate</button>
+    <button onclick="download()">Download PNG</button>
+  </div>
+
+  <div class="info" id="info"></div>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Color palette for cells
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+      '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
+      '#BB8FCE', '#85C1E9', '#F8B500', '#58D68D',
+      '#EC7063', '#5DADE2', '#F39C12', '#1ABC9C'
+    ];
+
+    function generate() {
+      const cols = parseInt(document.getElementById('cols').value);
+      const rows = parseInt(document.getElementById('rows').value);
+      const cellSize = parseInt(document.getElementById('cellSize').value);
+
+      canvas.width = cols * cellSize;
+      canvas.height = rows * cellSize;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const index = row * cols + col;
+          const x = col * cellSize;
+          const y = row * cellSize;
+
+          // Fill cell with color
+          ctx.fillStyle = colors[index % colors.length];
+          ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+
+          // Draw cell number
+          ctx.fillStyle = '#000';
+          ctx.font = `bold ${Math.floor(cellSize/3)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(index.toString(), x + cellSize/2, y + cellSize/2);
+        }
+      }
+
+      document.getElementById('info').textContent =
+        `${cols}x${rows} grid, ${cellSize}px cells, ${canvas.width}x${canvas.height}px total, ${cols*rows} sprites`;
+    }
+
+    function download() {
+      const cols = document.getElementById('cols').value;
+      const rows = document.getElementById('rows').value;
+      const link = document.createElement('a');
+      link.download = `test-grid-${cols}x${rows}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Generate initial grid
+    generate();
+  </script>
+</body>
+</html>

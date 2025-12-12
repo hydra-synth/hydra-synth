@@ -430,7 +430,7 @@ fn main(input: VertexInput) -> VertexOutput {
     return value;
   }
   Output.prototype.registerSprite = function(spriteLevel, config) {
-    const { passes, vertexData, blendMode = "normal", vertexOptions = null, primitive = "triangles" } = config;
+    const { passes, vertexData, blendMode = "normal", vertexOptions = null, primitive = "triangles", sprite = null } = config;
     const pass = passes[0];
     const self2 = this;
     let rawVerts = null;
@@ -463,6 +463,14 @@ fn main(input: VertexInput) -> VertexOutput {
     const uniforms = Object.assign({}, pass.uniforms, {
       prevBuffer: () => self2.fbos[self2.pingPongIndex]
     });
+    if (sprite && sprite.getUVBounds) {
+      uniforms.u_spriteUV = () => {
+        const bounds2 = sprite.getUVBounds();
+        return [bounds2.uMin, bounds2.vMin, bounds2.uMax, bounds2.vMax];
+      };
+    } else {
+      uniforms.u_spriteUV = [0, 0, 1, 1];
+    }
     if (rawVerts) {
       uniforms.u_boundsMin = [bounds.minX, bounds.minY];
       uniforms.u_boundsMax = [bounds.maxX, bounds.maxY];
@@ -2794,7 +2802,7 @@ fn main(input: VertexInput) -> VertexOutput {
     if (typeof arg !== "object") return false;
     if (Array.isArray(arg)) return false;
     if (arg.vertices) return false;
-    return "level" in arg || "blend" in arg || "primitive" in arg;
+    return "level" in arg || "blend" in arg || "primitive" in arg || "sprite" in arg;
   }
   function isOutput(arg) {
     return arg && typeof arg === "object" && "registerSprite" in arg;
@@ -2819,6 +2827,9 @@ fn main(input: VertexInput) -> VertexOutput {
       } else if (isConfig(arg2)) {
         geometry = null;
         config = arg2;
+      } else if (arg2 === null && isConfig(arg3)) {
+        geometry = null;
+        config = arg3;
       } else {
         geometry = null;
         config = {};
@@ -2831,6 +2842,7 @@ fn main(input: VertexInput) -> VertexOutput {
     const level = config.level !== void 0 ? config.level : 0;
     const blend = config.blend || "normal";
     const primitive = config.primitive || "triangles";
+    const sprite = config.sprite || null;
     if (output) try {
       var glsl = this.glsl(output);
       this.synth.currentFunctions = [];
@@ -2844,7 +2856,8 @@ fn main(input: VertexInput) -> VertexOutput {
         passes: glsl,
         vertexData: geometry,
         blendMode: blend,
-        primitive
+        primitive,
+        sprite
       });
     } catch (error) {
       console.warn("shader could not compile", error);
@@ -2909,6 +2922,7 @@ fn main(input: VertexInput) -> VertexOutput {
   uniform vec2 resolution;
   varying vec2 uv;
   uniform sampler2D prevBuffer;
+  uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax
 
   ${Object.values(utilityGlsl).map((transform) => {
         return `
@@ -2923,7 +2937,9 @@ fn main(input: VertexInput) -> VertexOutput {
       }).join("")}
 
   void main () {
-    vec2 st = uv;
+    // Transform UV for sprite sheet picking
+    // u_spriteUV: x=uMin, y=vMin, z=uMax, w=vMax (default 0,0,1,1 = full texture)
+    vec2 st = u_spriteUV.xy + uv * (u_spriteUV.zw - u_spriteUV.xy);
 
     gl_FragColor = ${shaderInfo.fragColor};
   }
@@ -22563,6 +22579,225 @@ fn main(input: VertexInput) -> VertexOutput {
     }
     return new VertexSource(verts);
   }
+  class SpriteSheet {
+    constructor(options = {}) {
+      this.cols = options.cols || 1;
+      this.rows = options.rows || 1;
+      this.total = this.cols * this.rows;
+      this.cells = options.cells || null;
+      this.source = options.source || null;
+      this.padding = options.padding || 0;
+    }
+    // Get UV bounds for a cell index
+    // Returns { uMin, vMin, uMax, vMax }
+    getUVBounds(index) {
+      const idx = typeof index === "function" ? index() : index;
+      const i2 = Math.floor(idx) % this.total;
+      const safeIndex = i2 < 0 ? i2 + this.total : i2;
+      if (this.cells) {
+        const cell = this.cells[safeIndex] || this.cells[0];
+        return {
+          uMin: cell.x,
+          vMin: cell.y,
+          uMax: cell.x + cell.width,
+          vMax: cell.y + cell.height
+        };
+      }
+      const col = safeIndex % this.cols;
+      const row = Math.floor(safeIndex / this.cols);
+      const cellWidth = (1 - this.padding * (this.cols + 1)) / this.cols;
+      const cellHeight = (1 - this.padding * (this.rows + 1)) / this.rows;
+      const uMin = this.padding + col * (cellWidth + this.padding);
+      const vMin = this.padding + row * (cellHeight + this.padding);
+      return {
+        uMin,
+        vMin,
+        uMax: uMin + cellWidth,
+        vMax: vMin + cellHeight
+      };
+    }
+    // Create a picker that returns UV bounds
+    // Can be static index, lambda, or Hydra source
+    pick(indexOrSource) {
+      return {
+        sheet: this,
+        index: indexOrSource,
+        type: "sprite-pick",
+        // Get UV bounds (called per-frame if lambda)
+        getUVBounds: () => this.getUVBounds(indexOrSource)
+      };
+    }
+    // Use material ID from vertex data
+    fromModel() {
+      return {
+        sheet: this,
+        type: "sprite-from-model",
+        // UV transform happens in shader using vertex materialId
+        getUVBounds: () => ({
+          uMin: 0,
+          vMin: 0,
+          uMax: 1,
+          vMax: 1,
+          useVertexMaterialId: true,
+          cols: this.cols,
+          rows: this.rows
+        })
+      };
+    }
+    // Get GLSL code for UV transformation
+    // For use in fragment shader
+    getGlslTransform(indexUniform = "u_spriteIndex") {
+      return `
+vec2 spriteUV(vec2 uv, float index) {
+  float idx = floor(mod(index, ${this.total}.0));
+  float col = mod(idx, ${this.cols}.0);
+  float row = floor(idx / ${this.cols}.0);
+  float cellW = 1.0 / ${this.cols}.0;
+  float cellH = 1.0 / ${this.rows}.0;
+  return vec2(
+    (col + uv.x) * cellW,
+    (row + uv.y) * cellH
+  );
+}
+`;
+    }
+    // Get WGSL code for UV transformation
+    getWgslTransform(indexUniform = "u_spriteIndex") {
+      return `
+fn spriteUV(uv: vec2f, index: f32) -> vec2f {
+  let idx = floor(index % ${this.total}.0);
+  let col = idx % ${this.cols}.0;
+  let row = floor(idx / ${this.cols}.0);
+  let cellW = 1.0 / ${this.cols}.0;
+  let cellH = 1.0 / ${this.rows}.0;
+  return vec2f(
+    (col + uv.x) * cellW,
+    (row + uv.y) * cellH
+  );
+}
+`;
+    }
+  }
+  function spriteSheet(source, cols = 1, rows = 1, options = {}) {
+    return new SpriteSheet({
+      source,
+      cols,
+      rows,
+      ...options
+    });
+  }
+  function spriteAtlas(source, cells, options = {}) {
+    return new SpriteSheet({
+      source,
+      cells,
+      ...options
+    });
+  }
+  function parseAseprite(json, source = null) {
+    const data2 = typeof json === "string" ? JSON.parse(json) : json;
+    const meta = data2.meta || {};
+    const size = meta.size || { w: 1, h: 1 };
+    const imageWidth = size.w;
+    const imageHeight = size.h;
+    const frames = data2.frames;
+    const cells = [];
+    const names = {};
+    const durations = [];
+    if (Array.isArray(frames)) {
+      frames.forEach((f, i2) => {
+        const cell = {
+          name: f.filename,
+          x: f.frame.x / imageWidth,
+          y: f.frame.y / imageHeight,
+          width: f.frame.w / imageWidth,
+          height: f.frame.h / imageHeight
+        };
+        names[f.filename] = i2;
+        cells.push(cell);
+        durations.push(f.duration || 100);
+      });
+    } else {
+      const keys = Object.keys(frames);
+      keys.forEach((key, i2) => {
+        const f = frames[key];
+        const cell = {
+          name: key,
+          x: f.frame.x / imageWidth,
+          y: f.frame.y / imageHeight,
+          width: f.frame.w / imageWidth,
+          height: f.frame.h / imageHeight
+        };
+        names[key] = i2;
+        cells.push(cell);
+        durations.push(f.duration || 100);
+      });
+    }
+    const animations = {};
+    const frameTags = meta.frameTags || [];
+    for (const tag of frameTags) {
+      animations[tag.name] = {
+        from: tag.from,
+        to: tag.to,
+        direction: tag.direction || "forward",
+        frames: []
+      };
+      for (let i2 = tag.from; i2 <= tag.to; i2++) {
+        animations[tag.name].frames.push(i2);
+      }
+    }
+    const sheet = new SpriteSheet({
+      source,
+      cells,
+      cols: cells.length,
+      // for compatibility
+      rows: 1
+    });
+    sheet.names = names;
+    sheet.durations = durations;
+    sheet.animations = animations;
+    sheet.imageWidth = imageWidth;
+    sheet.imageHeight = imageHeight;
+    sheet.playAnimation = function(animName, speed = 1) {
+      const anim = this.animations[animName];
+      if (!anim) {
+        console.warn(`Animation "${animName}" not found`);
+        return this.pick(0);
+      }
+      return {
+        sheet: this,
+        animation: anim,
+        type: "sprite-animation",
+        getUVBounds: () => {
+          const totalDuration = anim.frames.reduce((sum, i2) => sum + this.durations[i2], 0);
+          const now2 = typeof performance !== "undefined" ? performance.now() : Date.now();
+          let elapsed = now2 * speed % totalDuration;
+          let frameIndex = anim.from;
+          for (const i2 of anim.frames) {
+            elapsed -= this.durations[i2];
+            if (elapsed <= 0) {
+              frameIndex = i2;
+              break;
+            }
+          }
+          return this.getUVBounds(frameIndex);
+        }
+      };
+    };
+    sheet.pickByName = function(name) {
+      const index = this.names[name];
+      if (index === void 0) {
+        console.warn(`Frame "${name}" not found`);
+        return this.pick(0);
+      }
+      return this.pick(index);
+    };
+    return sheet;
+  }
+  async function loadAseprite(jsonUrl, source = null) {
+    const response = await fetch(jsonUrl);
+    const json = await response.json();
+    return parseAseprite(json, source);
+  }
   const GeneratorFunction = (function* () {
   }).constructor;
   let Mouse;
@@ -22636,7 +22871,12 @@ fn main(input: VertexInput) -> VertexOutput {
         poly,
         circle,
         line,
-        ring
+        ring,
+        // Sprite sheet helpers
+        spriteSheet,
+        spriteAtlas,
+        parseAseprite,
+        loadAseprite
       };
       if (makeGlobal) window.loadScript = this.loadScript;
       this.timeSinceLastUpdate = 0;

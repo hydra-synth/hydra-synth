@@ -196,7 +196,7 @@ function normalizeVertexOption(value, defaultValue) {
 // spriteLevel 0 clears the buffer before drawing
 // spriteLevel 1+ composites over previous content
 Output.prototype.registerSprite = function (spriteLevel, config) {
-  const { passes, vertexData, blendMode = 'normal', vertexOptions = null, primitive = 'triangles' } = config
+  const { passes, vertexData, blendMode = 'normal', vertexOptions = null, primitive = 'triangles', sprite = null } = config
   const pass = passes[0]
   const self = this
 
@@ -246,6 +246,18 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   const uniforms = Object.assign({}, pass.uniforms, {
     prevBuffer: () => self.fbos[self.pingPongIndex]
   })
+
+  // Add sprite UV uniform (default = full texture)
+  if (sprite && sprite.getUVBounds) {
+    // Dynamic sprite picker - call getUVBounds each frame
+    uniforms.u_spriteUV = () => {
+      const bounds = sprite.getUVBounds()
+      return [bounds.uMin, bounds.vMin, bounds.uMax, bounds.vMax]
+    }
+  } else {
+    // No sprite picking - use full texture
+    uniforms.u_spriteUV = [0, 0, 1, 1]
+  }
 
   // Add bounds uniforms for UV normalization (custom geometry only)
   if (rawVerts) {

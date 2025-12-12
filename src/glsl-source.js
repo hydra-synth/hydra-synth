@@ -50,7 +50,7 @@ function isConfig(arg) {
   if (Array.isArray(arg)) return false
   if (arg.vertices) return false  // VertexSource
   // Check for config keys
-  return 'level' in arg || 'blend' in arg || 'primitive' in arg
+  return 'level' in arg || 'blend' in arg || 'primitive' in arg || 'sprite' in arg
 }
 
 function isOutput(arg) {
@@ -86,6 +86,10 @@ GlslSource.prototype.out = function (arg1, arg2, arg3, arg4) {
       // out(output, config) - fullscreen with config
       geometry = null
       config = arg2
+    } else if (arg2 === null && isConfig(arg3)) {
+      // out(output, null, config) - explicit null geometry with config
+      geometry = null
+      config = arg3
     } else {
       // out(output) or out() - fullscreen
       geometry = null
@@ -102,6 +106,7 @@ GlslSource.prototype.out = function (arg1, arg2, arg3, arg4) {
   const level = config.level !== undefined ? config.level : 0
   const blend = config.blend || 'normal'
   const primitive = config.primitive || 'triangles'
+  const sprite = config.sprite || null
 
   if(output) try {
     var glsl = this.glsl(output)
@@ -120,7 +125,8 @@ GlslSource.prototype.out = function (arg1, arg2, arg3, arg4) {
       passes: glsl,
       vertexData: geometry,
       blendMode: blend,
-      primitive: primitive
+      primitive: primitive,
+      sprite: sprite
     })
   } catch (error) {
     console.warn('shader could not compile', error)
@@ -209,6 +215,7 @@ GlslSource.prototype.compile = function (transforms) {
   uniform vec2 resolution;
   varying vec2 uv;
   uniform sampler2D prevBuffer;
+  uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax
 
   ${Object.values(utilityGlsl).map((transform) => {
   //  console.log(transform.glsl)
@@ -224,7 +231,9 @@ GlslSource.prototype.compile = function (transforms) {
   }).join('')}
 
   void main () {
-    vec2 st = uv;
+    // Transform UV for sprite sheet picking
+    // u_spriteUV: x=uMin, y=vMin, z=uMax, w=vMax (default 0,0,1,1 = full texture)
+    vec2 st = u_spriteUV.xy + uv * (u_spriteUV.zw - u_spriteUV.xy);
 
     gl_FragColor = ${shaderInfo.fragColor};
   }

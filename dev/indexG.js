@@ -1,6 +1,4 @@
 import Hydra from "./../src/hydra-synth.js";
-import {BGSynth} from './../src/workers/BGSynth.js';
-import * as Comlink from "comlink";
 
 //const { fugitiveGeometry, exampleVideo, exampleResize, nonGlobalCanvas } = import('./examples.js')
 
@@ -40,44 +38,29 @@ function fitCanvas() {
 }
 
 window.addEventListener('resize', fitCanvas, false);
+fitCanvas();  // Initial sizing
 
 // *******************************************
 // test code follows:
 
+// Sprite Sheet Test
+s0.initImage('test-grid-4x4.png')
 
+// Create 4x4 sprite sheet
+const sheet = spriteSheet(s0, 4, 4)
 
- osc(10, 0.9, 300)
-.color(0.9, 0.7, 0.8)
-.diff(
-  osc(45, 0.3, 100)
-  .color(0.9, 0.9, 0.9)
-  .rotate(0.18)
-  .pixelate(12)
-  .kaleid()
-)
-.scrollX(10)
-.colorama()
-//.luma()
-.repeatX(4)
-.repeatY(4)
-.modulate(
-  osc(1, -0.9, 300)
-)
-.scale(2)
-.out()
+// Test 1: Full grid (no sprite picking)
+// src(s0).out(o0)
 
-s1.initCam();
-src(s1).out(o1);
-render()
+// Test 2: Static pick - show cell 5 (second row, second col)
+// src(s0).out(o0, null, { sprite: sheet.pick(5) })
 
-noise(()=>time, ()=>time / 10.).out(o2);
+// Test 3: Animated pick - cycle through cells
+src(s0).out(o0, null, { sprite: sheet.pick(() => Math.floor(time * 4) % 16) })
 
-
-s3.initVideo("https://media.giphy.com/media/26ufplp8yheSKUE00/giphy.mp4", {})
-//s3.initCam();
-src(s1).scale(1.1).blend(src(o3).scale(1.1), 0.8).out(o3);
-//src(s3).out(o3)
-render();
+console.log('Sprite sheet test - should show cell 5 (numbered "5")')
+console.log('spriteSheet:', sheet)
+console.log('pick(5):', sheet.pick(5))
 
 
 
