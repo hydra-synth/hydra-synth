@@ -79,16 +79,16 @@ render()
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Geometry helpers | ✓ Done | tri, quad, poly, circle, ring, line |
-| GPU transforms | ✓ Done | rotate, scale, offset (animated via lambdas) |
+| Geometry helpers | ✓ Done | tri, quad, poly, circle, ring, line, cube |
+| GPU transforms | ✓ Done | rotate, scale, offset, rotateX/Y/Z, perspective |
 | CPU transforms | ✓ Done | mirror, repeat |
 | Sprite levels + blend | ✓ Done | Painter's algorithm, level 0 clears, 1+ composites |
-| Model loading | TODO | OBJ first (simple parser), then glTF |
-| Sprite sheets | TODO | Atlas UV math in frag shader |
+| Model loading | ✓ Done | OBJ with materials, normals, UVs, auto-normalization |
+| Sprite sheets | ✓ Done | faceId-based cell picking, per-face materials |
 | Video matrices | TODO | Composite N sources to one output, index in |
 | Displacement mapping | TODO | Sample texture, offset verts in vertex shader |
-| Fixed 3D camera | TODO | Ortho + perspective, simple orbit controls |
-| Normals in vertex buffer | TODO | Required for lighting and displacement |
+| Fixed 3D camera | Partial | perspective() transform, needs orbit controls |
+| Normals in vertex buffer | ✓ Done | Parsed from OBJ (vn lines) |
 | Basic lighting | TODO | One directional + ambient |
 
 ---
@@ -127,26 +127,42 @@ struct VertexOut {
 
 ## Sprite Sheet / Video Matrix Design
 
-### Sprite Sheets
+### Sprite Sheets with FaceId (Implemented)
 
-Pack multiple textures into one atlas, index via UV math in frag shader.
+Each face of a 3D model can display a different cell from a sprite sheet atlas, based on the model's material assignments.
 
 ```javascript
-s0.initImage('sprites.png')
-const sheet = spriteSheet(s0, 4, 4)  // 4x4 grid
+// Load sprite sheet and model
+s0.initImage('sprites-4x4.png')
 
-// Static pick
-osc(10).out(o0, model, { sprite: sheet.pick(3) })
-
-// Animated
-osc(10).out(o0, model, { sprite: sheet.pick(() => Math.floor(time * 8) % 16) })
-
-// Driven by Hydra source
-noise(2).out(o1)
-osc(10).out(o0, model, { sprite: sheet.pick(o1) })
+loadObj('cube-with-materials.obj').then(cube => {
+  // Each face shows its material's cell from the 4x4 grid
+  // Material 0 → cell 0, Material 1 → cell 1, etc.
+  src(s0).out(o0,
+    cube.scale(0.6).rotateY(() => time).perspective(45),
+    { sprite: { cols: 4, rows: 4 } }
+  )
+})
 ```
 
-### Video Matrices
+### How FaceId Mapping Works
+
+1. OBJ `usemtl` lines assign material indices (0, 1, 2, ...) to faces
+2. Each vertex gets a `faceId` attribute matching its face's material
+3. Fragment shader uses faceId to select sprite cell in row-major order:
+   - faceId 0 → cell (0,0), faceId 1 → cell (1,0), faceId 4 → cell (0,1), etc.
+
+### Built-in Cube with Materials
+
+```javascript
+// cube() returns a VertexSource with faceIds 0-5 for the 6 faces
+src(s0).out(o0,
+  cube(0.5).rotateY(() => time).perspective(45),
+  { sprite: { cols: 4, rows: 4 } }
+)
+```
+
+### Video Matrices (TODO)
 
 Composite live sources into a grid on one output, then index like a sprite sheet:
 
@@ -155,41 +171,65 @@ src(s0).out(o3, quad(0.5, 0.5, -0.5, -0.5))  // top-left
 src(s1).out(o3, quad(0.5, 0.5, 0.5, -0.5), { level: 1 })   // top-right
 // ...
 
-const matrix = spriteSheet(o3, 2, 2)
-src(o3).out(o0, model, { sprite: matrix.pick(() => midiCC[16]) })
+// Future: use as sprite sheet
+src(o3).out(o0, model, { sprite: { cols: 2, rows: 2 } })
 ```
 
-### Two Paths to Sprite Index
-
-1. **From vertex:** Model's material ID baked into vertex buffer, passed flat to frag
-2. **From Hydra source:** Frag shader samples picker texture, quantizes to index
-
-Frag shader has both available; API chooses which:
+### Future: Dynamic Sprite Picking
 
 ```javascript
-{ sprite: sheet.fromModel() }        // use vertex materialId
-{ sprite: sheet.pick(noise(3)) }     // use dynamic source
+// Pick cell dynamically from Hydra source (not yet implemented)
+{ sprite: sheet.pick(noise(3)) }     // sample source to determine cell
 ```
 
 ---
 
-## Model Loading
+## Model Loading (Implemented)
 
-### Priority Formats
+### OBJ Loader
 
-| Format | Pros | Cons |
-|--------|------|------|
-| OBJ | Trivial parser (~50 lines), universal | No hierarchy, separate .mtl |
-| glTF/GLB | Modern standard, embedded textures, good JS libs | More complex |
+```javascript
+// Load and display a spinning 3D model
+loadObj('model.obj').then(model => {
+  src(s0).out(o0,
+    model.scale(0.6).rotateY(() => time).perspective(45)
+  )
+})
+
+// With axis swap for Blender exports (Z-up → Y-up)
+loadObj('blender-export.obj', { swapYZ: true }).then(model => { ... })
+```
+
+### Supported OBJ Features
+
+| Feature | OBJ Syntax | Notes |
+|---------|------------|-------|
+| Vertices | `v x y z` | Auto-centered and normalized to unit cube |
+| Normals | `vn x y z` | Optional, parsed if present |
+| UVs | `vt u v` | Optional, auto-generated per-face if missing |
+| Faces | `f v/vt/vn` | Triangles and quads (auto-triangulated) |
+| Materials | `usemtl name` | Maps to faceId for sprite sheet picking |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `swapYZ` | `false` | Swap Y and Z axes (Blender Z-up → WebGL Y-up) |
 
 ### Vertex Buffer Contents
 
 ```
-position: vec3
-uv: vec2
-normal: vec3
-materialId: u32  // maps to sprite sheet index
+position: vec3     // Auto-normalized to fit unit cube
+uv: vec2           // From OBJ or auto-generated per-face
+normal: vec3       // From OBJ (optional)
+faceId: float      // Material index for sprite sheet picking
 ```
+
+### Future: glTF/GLB
+
+| Format | Pros | Cons |
+|--------|------|------|
+| glTF/GLB | Modern standard, embedded textures, good JS libs | More complex |
 
 ---
 

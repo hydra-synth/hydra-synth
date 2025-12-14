@@ -2,6 +2,8 @@
 
 ## Geometry Helpers
 
+### 2D Shapes
+
 | Function | Description |
 |----------|-------------|
 | `tri(size, cx, cy)` | Triangle |
@@ -11,12 +13,22 @@
 | `ring(outerR, innerR, cx, cy, segs)` | Donut shape |
 | `line(x1, y1, x2, y2, thickness)` | Line segment |
 
+### 3D Shapes
+
+| Function | Description |
+|----------|-------------|
+| `cube(size)` | 3D cube with per-face UVs and faceIds |
+| `loadObj(url, options)` | Load OBJ file (async, returns Promise) |
+
 All return `VertexSource`, chainable with transforms.
-Coordinates are NDC: -1 to 1, center is (0,0).
+2D coordinates are NDC: -1 to 1, center is (0,0).
+3D models are auto-normalized to fit in a unit cube.
 
 ---
 
 ## Chainable Transforms (GPU, animated)
+
+### 2D Transforms
 
 | Transform | Description |
 |-----------|-------------|
@@ -25,12 +37,28 @@ Coordinates are NDC: -1 to 1, center is (0,0).
 | `.offset(x, y)` | Translate position |
 | `.translate(x, y)` | Alias for offset |
 
+### 3D Transforms
+
+| Transform | Description |
+|-----------|-------------|
+| `.rotateX(angle)` | Rotate around X axis |
+| `.rotateY(angle)` | Rotate around Y axis |
+| `.rotateZ(angle)` | Rotate around Z axis |
+| `.scale(x, y, z)` | 3D scale (z defaults to 1) |
+| `.offset(x, y, z)` | 3D translate |
+| `.perspective(fov, near, far)` | Perspective projection |
+
 ### Animation Examples
 
 ```javascript
+// 2D
 tri(0.3).rotate(() => time)
 poly(5, 0.4).scale(() => 0.5 + Math.sin(time) * 0.3)
 ring(0.3, 0.2).offset(() => Math.sin(time) * 0.5, () => Math.cos(time) * 0.5)
+
+// 3D
+cube(0.5).rotateY(() => time).rotateX(() => time * 0.3).perspective(45)
+loadObj('model.obj').then(m => m.scale(0.6).rotateY(() => time).perspective(45))
 ```
 
 ---
@@ -163,6 +191,55 @@ osc(30).out(o0, tri(0.15).repeat(3, 3, 0.5), { level: 1, blend: 'add' })
 gradient().out(o0, tri(0.3).mirror('xy').rotate(
   () => time * 0.2
 ), { level: 1 })
+```
+
+---
+
+## 3D Models
+
+### Loading OBJ Files
+
+```javascript
+loadObj('model.obj').then(model => {
+  osc(10).out(o0, model.scale(0.6).rotateY(() => time).perspective(45))
+})
+
+// Blender exports (Z-up) need axis swap
+loadObj('blender.obj', { swapYZ: true }).then(model => { ... })
+```
+
+### Built-in Cube
+
+```javascript
+osc(10).out(o0, cube(0.5).rotateY(() => time).perspective(45))
+```
+
+---
+
+## Sprite Sheets
+
+Map different sprite cells to different faces of a 3D model using materials.
+
+### Basic Usage
+
+```javascript
+s0.initImage('sprites-4x4.png')
+
+loadObj('cube-with-materials.obj').then(model => {
+  // Each material (usemtl) maps to a cell: 0→(0,0), 1→(1,0), 4→(0,1)...
+  src(s0).out(o0,
+    model.scale(0.6).rotateY(() => time).perspective(45),
+    { sprite: { cols: 4, rows: 4 } }
+  )
+})
+```
+
+### With Built-in Cube
+
+```javascript
+// cube() has faceIds 0-5 for front, back, top, bottom, right, left
+s0.initImage('dice.png')  // 4x4 grid with numbers
+src(s0).out(o0, cube(0.5).rotateY(() => time).perspective(45), { sprite: { cols: 4, rows: 4 } })
 ```
 
 ---
