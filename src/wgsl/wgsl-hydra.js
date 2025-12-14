@@ -192,6 +192,18 @@ class wgslHydra {
  	 	}
 	 }
 
+	// Lazily create depth texture for 3D rendering
+	ensureDepthTexture() {
+		if (this.depthTexture) return;
+		this.depthTexture = this.device.createTexture({
+			label: 'depthTexture',
+			size: { width: this.canvas.width, height: this.canvas.height },
+			format: 'depth24plus',
+			usage: GPUTextureUsage.RENDER_ATTACHMENT
+		});
+		this.depthTextureView = this.depthTexture.createView();
+	}
+
 	async setupHydra() {
 			if (trace) console.timeStamp("setupHydra");
 	      // Step 1: Check for WebGPU support
@@ -411,7 +423,8 @@ class wgslHydra {
 	//
 	async setupSpriteChain(chan, spriteLevel, config) {
 		if (trace) console.timeStamp("setupSpriteChain");
-		const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive } = config;
+		const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive, has3D,
+			hasExplicitUVs, hasFaceIds, uvs, faceIds, sprite } = config;
 
 		const rpe = this.renderPassInfo[chan];
 		rpe.outputObject = this.outputChannelObjects[chan];
@@ -428,6 +441,9 @@ class wgslHydra {
 		spe.uniformList = uniforms;
 		spe.blendMode = blendMode || 'normal';
 		spe.hasCustomGeometry = rawVerts !== null && rawVerts !== undefined;
+		spe.hasExplicitUVs = hasExplicitUVs || false;
+		spe.hasFaceIds = hasFaceIds || false;
+		spe.sprite = sprite || null;
 
 		// Generate uniform declarations for fragment shader
 		this.generateSpriteUniformDeclarations(spe);
@@ -444,13 +460,14 @@ class wgslHydra {
 			// Custom vertex shader with vertex buffer
 			spe.vertexWgsl = vertexWgsl;
 			spe.vertexUniforms = vertexUniforms || [];
+			spe.has3D = has3D || false;
 			spe.vertexShaderModule = this.device.createShaderModule({
 				label: `vert_c${chan}_s${spriteLevel}`,
 				code: vertexWgsl
 			});
 
 			// Create vertex buffer from raw vertices (reshape to vec3)
-			const verts = this.reshapeToVec3(rawVerts);
+			const verts = this.reshapeToVec3(rawVerts, spe.has3D);
 			spe.vertexCount = verts.length;
 			const vertexData = new Float32Array(verts.flat());
 			spe.vertexBuffer = this.device.createBuffer({
@@ -459,6 +476,28 @@ class wgslHydra {
 				usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 			});
 			this.device.queue.writeBuffer(spe.vertexBuffer, 0, vertexData);
+
+			// Create UV buffer if explicit UVs provided
+			if (spe.hasExplicitUVs && uvs && uvs.length > 0) {
+				const uvData = new Float32Array(uvs);
+				spe.uvBuffer = this.device.createBuffer({
+					label: `uvbuf_c${chan}_s${spriteLevel}`,
+					size: uvData.byteLength,
+					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+				});
+				this.device.queue.writeBuffer(spe.uvBuffer, 0, uvData);
+			}
+
+			// Create faceId buffer if faceIds provided
+			if (spe.hasFaceIds && faceIds && faceIds.length > 0) {
+				const faceIdData = new Float32Array(faceIds);
+				spe.faceIdBuffer = this.device.createBuffer({
+					label: `faceidbuf_c${chan}_s${spriteLevel}`,
+					size: faceIdData.byteLength,
+					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+				});
+				this.device.queue.writeBuffer(spe.faceIdBuffer, 0, faceIdData);
+			}
 
 			// Setup vertex uniform buffer if needed
 			if (spe.vertexUniforms.length > 0) {
@@ -503,14 +542,50 @@ class wgslHydra {
 
 		// Add vertex buffer layout if custom geometry
 		if (spe.hasCustomGeometry) {
-			pipelineDescriptor.vertex.buffers = [{
-				arrayStride: 12, // 3 floats * 4 bytes
+			const bufferLayouts = [{
+				arrayStride: 12, // 3 floats * 4 bytes (position)
 				attributes: [{
 					shaderLocation: 0,
 					offset: 0,
 					format: 'float32x3'
 				}]
 			}];
+
+			// Add UV buffer layout if explicit UVs
+			if (spe.hasExplicitUVs && spe.uvBuffer) {
+				bufferLayouts.push({
+					arrayStride: 8, // 2 floats * 4 bytes (texcoord)
+					attributes: [{
+						shaderLocation: 1,
+						offset: 0,
+						format: 'float32x2'
+					}]
+				});
+			}
+
+			// Add faceId buffer layout if faceIds
+			if (spe.hasFaceIds && spe.faceIdBuffer) {
+				bufferLayouts.push({
+					arrayStride: 4, // 1 float * 4 bytes (faceId)
+					attributes: [{
+						shaderLocation: 2,
+						offset: 0,
+						format: 'float32'
+					}]
+				});
+			}
+
+			pipelineDescriptor.vertex.buffers = bufferLayouts;
+		}
+
+		// Add depth testing for 3D geometry
+		if (spe.has3D) {
+			this.ensureDepthTexture();
+			pipelineDescriptor.depthStencil = {
+				format: 'depth24plus',
+				depthWriteEnabled: true,
+				depthCompare: 'less'
+			};
 		}
 
 		spe.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
@@ -529,6 +604,12 @@ class wgslHydra {
 				if (spe.vertexBuffer) {
 					spe.vertexBuffer.destroy();
 				}
+				if (spe.uvBuffer) {
+					spe.uvBuffer.destroy();
+				}
+				if (spe.faceIdBuffer) {
+					spe.faceIdBuffer.destroy();
+				}
 				if (spe.vertexUniformBuffer) {
 					spe.vertexUniformBuffer.destroy();
 				}
@@ -537,10 +618,10 @@ class wgslHydra {
 		}
 	}
 
-	// Reshape 2D vertex data to vec3 format
-	reshapeToVec3(flatArray) {
+	// Reshape vertex data to vec3 format
+	// is3D: explicit flag indicating 3D data (required for ambiguous lengths divisible by both 2 and 3)
+	reshapeToVec3(flatArray, is3D = false) {
 		const len = flatArray.length;
-		const is3D = len % 3 === 0 && len % 2 !== 0;
 		const stride = is3D ? 3 : 2;
 		const verts = [];
 		for (let i = 0; i < len; i += stride) {
@@ -555,13 +636,25 @@ class wgslHydra {
 
 	// Setup vertex uniform buffer
 	setupVertexUniforms(spe) {
-		// Calculate buffer size (f32 = 4 bytes, vec2f = 8 bytes)
+		// Calculate buffer size with proper WGSL alignment
+		// f32 = 4 bytes (align 4), vec2f = 8 bytes (align 8), vec3f = 12 bytes (align 16)
 		let size = 0;
 		for (const u of spe.vertexUniforms) {
-			if (u.type === 'f32') size += 4;
-			else if (u.type === 'vec2f') size += 8;
+			if (u.type === 'f32') {
+				// Align to 4 bytes
+				size = Math.ceil(size / 4) * 4;
+				size += 4;
+			} else if (u.type === 'vec2f') {
+				// Align to 8 bytes
+				size = Math.ceil(size / 8) * 8;
+				size += 8;
+			} else if (u.type === 'vec3f') {
+				// Align to 16 bytes (WGSL requirement)
+				size = Math.ceil(size / 16) * 16;
+				size += 12; // vec3f is 12 bytes but needs 16-byte alignment
+			}
 		}
-		// Align to 16 bytes
+		// Align total to 16 bytes
 		size = Math.ceil(size / 16) * 16;
 
 		spe.vertexUniformBuffer = this.device.createBuffer({
@@ -707,21 +800,53 @@ class wgslHydra {
 	updateVertexUniforms(spe) {
 		if (!spe.vertexUniforms || spe.vertexUniforms.length === 0) return;
 
-		const data = [];
+		// Calculate total size with alignment (matches setupVertexUniforms)
+		let totalSize = 0;
+		for (const u of spe.vertexUniforms) {
+			if (u.type === 'f32') {
+				totalSize = Math.ceil(totalSize / 4) * 4;
+				totalSize += 4;
+			} else if (u.type === 'vec2f') {
+				totalSize = Math.ceil(totalSize / 8) * 8;
+				totalSize += 8;
+			} else if (u.type === 'vec3f') {
+				totalSize = Math.ceil(totalSize / 16) * 16;
+				totalSize += 12;
+			}
+		}
+		totalSize = Math.ceil(totalSize / 16) * 16;
+
+		// Create buffer with proper alignment
+		const floatData = new Float32Array(Math.max(totalSize / 4, 4));
+		let offset = 0;
+
 		for (const u of spe.vertexUniforms) {
 			let val = typeof u.value === 'function' ? u.value() : u.value;
-			if (Array.isArray(val)) {
-				// Handle arrays that may contain lambdas
-				data.push(...val.map(v => typeof v === 'function' ? v() : v));
-			} else {
-				data.push(val);
+
+			if (u.type === 'f32') {
+				// Align to 4 bytes (1 float)
+				offset = Math.ceil(offset);
+				const v = Array.isArray(val) ? val[0] : val;
+				floatData[offset] = typeof v === 'function' ? v() : v;
+				offset += 1;
+			} else if (u.type === 'vec2f') {
+				// Align to 8 bytes (2 floats)
+				offset = Math.ceil(offset / 2) * 2;
+				const arr = Array.isArray(val) ? val : [val, val];
+				floatData[offset] = typeof arr[0] === 'function' ? arr[0]() : arr[0];
+				floatData[offset + 1] = typeof arr[1] === 'function' ? arr[1]() : arr[1];
+				offset += 2;
+			} else if (u.type === 'vec3f') {
+				// Align to 16 bytes (4 floats)
+				offset = Math.ceil(offset / 4) * 4;
+				const arr = Array.isArray(val) ? val : [val, val, val];
+				floatData[offset] = typeof arr[0] === 'function' ? arr[0]() : arr[0];
+				floatData[offset + 1] = typeof arr[1] === 'function' ? arr[1]() : arr[1];
+				floatData[offset + 2] = typeof arr[2] === 'function' ? arr[2]() : arr[2];
+				offset += 3;
 			}
 		}
 
-		// Pad to 4 floats minimum
-		while (data.length < 4) data.push(0);
-
-		const floatData = new Float32Array(data);
 		this.device.queue.writeBuffer(spe.vertexUniformBuffer, 0, floatData);
 	}
 
@@ -788,6 +913,16 @@ class wgslHydra {
 						}],
 					};
 
+					// Add depth attachment for 3D geometry
+					if (spe.has3D && this.depthTextureView) {
+						renderPassDescriptor.depthStencilAttachment = {
+							view: this.depthTextureView,
+							depthClearValue: 1.0,
+							depthLoadOp: level === 0 ? 'clear' : 'load',
+							depthStoreOp: 'store'
+						};
+					}
+
 					// Fill bind group for fragment uniforms
 					let ubgData = this.fillSpriteBindGroup(spe);
 					let ubg = this.device.createBindGroup(ubgData);
@@ -796,6 +931,16 @@ class wgslHydra {
 					if (spe.vertexUniforms && spe.vertexUniforms.length > 0) {
 						this.updateVertexUniforms(spe);
 					}
+
+					// Update spriteGrid uniform for this sprite
+					if (spe.sprite && spe.sprite.cols && spe.sprite.rows) {
+						this.spriteGridUniformValues[0] = spe.sprite.cols;
+						this.spriteGridUniformValues[1] = spe.sprite.rows;
+					} else {
+						this.spriteGridUniformValues[0] = 1;
+						this.spriteGridUniformValues[1] = 1;
+					}
+					this.device.queue.writeBuffer(this.spriteGridUniformBuffer, 0, this.spriteGridUniformValues);
 
 					if (trace) console.timeStamp("spritepass");
 					const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
@@ -811,6 +956,14 @@ class wgslHydra {
 					// Set vertex buffer if custom geometry
 					if (spe.hasCustomGeometry && spe.vertexBuffer) {
 						passEncoder.setVertexBuffer(0, spe.vertexBuffer);
+						// Set UV buffer if explicit UVs
+						if (spe.hasExplicitUVs && spe.uvBuffer) {
+							passEncoder.setVertexBuffer(1, spe.uvBuffer);
+						}
+						// Set faceId buffer if faceIds
+						if (spe.hasFaceIds && spe.faceIdBuffer) {
+							passEncoder.setVertexBuffer(2, spe.faceIdBuffer);
+						}
 						passEncoder.draw(spe.vertexCount);
 					} else {
 						passEncoder.draw(6);

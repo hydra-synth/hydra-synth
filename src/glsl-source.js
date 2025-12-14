@@ -197,11 +197,11 @@ GlslSource.prototype.compile = function (transforms) {
 
     // If using sprite grid (cols > 1 or rows > 1), use faceId to pick cell
     if (u_spriteGrid.x > 1.0 || u_spriteGrid.y > 1.0) {
-      // faceId maps to cell in row-major order
+      // faceId maps to cell in row-major order (left-to-right, top-to-bottom)
       let cellX = ourIn.faceId % u_spriteGrid.x;
       let cellY = floor(ourIn.faceId / u_spriteGrid.x);
-      let cellSize = vec2f(1.0 / u_spriteGrid.x, 1.0 / u_spriteGrid.y);
-      st = ourIn.texcoord * cellSize + vec2f(cellX, cellY) * cellSize;
+      let cellSize = vec2<f32>(1.0 / u_spriteGrid.x, 1.0 / u_spriteGrid.y);
+      st = ourIn.texcoord * cellSize + vec2<f32>(cellX, cellY) * cellSize;
     } else {
       // Fallback to u_spriteUV for single sprite picking
       st = u_spriteUV.xy + ourIn.texcoord * (u_spriteUV.zw - u_spriteUV.xy);
@@ -249,7 +249,7 @@ GlslSource.prototype.compile = function (transforms) {
     vec2 st;
     // If using sprite grid (cols > 1 or rows > 1), use faceId to pick cell
     if (u_spriteGrid.x > 1.0 || u_spriteGrid.y > 1.0) {
-      // faceId maps to cell in row-major order
+      // faceId maps to cell in row-major order (left-to-right, top-to-bottom)
       float cellX = mod(v_faceId, u_spriteGrid.x);
       float cellY = floor(v_faceId / u_spriteGrid.x);
       vec2 cellSize = vec2(1.0 / u_spriteGrid.x, 1.0 / u_spriteGrid.y);

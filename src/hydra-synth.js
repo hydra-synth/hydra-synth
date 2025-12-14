@@ -13,7 +13,7 @@ import regl from 'regl'
 // const window = global.window
 import {wgslHydra} from './wgsl/wgsl-hydra.js';
 import {Deglobalize} from './Deglobalize.js';
-import { tri, quad, poly, circle, line, ring } from './lib/geometry.js';
+import { tri, quad, poly, circle, line, ring, cube, loadObj } from './lib/geometry.js';
 import { spriteSheet, spriteAtlas, parseAseprite, loadAseprite } from './lib/sprite-sheet.js';
 
 const GeneratorFunction = function* () {}.constructor;
@@ -92,6 +92,8 @@ class HydraRenderer {
       circle: circle,
       line: line,
       ring: ring,
+      cube: cube,
+      loadObj: loadObj,
       // Sprite sheet helpers
       spriteSheet: spriteSheet,
       spriteAtlas: spriteAtlas,

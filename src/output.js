@@ -279,7 +279,9 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
     // Check for face IDs from VertexSource (e.g., cube for per-face materials)
     if (vertexSource && vertexSource.faceIds && vertexSource.faceIds.length > 0) {
       hasFaceIds = true
-      faceIdBuffer = this.regl.buffer(vertexSource.faceIds)
+      // Wrap each faceId in array for explicit per-vertex scalar format
+      // This matches how position [[x,y,z],...] and texcoord [[u,v],...] are structured
+      faceIdBuffer = this.regl.buffer(vertexSource.faceIds.map(id => [id]))
     }
   } else {
     // Default fullscreen triangle

@@ -28,7 +28,7 @@ let hydra2;
 let wgsl = false;
 
 // Run in foreground 
-	 hydra = new Hydra({canvas: canvas, detectAudio:true, makeGlobal: true, useWGSL: wgsl}) // true false
+	 hydra = new Hydra({canvas: canvas, detectAudio:true, useWGSL: false, makeGlobal: true, useWGSL: wgsl}) // true false
 	 if (wgsl) await hydra.wgslPromise;
 
 function fitCanvas() {
@@ -42,17 +42,32 @@ fitCanvas();  // Initial sizing
 
 // *******************************************
 // test code follows:
+/*
+// 3D OBJ Model Test - Spinning head
+loadObj('dev/headsSortedRandom.obj', { swapYZ: true }).then(head => {
+  osc(10, 0.1, 1.5)
+    .color(0.9, 0.5, 0.3)
+    .out(o0, head.scale(0.8).rotateY(() => time).rotateX(() => time * 0.3).perspective(45))
+})
 
-// 3D Cube Test - Die with per-face textures
+*/
+// 3D OBJ Cube Test - Each face gets different sprite cell
 s0.initImage('test-grid-4x4.png')
 
-// Create spinning die cube with 4x4 sprite grid (faces 0-5 map to first 6 cells)
-src(s0).out(o0, cube(0.4).rotateY(() => time).rotateX(() => time * 0.7).perspective(45), { sprite: { cols: 4, rows: 4 } })
+loadObj('dev/test-cube.obj').then(cube => {
+  console.log('Materials:', cube.materialNames)
+  console.log('FaceIds:', cube.faceIds?.length, 'vertices')
+  console.log('UVs:', cube.uvs?.length / 2, 'UV pairs (should match vertex count)')
+  // Show unique faceIds (should be 0-5 for 6 materials)
+  const uniqueIds = [...new Set(cube.faceIds)]
+  console.log('Unique faceIds:', uniqueIds, '(expecting 0-5 for 6 faces)')
 
-console.log('3D Die test - each face should show different cell from sprite grid')
-
-
-
+  // Test sprite sheet mapping: each face should show a different cell
+  src(s0).out(o0,
+    cube.scale(0.6).rotateY(() => time).rotateX(() => time * 0.7).perspective(45),
+    { sprite: { cols: 4, rows: 4 } }
+  )
+})
 
 	//hydra2.s[1].init({src: hydra.s[0].tex, dynamic: true});
 // *******************************************

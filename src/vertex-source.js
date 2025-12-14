@@ -528,20 +528,22 @@ ${allUniformFields.join('\n')}
     inputFields.push('  @location(2) faceId: f32,')
   }
 
-  // Build vertex output struct - always include faceId for fragment compatibility
+  // Build vertex output struct
   const outputFields = [
     '  @builtin(position) position: vec4f,',
     '  @location(0) texcoord: vec2f,',
-    '  @location(1) faceId: f32,'
+    '  @location(1) faceId: f32,'  // Always include for fragment shader compatibility
   ]
-
-  // FaceId passthrough - use attribute if available, else default to 0
-  const faceIdCode = useFaceIds ? 'output.faceId = input.faceId;' : 'output.faceId = 0.0;'
 
   // UV computation
   const uvCode = useExplicitUVs
     ? 'output.texcoord = input.texcoord;'
     : 'output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);'
+
+  // FaceId passthrough
+  const faceIdCode = useFaceIds
+    ? 'output.faceId = input.faceId;'
+    : 'output.faceId = 0.0;'
 
   // Build the vertex shader
   let wgsl
@@ -583,6 +585,7 @@ fn main(input: VertexInput) -> VertexOutput {
 
   // UV
   ${uvCode}
+  // FaceId
   ${faceIdCode}
 
   // Apply transforms (3D)
@@ -609,6 +612,7 @@ fn main(input: VertexInput) -> VertexOutput {
 
   // UV
   ${uvCode}
+  // FaceId
   ${faceIdCode}
 
   // Apply transforms (2D)
