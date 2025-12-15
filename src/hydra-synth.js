@@ -16,7 +16,7 @@ import {Deglobalize} from './Deglobalize.js';
 import { tri, quad, poly, circle, line, ring, cube, loadObj, loadGlb, parseGlb, extractGlbTextures, createGlbSpriteSheet } from './lib/geometry.js';
 import { spriteSheet, spriteAtlas, parseAseprite, loadAseprite } from './lib/sprite-sheet.js';
 
-const GeneratorFunction = function* () {}.constructor;
+const AsyncGeneratorFunction = async function* () {}.constructor;
 
 let Mouse;
 if (!(typeof self !== 'undefined' && self.constructor && self.constructor.name === 'DedicatedWorkerGlobalScope')) {
@@ -224,7 +224,7 @@ class HydraRenderer {
     keys.push("_h"); // _h used for fixing-up primitive-valued 'global' references, like "time".
     values.push(h);
     try {
-    	let fn = new GeneratorFunction(...keys, code);
+    	let fn = new AsyncGeneratorFunction(...keys, code);
     	this.done = false;
     	this.generatorFunction = fn(...values);
     } catch (err) {
@@ -235,7 +235,7 @@ class HydraRenderer {
     }
     this.generatorFunctionTimer = -1;
     try {
-    	let reply = this.generatorFunction.next();
+    	let reply = await this.generatorFunction.next();
     	this.planNext(reply);
     } catch (err) {
     	console.log("Error calling initial generator function.next()");
@@ -246,7 +246,7 @@ class HydraRenderer {
 }
 
 // Called from the general tick() function.
- generatorTick() {
+ async generatorTick() {
 	if (!this.generatorFunction || this.generatorFunctionTimer === -1) return;
 	if (this.synth.time < this.generatorFunctionTimer) return;
 	let f = this.generatorFunction;
@@ -254,7 +254,7 @@ class HydraRenderer {
 			this.generatorFunctionTimer = -1;
 	} else
 	try {
-		let reply = f.next();
+		let reply = await f.next();
 		this.planNext(reply);
 	} catch (err) {
     	console.log("Error calling generator function.next()");

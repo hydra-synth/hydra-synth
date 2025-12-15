@@ -301,11 +301,12 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
   let glsl
   if (has3D) {
     const projectionCode = hasPerspective ? `
-      // Perspective projection
+      // Perspective projection with aspect ratio correction
       float fov = ${perspectiveUniform}.x;
       float near = ${perspectiveUniform}.y;
       float far = ${perspectiveUniform}.z;
       float f = 1.0 / tan(radians(fov) / 2.0);
+      float aspect = resolution.x / resolution.y;
       float rangeInv = 1.0 / (near - far);
 
       // Move camera back
@@ -314,13 +315,14 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       // Apply perspective
       float w = -pos.z;
       gl_Position = vec4(
-        pos.x * f,
+        pos.x * f / aspect,
         pos.y * f,
         (pos.z * (near + far) + 2.0 * near * far) * rangeInv,
         w
       );` : `
       // Simple projection - just use z for depth, no perspective divide
-      gl_Position = vec4(pos.xy, pos.z * 0.1, 1.0);`
+      float aspect = resolution.x / resolution.y;
+      gl_Position = vec4(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`
 
     glsl = `
     precision ${precision} float;
@@ -330,6 +332,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     varying vec2 uv;
     ${faceIdVaryingDecl}
 
+    uniform vec2 resolution;
     uniform vec2 u_boundsMin;
     uniform vec2 u_boundsMax;
     ${uniformDecls.join('\n    ')}
@@ -549,11 +552,12 @@ ${allUniformFields.join('\n')}
   let wgsl
   if (has3D) {
     const projectionCode = hasPerspective ? `
-      // Perspective projection
+      // Perspective projection with aspect ratio correction
       let fov = vtx.${perspectiveUniform}.x;
       let near = vtx.${perspectiveUniform}.y;
       let far = vtx.${perspectiveUniform}.z;
       let f = 1.0 / tan(radians(fov) / 2.0);
+      let aspect = resolution.x / resolution.y;
       let rangeInv = 1.0 / (near - far);
 
       // Move camera back
@@ -562,13 +566,14 @@ ${allUniformFields.join('\n')}
       // Apply perspective
       let w = -pos.z;
       output.position = vec4f(
-        pos.x * f,
+        pos.x * f / aspect,
         pos.y * f,
         (pos.z * (near + far) + 2.0 * near * far) * rangeInv,
         w
       );` : `
       // Simple projection - just use z for depth, no perspective divide
-      output.position = vec4f(pos.xy, pos.z * 0.1, 1.0);`
+      let aspect = resolution.x / resolution.y;
+      output.position = vec4f(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`
 
     wgsl = `struct VertexInput {
 ${inputFields.join('\n')}
@@ -578,6 +583,7 @@ struct VertexOutput {
 ${outputFields.join('\n')}
 };
 
+@group(0) @binding(1) var<uniform> resolution: vec2f;
 ${uniformStruct}
 @vertex
 fn main(input: VertexInput) -> VertexOutput {

@@ -67,8 +67,30 @@ class HydraSource {
       if (!this.wgsl) {
       	this.tex = this.regl.texture({ data: this.src, ...params })
       } else {
-      	this.indirect = true;
-      	this.tex = opts.src.tex;
+        // Check if src already has a .tex property (e.g., another HydraSource)
+        if (opts.src.tex) {
+          this.indirect = true;
+          this.tex = opts.src.tex;
+        } else {
+          // src is an Image/Video/Canvas - create WGSL texture from it
+          const w = opts.src.width || opts.src.videoWidth || this.width;
+          const h = opts.src.height || opts.src.videoHeight || this.height;
+          this.width = w;
+          this.height = h;
+          this.tex = this.wgsl.device.createTexture({
+            size: [w, h, 1],
+            format: this.wgsl.format,
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+          });
+          // Copy image data to texture
+          this.wgsl.device.queue.copyExternalImageToTexture(
+            { source: opts.src, flipY: true },
+            { texture: this.tex },
+            [w, h]
+          );
+          this.indirect = false;
+          this.lastTextureView = undefined; // Clear cached view
+        }
       }
     }
     if ('dynamic' in opts) this.dynamic = opts.dynamic

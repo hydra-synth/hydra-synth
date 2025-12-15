@@ -376,7 +376,13 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
 export async function loadGlb(url, options = {}) {
   const { extractTextures = true, ...parseOptions } = options
   const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to load GLB from ${url}: ${response.status} ${response.statusText}`)
+  }
   const arrayBuffer = await response.arrayBuffer()
+  if (arrayBuffer.byteLength < 12) {
+    throw new Error(`Invalid GLB file from ${url}: file too small (${arrayBuffer.byteLength} bytes)`)
+  }
   const model = parseGlb(arrayBuffer, parseOptions)
 
   // Attach embedded texture to model if available

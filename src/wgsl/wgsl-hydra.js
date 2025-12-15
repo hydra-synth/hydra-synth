@@ -262,7 +262,7 @@ class wgslHydra {
     	},
     	{
       	binding: 1, // Binding index "resolution"
-     	  visibility: GPUShaderStage.FRAGMENT, // Shader stages where this binding is used
+     	  visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, // Shader stages where this binding is used
       	buffer: { type: "uniform" }, // Resource type
     	},
     	{
@@ -894,6 +894,7 @@ class wgslHydra {
 			if (hasSprites) {
 				// Render sprites in level order
 				const levels = Array.from(rpe.sprites.keys()).sort((a, b) => a - b);
+				let depthCleared = false;  // Track if depth buffer has been cleared this frame
 
 				for (let i = 0; i < levels.length; i++) {
 					const level = levels[i];
@@ -914,11 +915,14 @@ class wgslHydra {
 					};
 
 					// Add depth attachment for 3D geometry
+					// Clear depth on first 3D sprite of the frame, regardless of level
 					if (spe.has3D && this.depthTextureView) {
+						const shouldClearDepth = !depthCleared;
+						depthCleared = true;
 						renderPassDescriptor.depthStencilAttachment = {
 							view: this.depthTextureView,
 							depthClearValue: 1.0,
-							depthLoadOp: level === 0 ? 'clear' : 'load',
+							depthLoadOp: shouldClearDepth ? 'clear' : 'load',
 							depthStoreOp: 'store'
 						};
 					}
