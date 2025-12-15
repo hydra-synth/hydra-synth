@@ -154,6 +154,349 @@ export async function loadObj(url, options = {}) {
   return parseObj(text, options)
 }
 
+// ============================================================================
+// GLB/glTF Loader
+// ============================================================================
+
+// Parse GLB binary file and return VertexSource
+// GLB format: 12-byte header + JSON chunk + BIN chunk
+// Options:
+//   meshIndex: which mesh to load (default 0)
+//   primitiveIndex: which primitive to load (default: all primitives combined)
+export function parseGlb(arrayBuffer, options = {}) {
+  const { meshIndex = 0, primitiveIndex } = options  // primitiveIndex undefined = load all
+  const view = new DataView(arrayBuffer)
+
+  // Parse GLB header (12 bytes)
+  const magic = view.getUint32(0, true)
+  if (magic !== 0x46546C67) { // "glTF" in little-endian
+    throw new Error('Invalid GLB file: bad magic number')
+  }
+  const version = view.getUint32(4, true)
+  if (version !== 2) {
+    throw new Error(`Unsupported glTF version: ${version}`)
+  }
+  // const length = view.getUint32(8, true)
+
+  // Parse chunks
+  let jsonChunk = null
+  let binChunk = null
+  let offset = 12
+
+  while (offset < arrayBuffer.byteLength) {
+    const chunkLength = view.getUint32(offset, true)
+    const chunkType = view.getUint32(offset + 4, true)
+    const chunkData = new Uint8Array(arrayBuffer, offset + 8, chunkLength)
+
+    if (chunkType === 0x4E4F534A) { // JSON
+      const decoder = new TextDecoder('utf-8')
+      jsonChunk = JSON.parse(decoder.decode(chunkData))
+    } else if (chunkType === 0x004E4942) { // BIN
+      binChunk = chunkData.buffer.slice(chunkData.byteOffset, chunkData.byteOffset + chunkData.byteLength)
+    }
+
+    offset += 8 + chunkLength
+    // Align to 4-byte boundary
+    if (offset % 4 !== 0) offset += 4 - (offset % 4)
+  }
+
+  if (!jsonChunk) throw new Error('GLB missing JSON chunk')
+
+  return extractMeshFromGltf(jsonChunk, binChunk, meshIndex, primitiveIndex)
+}
+
+// Extract mesh data from glTF JSON and binary buffer
+// Combines all primitives in the mesh into a single VertexSource
+function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
+  const mesh = gltf.meshes?.[meshIndex]
+  if (!mesh) throw new Error(`Mesh ${meshIndex} not found`)
+
+  // Helper to read accessor data
+  const readAccessor = (accessorIndex) => {
+    const accessor = gltf.accessors[accessorIndex]
+    const bufferView = gltf.bufferViews[accessor.bufferView]
+    const componentType = accessor.componentType
+    const count = accessor.count
+    const type = accessor.type
+
+    // Component counts for each type
+    const typeComponents = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 }
+    const components = typeComponents[type] || 1
+
+    // Get the right typed array constructor
+    const TypedArray = {
+      5120: Int8Array,    // BYTE
+      5121: Uint8Array,   // UNSIGNED_BYTE
+      5122: Int16Array,   // SHORT
+      5123: Uint16Array,  // UNSIGNED_SHORT
+      5125: Uint32Array,  // UNSIGNED_INT
+      5126: Float32Array  // FLOAT
+    }[componentType]
+
+    if (!TypedArray) throw new Error(`Unsupported component type: ${componentType}`)
+
+    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0)
+    const byteStride = bufferView.byteStride || 0
+
+    // If tightly packed, read directly
+    if (byteStride === 0 || byteStride === components * TypedArray.BYTES_PER_ELEMENT) {
+      return new TypedArray(binBuffer, byteOffset, count * components)
+    }
+
+    // Otherwise, handle stride
+    const result = new TypedArray(count * components)
+    const srcView = new DataView(binBuffer)
+    for (let i = 0; i < count; i++) {
+      const srcOffset = byteOffset + i * byteStride
+      for (let j = 0; j < components; j++) {
+        if (TypedArray === Float32Array) {
+          result[i * components + j] = srcView.getFloat32(srcOffset + j * 4, true)
+        } else if (TypedArray === Uint16Array) {
+          result[i * components + j] = srcView.getUint16(srcOffset + j * 2, true)
+        } else if (TypedArray === Uint32Array) {
+          result[i * components + j] = srcView.getUint32(srcOffset + j * 4, true)
+        }
+      }
+    }
+    return result
+  }
+
+  // Determine which primitives to load
+  const primitives = primitiveIndex !== undefined
+    ? [mesh.primitives[primitiveIndex]]
+    : mesh.primitives  // Load all primitives if no specific index given
+
+  if (!primitives || primitives.length === 0) {
+    throw new Error(`No primitives found in mesh ${meshIndex}`)
+  }
+
+  // Accumulate vertices from all primitives
+  const verts = []
+  const outNormals = []
+  const outUVs = []
+  let hasAnyUVs = false
+  let hasAnyNormals = false
+
+  for (const primitive of primitives) {
+    const positionAccessor = primitive.attributes.POSITION
+    if (positionAccessor === undefined) continue  // Skip primitives without positions
+
+    const positions = readAccessor(positionAccessor)
+    const normals = primitive.attributes.NORMAL !== undefined
+      ? readAccessor(primitive.attributes.NORMAL) : null
+    const uvs = primitive.attributes.TEXCOORD_0 !== undefined
+      ? readAccessor(primitive.attributes.TEXCOORD_0) : null
+
+    if (normals) hasAnyNormals = true
+    if (uvs) hasAnyUVs = true
+
+    // Read indices if present
+    const indices = primitive.indices !== undefined
+      ? readAccessor(primitive.indices) : null
+
+    const addVertex = (idx) => {
+      verts.push(positions[idx * 3], positions[idx * 3 + 1], positions[idx * 3 + 2])
+      if (normals) {
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2])
+      }
+      if (uvs) {
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1])
+      }
+    }
+
+    if (indices) {
+      for (let i = 0; i < indices.length; i++) {
+        addVertex(indices[i])
+      }
+    } else {
+      const vertexCount = positions.length / 3
+      for (let i = 0; i < vertexCount; i++) {
+        addVertex(i)
+      }
+    }
+  }
+
+  if (verts.length === 0) {
+    throw new Error('No vertex data found in mesh')
+  }
+
+  // Compute bounding box and normalize
+  let minX = Infinity, maxX = -Infinity
+  let minY = Infinity, maxY = -Infinity
+  let minZ = Infinity, maxZ = -Infinity
+
+  for (let i = 0; i < verts.length; i += 3) {
+    minX = Math.min(minX, verts[i]); maxX = Math.max(maxX, verts[i])
+    minY = Math.min(minY, verts[i + 1]); maxY = Math.max(maxY, verts[i + 1])
+    minZ = Math.min(minZ, verts[i + 2]); maxZ = Math.max(maxZ, verts[i + 2])
+  }
+
+  const centerX = (minX + maxX) / 2
+  const centerY = (minY + maxY) / 2
+  const centerZ = (minZ + maxZ) / 2
+  const rangeX = maxX - minX
+  const rangeY = maxY - minY
+  const rangeZ = maxZ - minZ
+  const maxRange = Math.max(rangeX, rangeY, rangeZ)
+  const scale = maxRange > 0 ? 1.0 / maxRange : 1.0
+
+  // Normalize vertices
+  for (let i = 0; i < verts.length; i += 3) {
+    verts[i] = (verts[i] - centerX) * scale
+    verts[i + 1] = (verts[i + 1] - centerY) * scale
+    verts[i + 2] = (verts[i + 2] - centerZ) * scale
+  }
+
+  // Generate default UVs if model has none (spherical projection)
+  if (!hasAnyUVs) {
+    for (let i = 0; i < verts.length; i += 3) {
+      const x = verts[i], y = verts[i + 1], z = verts[i + 2]
+      // Spherical UV mapping
+      const u = 0.5 + Math.atan2(z, x) / (2 * Math.PI)
+      const v = 0.5 + Math.asin(Math.max(-1, Math.min(1, y))) / Math.PI
+      outUVs.push(u, v)
+    }
+  }
+
+  // Create VertexSource
+  const vs = new VertexSource(verts)
+  vs.is3D = true
+  if (outNormals.length > 0) vs.normals = outNormals
+  if (outUVs.length > 0) vs.uvs = outUVs
+
+  return vs
+}
+
+// Load GLB file from URL and return Promise<VertexSource>
+// The returned VertexSource has a .texture property (Image) if the GLB has embedded textures
+// Options:
+//   meshIndex: which mesh to load (default 0)
+//   primitiveIndex: which primitive to load (default: all primitives combined)
+//   extractTextures: extract embedded textures (default: true)
+export async function loadGlb(url, options = {}) {
+  const { extractTextures = true, ...parseOptions } = options
+  const response = await fetch(url)
+  const arrayBuffer = await response.arrayBuffer()
+  const model = parseGlb(arrayBuffer, parseOptions)
+
+  // Attach embedded texture to model if available
+  if (extractTextures) {
+    const textures = await extractGlbTextures(arrayBuffer)
+    model.texture = textures[0]?.image || null
+    model.textures = textures.map(t => t.image)  // all textures if multiple
+  }
+
+  return model
+}
+
+// Extract embedded images from GLB as Image objects
+// Returns array of { image: HTMLImageElement, index: number }
+export async function extractGlbTextures(arrayBuffer) {
+  const view = new DataView(arrayBuffer)
+
+  // Parse header
+  const magic = view.getUint32(0, true)
+  if (magic !== 0x46546C67) throw new Error('Invalid GLB')
+
+  // Find JSON and BIN chunks
+  let jsonChunk = null
+  let binStart = 0
+  let offset = 12
+
+  while (offset < arrayBuffer.byteLength) {
+    const chunkLength = view.getUint32(offset, true)
+    const chunkType = view.getUint32(offset + 4, true)
+
+    if (chunkType === 0x4E4F534A) { // JSON
+      const chunkData = new Uint8Array(arrayBuffer, offset + 8, chunkLength)
+      jsonChunk = JSON.parse(new TextDecoder().decode(chunkData))
+    } else if (chunkType === 0x004E4942) { // BIN
+      binStart = offset + 8
+    }
+
+    offset += 8 + chunkLength
+    if (offset % 4 !== 0) offset += 4 - (offset % 4)
+  }
+
+  if (!jsonChunk || !jsonChunk.images) return []
+
+  // Extract each image
+  const textures = []
+  for (let i = 0; i < jsonChunk.images.length; i++) {
+    const imgDef = jsonChunk.images[i]
+    if (imgDef.bufferView === undefined) continue
+
+    const bv = jsonChunk.bufferViews[imgDef.bufferView]
+    const imgBytes = new Uint8Array(arrayBuffer, binStart + (bv.byteOffset || 0), bv.byteLength)
+
+    // Detect mime type from magic bytes if not specified
+    let mimeType = imgDef.mimeType
+    if (!mimeType) {
+      if (imgBytes[0] === 0x89 && imgBytes[1] === 0x50) mimeType = 'image/png'
+      else if (imgBytes[0] === 0xFF && imgBytes[1] === 0xD8) mimeType = 'image/jpeg'
+      else mimeType = 'image/png'
+    }
+
+    // Create blob URL and load as Image
+    const blob = new Blob([imgBytes], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image()
+      image.onload = () => resolve(image)
+      image.onerror = reject
+      image.src = url
+    })
+
+    textures.push({ image: img, index: i, blobUrl: url })
+  }
+
+  return textures
+}
+
+// Create a sprite sheet canvas from multiple GLB files
+// Returns { canvas, models, cols, rows }
+export async function createGlbSpriteSheet(urls, options = {}) {
+  const { cellSize = 256 } = options
+
+  // Load all GLBs and extract textures
+  const results = await Promise.all(urls.map(async (url) => {
+    const response = await fetch(url)
+    const arrayBuffer = await response.arrayBuffer()
+    const model = parseGlb(arrayBuffer, options)
+    const textures = await extractGlbTextures(arrayBuffer)
+    return { model, texture: textures[0]?.image || null }
+  }))
+
+  // Calculate grid size
+  const count = results.length
+  const cols = Math.ceil(Math.sqrt(count))
+  const rows = Math.ceil(count / cols)
+
+  // Create canvas
+  const canvas = document.createElement('canvas')
+  canvas.width = cols * cellSize
+  canvas.height = rows * cellSize
+  const ctx = canvas.getContext('2d')
+
+  // Draw textures into grid
+  results.forEach((r, i) => {
+    if (r.texture) {
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      ctx.drawImage(r.texture, col * cellSize, row * cellSize, cellSize, cellSize)
+    }
+  })
+
+  // Assign faceIds to models for sprite picking
+  const models = results.map((r, i) => {
+    r.model.spriteIndex = i
+    return r.model
+  })
+
+  return { canvas, models, cols, rows, cellSize }
+}
+
 // Equilateral triangle centered at (centerX, centerY)
 export function tri(size = 1.0, centerX = 0, centerY = 0) {
   const h = size * Math.sqrt(3) / 2
