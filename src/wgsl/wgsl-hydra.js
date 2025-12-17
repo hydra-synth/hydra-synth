@@ -20,8 +20,9 @@ const vertexPrefix = `
   	// Vertex data for fragment shader
   	@location(2) v_position : vec3f,
   	@location(3) v_normal : vec3f,
-  	@location(4) v_viewDir : vec3f,
-  	@location(5) v_depth : f32,
+  	@location(4) v_worldNormal : vec3f,
+  	@location(5) v_viewDir : vec3f,
+  	@location(6) v_depth : f32,
 	 };
 `;
 
@@ -57,6 +58,7 @@ const fragPrefix = `
      // Default vertex data for fullscreen quad
      output.v_position = vec3f(positions[vertexIndex], 0.0);
      output.v_normal = vec3f(0.0, 0.0, 1.0);
+     output.v_worldNormal = vec3f(0.0, 0.0, 1.0);
      output.v_viewDir = vec3f(0.0, 0.0, 1.0);
      output.v_depth = 1.0;
 
@@ -94,6 +96,9 @@ class SpritePassEntry {
 		// Vertex buffer support
 		this.hasCustomGeometry = false;
 		this.vertexBuffer = undefined;
+		this.uvBuffer = undefined;
+		this.faceIdBuffer = undefined;
+		this.normalBuffer = undefined;
 		this.vertexCount = 0;
 		this.vertexWgsl = undefined;
 		this.vertexUniforms = [];
@@ -101,6 +106,9 @@ class SpritePassEntry {
 		this.vertexUniformView = undefined;
 		this.vertexBindGroupLayout = undefined;
 		this.vertexBindGroup = undefined;
+		this.hasExplicitUVs = false;
+		this.hasFaceIds = false;
+		this.hasNormals = false;
 
 		// Blend mode
 		this.blendMode = 'normal';
@@ -436,7 +444,7 @@ class wgslHydra {
 	async setupSpriteChain(chan, spriteLevel, config) {
 		if (trace) console.timeStamp("setupSpriteChain");
 		const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive, has3D,
-			hasExplicitUVs, hasFaceIds, uvs, faceIds, sprite } = config;
+			hasExplicitUVs, hasFaceIds, hasNormals, uvs, faceIds, normals, sprite } = config;
 
 		const rpe = this.renderPassInfo[chan];
 		rpe.outputObject = this.outputChannelObjects[chan];
@@ -455,6 +463,7 @@ class wgslHydra {
 		spe.hasCustomGeometry = rawVerts !== null && rawVerts !== undefined;
 		spe.hasExplicitUVs = hasExplicitUVs || false;
 		spe.hasFaceIds = hasFaceIds || false;
+		spe.hasNormals = hasNormals || false;
 		spe.sprite = sprite || null;
 
 		// Generate uniform declarations for fragment shader
@@ -509,6 +518,17 @@ class wgslHydra {
 					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 				});
 				this.device.queue.writeBuffer(spe.faceIdBuffer, 0, faceIdData);
+			}
+
+			// Create normal buffer if normals provided
+			if (spe.hasNormals && normals && normals.length > 0) {
+				const normalData = new Float32Array(normals);
+				spe.normalBuffer = this.device.createBuffer({
+					label: `normalbuf_c${chan}_s${spriteLevel}`,
+					size: normalData.byteLength,
+					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+				});
+				this.device.queue.writeBuffer(spe.normalBuffer, 0, normalData);
 			}
 
 			// Setup vertex uniform buffer if needed
@@ -583,6 +603,18 @@ class wgslHydra {
 						shaderLocation: 2,
 						offset: 0,
 						format: 'float32'
+					}]
+				});
+			}
+
+			// Add normal buffer layout if normals
+			if (spe.hasNormals && spe.normalBuffer) {
+				bufferLayouts.push({
+					arrayStride: 12, // 3 floats * 4 bytes (normal)
+					attributes: [{
+						shaderLocation: 3,
+						offset: 0,
+						format: 'float32x3'
 					}]
 				});
 			}
@@ -971,14 +1003,20 @@ class wgslHydra {
 
 					// Set vertex buffer if custom geometry
 					if (spe.hasCustomGeometry && spe.vertexBuffer) {
-						passEncoder.setVertexBuffer(0, spe.vertexBuffer);
+						// Slot indices must match the order in bufferLayouts array
+						let slot = 0;
+						passEncoder.setVertexBuffer(slot++, spe.vertexBuffer);
 						// Set UV buffer if explicit UVs
 						if (spe.hasExplicitUVs && spe.uvBuffer) {
-							passEncoder.setVertexBuffer(1, spe.uvBuffer);
+							passEncoder.setVertexBuffer(slot++, spe.uvBuffer);
 						}
 						// Set faceId buffer if faceIds
 						if (spe.hasFaceIds && spe.faceIdBuffer) {
-							passEncoder.setVertexBuffer(2, spe.faceIdBuffer);
+							passEncoder.setVertexBuffer(slot++, spe.faceIdBuffer);
+						}
+						// Set normal buffer if normals
+						if (spe.hasNormals && spe.normalBuffer) {
+							passEncoder.setVertexBuffer(slot++, spe.normalBuffer);
 						}
 						passEncoder.draw(spe.vertexCount);
 					} else {

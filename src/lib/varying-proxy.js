@@ -37,14 +37,18 @@ function createComponentProxy(baseName) {
 }
 
 // Main v proxy object
-// Provides access to vertex data: v.position, v.normal, v.viewDir, v.depth
+// Provides access to vertex data: v.position, v.normal, v.worldNormal, v.viewDir, v.depth
 const v = new Proxy({}, {
   get(target, prop) {
     switch (prop) {
       case 'position':
         return createComponentProxy('v_position')
       case 'normal':
+        // Model space normal (raw from vertex buffer)
         return createComponentProxy('v_normal')
+      case 'worldNormal':
+        // World space normal (after rotation transforms)
+        return createComponentProxy('v_worldNormal')
       case 'viewDir':
         return createComponentProxy('v_viewDir')
       case 'depth':

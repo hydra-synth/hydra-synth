@@ -145,6 +145,7 @@ Output.prototype.init = function () {
   // Vertex data for fragment shader (default values for fullscreen quad)
   varying vec3 v_position;
   varying vec3 v_normal;
+  varying vec3 v_worldNormal;
   varying vec3 v_viewDir;
   varying float v_depth;
 
@@ -155,6 +156,7 @@ Output.prototype.init = function () {
     // Default vertex data for fullscreen quad
     v_position = vec3(position.xy * 2.0 - 1.0, 0.0);
     v_normal = vec3(0.0, 0.0, 1.0);
+    v_worldNormal = vec3(0.0, 0.0, 1.0);
     v_viewDir = vec3(0.0, 0.0, 1.0);
     v_depth = 1.0;
 

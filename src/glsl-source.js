@@ -232,6 +232,7 @@ GlslSource.prototype.compile = function (transforms) {
   // Vertex data from vertex shader (for 3D geometry)
   varying vec3 v_position;
   varying vec3 v_normal;
+  varying vec3 v_worldNormal;
   varying vec3 v_viewDir;
   varying float v_depth;
 

@@ -25,10 +25,10 @@ async function init () {
 let hydra;
 let hydra2;
 
-let wgsl = false;
+let wgsl = true;
 
 // Run in foreground 
-	 hydra = new Hydra({canvas: canvas, detectAudio:true, useWGSL: false, makeGlobal: true, useWGSL: wgsl}) // true false
+	 hydra = new Hydra({canvas: canvas, detectAudio:true, makeGlobal: true, useWGSL: wgsl}) // true false
 	 if (wgsl) await hydra.wgslPromise;
 
 function fitCanvas() {
@@ -52,7 +52,8 @@ loadObj('dev/headsSortedRandom.obj', { swapYZ: true }).then(head => {
 
 */
 // 3D GLB Model Test - With embedded texture extraction
-const modelPath = 'dev/assets/AnimalKit/Cat.glb'
+//const modelPath = 'dev/assets/AnimalKit/Cat.glb'
+const modelPath = 'dev/assets/AnimatedWomenPack/Woman.glb'
 
 // Drag-to-rotate state (3 axes) + zoom
 let rotX = 0, rotY = 0, rotZ = 0
@@ -86,25 +87,47 @@ canvas.addEventListener('wheel', (e) => {
   zoom = Math.max(0.1, Math.min(3, zoom))  // clamp
 }, { passive: false })
 
-// Clean API: loadGlb returns model with .texture attached
+// Test v proxy - vertex data in fragment shader
+console.log('Testing v proxy:', v)
+console.log('v.depth:', v.depth)
+console.log('v.normal:', v.normal)
+console.log('v.normal.z:', v.normal.z)
+
+// Simple test: use v.depth to modulate the oscillator frequency
+// v.depth is 1.0 for fullscreen, so osc(10 * 1.0) = osc(10)
+//osc(10).mult(solid(v.depth, 0, 0)).out()
+
+
+  // Test v.worldNormal vs v.normal
+  // v.normal = model space (doesn't change with rotation)
+  // v.worldNormal = world space (rotates with the model)
+  loadGlb(modelPath).then(model => {
+    // Use v.worldNormal for proper lighting that follows rotation
+    solid(v.worldNormal.x, v.worldNormal.y, v.worldNormal.z)
+      .out(o0, model.scale(() => zoom)
+        .rotateX(() => rotX + Math.PI)
+        .rotateY(() => rotY)
+        .rotateZ(() => rotZ)
+        .perspective(45))
+  })
+
+// This should show red oscillations since v.depth = 1.0
+
+// Uncomment to test with 3D model where v values vary:
+/*
 loadGlb(modelPath).then(model => {
   console.log('GLB loaded:', model)
-  console.log('Vertices:', model.verts.length / 3)
-  console.log('Texture:', model.texture ? `${model.texture.width}x${model.texture.height}` : 'none')
 
-  // Use embedded texture (or override with webcam, osc, etc.)
-  if (model.texture) {
-    s0.init({ src: model.texture })
-  } else {
-    s0.initCam()  // fallback
-  }
-
-  src(s0).out(o0, model.scale(() => zoom)
-    .rotateX(() => rotX + Math.PI)
-    .rotateY(() => rotY)
-    .rotateZ(() => rotZ)
-    .perspective(45))
+  // Use v.normal.z for lighting-like effect
+  solid(1, 0.5, 0.2)
+    .brightness(v.normal.z)
+    .out(o0, model.scale(() => zoom)
+      .rotateX(() => rotX + Math.PI)
+      .rotateY(() => rotY)
+      .rotateZ(() => rotZ)
+      .perspective(45))
 })
+*/
 
 	//hydra2.s[1].init({src: hydra.s[0].tex, dynamic: true});
 // *******************************************

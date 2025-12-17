@@ -166,6 +166,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
         // Vertex data for fragment shader (default values for 2D)
         varying vec3 v_position;
         varying vec3 v_normal;
+        varying vec3 v_worldNormal;
         varying vec3 v_viewDir;
         varying float v_depth;
 
@@ -180,6 +181,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
           // Set default vertex data for 2D geometry
           v_position = vec3(position.xy, 0.0);
           v_normal = vec3(0.0, 0.0, 1.0);
+          v_worldNormal = vec3(0.0, 0.0, 1.0);
           v_viewDir = vec3(0.0, 0.0, 1.0);
           v_depth = 1.0;
 
@@ -194,6 +196,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
   const uniforms = {}
   const uniformDecls = []
   const transformCode = []
+  const normalTransformCode = []  // Rotation transforms for normals (no scale/offset)
 
   // Check if any 3D transforms are used
   const has3D = vertexSource.transforms.some(t =>
@@ -214,11 +217,19 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
         uniforms[uniformName] = makeUniformAccessor(transform.args.angle)
         if (has3D) {
           // 2D rotate = rotate around Z axis
-          transformCode.push(`
+          const rotateCode = `
           {
             float c = cos(${uniformName});
             float s = sin(${uniformName});
             pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`
+          transformCode.push(rotateCode)
+          // Apply same rotation to normal (using nrm variable)
+          normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
           }`)
         } else {
           transformCode.push(`
@@ -241,6 +252,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
             float s = sin(${uniformName});
             pos = vec3(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
           }`)
+        // Apply same rotation to normal
+        normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x, nrm.y * c - nrm.z * s, nrm.y * s + nrm.z * c);
+          }`)
         break
       }
 
@@ -254,6 +272,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
             float s = sin(${uniformName});
             pos = vec3(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
           }`)
+        // Apply same rotation to normal
+        normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x * c + nrm.z * s, nrm.y, -nrm.x * s + nrm.z * c);
+          }`)
         break
       }
 
@@ -266,6 +291,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
             float c = cos(${uniformName});
             float s = sin(${uniformName});
             pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`)
+        // Apply same rotation to normal
+        normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
           }`)
         break
       }
@@ -340,8 +372,15 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       float aspect = resolution.x / resolution.y;
       gl_Position = vec4(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`
 
-    // Normal passthrough (model space - TODO: apply rotation transforms)
-    const normalPassthrough = useNormals ? `v_normal = normalize(normal);` : `v_normal = vec3(0.0, 0.0, 1.0);`
+    // Model space normal (raw from vertex buffer)
+    const normalInit = useNormals ? `vec3 nrm = normalize(normal);` : `vec3 nrm = vec3(0.0, 0.0, 1.0);`
+
+    // World space normal computation (apply rotation transforms)
+    const worldNormalCode = normalTransformCode.length > 0
+      ? `// Apply rotation transforms to normal for world space
+      ${normalTransformCode.join('\n      ')}
+      v_worldNormal = normalize(nrm);`
+      : `v_worldNormal = nrm;`
 
     glsl = `
     precision ${precision} float;
@@ -355,6 +394,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     // Vertex data for fragment shader
     varying vec3 v_position;
     varying vec3 v_normal;
+    varying vec3 v_worldNormal;
     varying vec3 v_viewDir;
     varying float v_depth;
 
@@ -374,7 +414,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
 
       // Compute vertex data for fragment shader
       v_position = pos;
-      ${normalPassthrough}
+
+      // Model space normal (raw from vertex buffer)
+      ${normalInit}
+      v_normal = nrm;
+
+      // World space normal (after rotation transforms)
+      ${worldNormalCode}
 
       // Camera is at z = 2.0 (matching perspective projection)
       vec3 cameraPos = vec3(0.0, 0.0, 2.0);
@@ -399,6 +445,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     // Vertex data for fragment shader (default values for 2D)
     varying vec3 v_position;
     varying vec3 v_normal;
+    varying vec3 v_worldNormal;
     varying vec3 v_viewDir;
     varying float v_depth;
 
@@ -418,6 +465,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       // Set default vertex data for 2D geometry
       v_position = vec3(pos, 0.0);
       v_normal = vec3(0.0, 0.0, 1.0);  // Facing camera
+      v_worldNormal = vec3(0.0, 0.0, 1.0);  // Same as normal for 2D
       v_viewDir = vec3(0.0, 0.0, 1.0);  // Looking at camera
       v_depth = 1.0;
 
@@ -447,13 +495,14 @@ function makeUniformAccessor(value) {
 
 // Generate WGSL vertex shader from transforms
 // Returns { wgsl: string, uniforms: array of {name, type, value} }
-// Options: { useExplicitUVs: boolean, useFaceIds: boolean }
+// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean }
 export function generateVertexWgsl(vertexSource, options = {}) {
-  const { useExplicitUVs = false, useFaceIds = false } = options
+  const { useExplicitUVs = false, useFaceIds = false, useNormals = false } = options
 
   // Collect uniforms and build transform code
   const uniforms = []
   const transformCode = []
+  const normalTransformCode = []  // Rotation transforms for normals (no scale/offset)
 
   // Check if any 3D transforms are used
   const has3D = vertexSource.hasTransforms && vertexSource.transforms.some(t =>
@@ -479,6 +528,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
       }`)
+            // Apply same rotation to normal
+            normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
+      }`)
           } else {
             transformCode.push(`
       {
@@ -499,6 +555,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
       }`)
+          // Apply same rotation to normal
+          normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x, nrm.y * c - nrm.z * s, nrm.y * s + nrm.z * c);
+      }`)
           break
         }
 
@@ -511,6 +574,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
       }`)
+          // Apply same rotation to normal
+          normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x * c + nrm.z * s, nrm.y, -nrm.x * s + nrm.z * c);
+      }`)
           break
         }
 
@@ -522,6 +592,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let c = cos(vtx.${uniformName});
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+      }`)
+          // Apply same rotation to normal
+          normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
       }`)
           break
         }
@@ -580,6 +657,9 @@ ${allUniformFields.join('\n')}
   if (useFaceIds) {
     inputFields.push('  @location(2) faceId: f32,')
   }
+  if (useNormals) {
+    inputFields.push('  @location(3) normal: vec3f,')
+  }
 
   // Build vertex output struct
   const outputFields = [
@@ -589,8 +669,9 @@ ${allUniformFields.join('\n')}
     '  // Vertex data for fragment shader',
     '  @location(2) v_position: vec3f,',
     '  @location(3) v_normal: vec3f,',
-    '  @location(4) v_viewDir: vec3f,',
-    '  @location(5) v_depth: f32,'
+    '  @location(4) v_worldNormal: vec3f,',
+    '  @location(5) v_viewDir: vec3f,',
+    '  @location(6) v_depth: f32,'
   ]
 
   // UV computation
@@ -630,6 +711,16 @@ ${allUniformFields.join('\n')}
       let aspect = resolution.x / resolution.y;
       output.position = vec4f(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`
 
+    // Model space normal initialization
+    const normalInit = useNormals ? 'var nrm = normalize(input.normal);' : 'var nrm = vec3f(0.0, 0.0, 1.0);'
+
+    // World space normal computation (apply rotation transforms)
+    const worldNormalCode = normalTransformCode.length > 0
+      ? `// Apply rotation transforms to normal for world space
+${normalTransformCode.join('\n')}
+  output.v_worldNormal = normalize(nrm);`
+      : `output.v_worldNormal = nrm;`
+
     wgsl = `struct VertexInput {
 ${inputFields.join('\n')}
 };
@@ -655,7 +746,14 @@ ${transformCode.join('\n')}
 
   // Compute vertex data for fragment shader
   output.v_position = pos;
-  output.v_normal = vec3f(0.0, 0.0, 1.0);  // TODO: pass normals from vertex buffer
+
+  // Model space normal (raw from vertex buffer)
+  ${normalInit}
+  output.v_normal = nrm;
+
+  // World space normal (after rotation transforms)
+  ${worldNormalCode}
+
   let cameraPos = vec3f(0.0, 0.0, 2.0);
   output.v_viewDir = normalize(cameraPos - pos);
 
@@ -693,6 +791,7 @@ ${transformCode.join('\n')}
   // Set default vertex data for 2D geometry
   output.v_position = vec3f(pos, 0.0);
   output.v_normal = vec3f(0.0, 0.0, 1.0);  // Facing camera
+  output.v_worldNormal = vec3f(0.0, 0.0, 1.0);  // Same as normal for 2D
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);  // Looking at camera
   output.v_depth = 1.0;
 
@@ -719,8 +818,9 @@ struct VertexOutput {
   // Vertex data for fragment shader
   @location(2) v_position: vec3f,
   @location(3) v_normal: vec3f,
-  @location(4) v_viewDir: vec3f,
-  @location(5) v_depth: f32,
+  @location(4) v_worldNormal: vec3f,
+  @location(5) v_viewDir: vec3f,
+  @location(6) v_depth: f32,
 };
 
 struct VertexUniforms {
@@ -739,6 +839,7 @@ fn main(input: VertexInput) -> VertexOutput {
   // Set default vertex data for 2D geometry
   output.v_position = vec3f(input.position.xy, 0.0);
   output.v_normal = vec3f(0.0, 0.0, 1.0);
+  output.v_worldNormal = vec3f(0.0, 0.0, 1.0);
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);
   output.v_depth = 1.0;
 
