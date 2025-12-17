@@ -18,7 +18,13 @@
 | Function | Description |
 |----------|-------------|
 | `cube(size)` | 3D cube with per-face UVs and faceIds |
-| `loadObj(url, options)` | Load OBJ file (async, returns Promise) |
+| `sphere(radius, segments)` | UV sphere |
+| `plane(width, height, segsW, segsH)` | Subdivided plane |
+| `torus(majorR, minorR, segs, tubeSegs)` | Donut/ring |
+| `cylinder(radius, height, segs)` | Cylinder with caps |
+| `cone(radius, height, segs)` | Cone with base |
+| `loadObj(url, options)` | Load OBJ file (async) |
+| `loadGlb(url, options)` | Load GLB file with animations (async) |
 
 All return `VertexSource`, chainable with transforms.
 2D coordinates are NDC: -1 to 1, center is (0,0).
@@ -44,9 +50,10 @@ All return `VertexSource`, chainable with transforms.
 | `.rotateX(angle)` | Rotate around X axis |
 | `.rotateY(angle)` | Rotate around Y axis |
 | `.rotateZ(angle)` | Rotate around Z axis |
-| `.scale(x, y, z)` | 3D scale (z defaults to 1) |
+| `.scale(x, y, z)` | 3D scale (uniform if only x given) |
 | `.offset(x, y, z)` | 3D translate |
 | `.perspective(fov, near, far)` | Perspective projection |
+| `.animate(clipName, timeFunc)` | Skeletal animation (GLB models) |
 
 ### Animation Examples
 
@@ -208,10 +215,92 @@ loadObj('model.obj').then(model => {
 loadObj('blender.obj', { swapYZ: true }).then(model => { ... })
 ```
 
-### Built-in Cube
+### Loading GLB Files (with Animation)
+
+```javascript
+loadGlb('character.glb').then(model => {
+  // List available animations
+  console.log(model.getAnimations())  // [{name: 'Walk', duration: 1.2}, ...]
+
+  // Play animation
+  solid(0.9, 0.7, 0.5)
+    .diffuse(0, 1, 0, 0.3)
+    .out(o0, model.animate('Walk', () => time)
+      .scale(0.8)
+      .rotateY(() => time * 0.2)
+      .perspective(45))
+})
+
+// Dynamic clip switching
+const clips = model.getAnimations()
+let currentClip = 0
+model.animate(() => clips[currentClip].name, () => time)
+```
+
+### Built-in Shapes
 
 ```javascript
 osc(10).out(o0, cube(0.5).rotateY(() => time).perspective(45))
+osc(10).out(o0, sphere(0.5).rotateY(() => time).perspective(45))
+osc(10).out(o0, torus(0.4, 0.15).rotateX(() => time).perspective(45))
+```
+
+---
+
+## Lighting
+
+### Lighting Functions
+
+| Function | Description |
+|----------|-------------|
+| `.diffuse(lx, ly, lz, ambient)` | Lambertian diffuse lighting |
+| `.fresnel(power, intensity)` | Rim/edge lighting effect |
+| `.specular(lx, ly, lz, shininess, intensity)` | Phong specular highlights |
+
+### Examples
+
+```javascript
+// Basic diffuse lighting (light from front-top-right)
+solid(0.9, 0.7, 0.5).diffuse(0.3, 0.6, 0.8, 0.3).out(o0, model.perspective(45))
+
+// Rim lighting effect
+osc(10).fresnel(3, 0.5).out(o0, sphere(0.5).perspective(45))
+
+// Combined lighting
+solid(1, 0.5, 0.2)
+  .diffuse(0.5, 1, 0.3, 0.2)
+  .add(solid(1, 1, 1).specular(0.5, 1, 0.3, 32, 0.5))
+  .out(o0, model.perspective(45))
+```
+
+---
+
+## Vertex Data Access (v proxy)
+
+Access vertex attributes in fragment shaders for custom effects:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `v.position` | vec3 | Vertex position |
+| `v.normal` | vec3 | Model-space normal |
+| `v.worldNormal` | vec3 | World-space normal (after transforms) |
+| `v.tangent` | vec3 | Tangent vector (for normal mapping) |
+| `v.bitangent` | vec3 | Bitangent vector |
+| `v.depth` | float | Normalized depth (0=near, 1=far) |
+| `v.color` | vec4 | Vertex color (if present) |
+
+### Examples
+
+```javascript
+// Use normal for coloring
+solid(v.worldNormal.x, v.worldNormal.y, v.worldNormal.z)
+  .out(o0, sphere(0.5).perspective(45))
+
+// Depth-based fog
+osc(10).mult(solid(1,1,1), v.depth).out(o0, model.perspective(45))
+
+// Custom rim lighting using view direction
+solid(1, 0.5, 0).brightness(v.normal.z).out(o0, model.perspective(45))
 ```
 
 ---

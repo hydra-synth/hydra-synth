@@ -79,17 +79,20 @@ render()
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Geometry helpers | ✓ Done | tri, quad, poly, circle, ring, line, cube |
+| Geometry helpers | ✓ Done | tri, quad, poly, circle, ring, line, cube, sphere, plane, torus, cylinder, cone |
 | GPU transforms | ✓ Done | rotate, scale, offset, rotateX/Y/Z, perspective |
 | CPU transforms | ✓ Done | mirror, repeat |
 | Sprite levels + blend | ✓ Done | Painter's algorithm, level 0 clears, 1+ composites |
-| Model loading | ✓ Done | OBJ with materials, normals, UVs, auto-normalization |
+| Model loading (OBJ) | ✓ Done | OBJ with materials, normals, UVs, auto-normalization |
+| Model loading (GLB) | ✓ Done | glTF binary with embedded textures, skeleton, animations |
+| Skeletal animation | ✓ Done | CPU skinning, bone hierarchy, animation clips |
 | Sprite sheets | ✓ Done | faceId-based cell picking, per-face materials |
 | Video matrices | TODO | Composite N sources to one output, index in |
 | Displacement mapping | TODO | Sample texture, offset verts in vertex shader |
 | Fixed 3D camera | Partial | perspective() transform, needs orbit controls |
-| Normals in vertex buffer | ✓ Done | Parsed from OBJ (vn lines) |
-| Basic lighting | TODO | One directional + ambient |
+| Normals in vertex buffer | ✓ Done | Parsed from OBJ/GLB |
+| Basic lighting | ✓ Done | diffuse, fresnel, specular functions |
+| Vertex data access | ✓ Done | v proxy for normal, depth, tangent, etc. in fragment shaders |
 
 ---
 
@@ -225,11 +228,38 @@ normal: vec3       // From OBJ (optional)
 faceId: float      // Material index for sprite sheet picking
 ```
 
-### Future: glTF/GLB
+### GLB Loading (Implemented)
 
-| Format | Pros | Cons |
-|--------|------|------|
-| glTF/GLB | Modern standard, embedded textures, good JS libs | More complex |
+```javascript
+loadGlb('character.glb').then(model => {
+  // Check available animations
+  console.log(model.getAnimations())  // [{name: 'Walk', duration: 1.2}, ...]
+
+  // Play with lighting
+  solid(0.9, 0.7, 0.5)
+    .diffuse(0.3, 0.6, 0.8, 0.3)
+    .out(o0, model.animate('Walk', () => time).scale(0.8).perspective(45))
+})
+```
+
+### Supported GLB Features
+
+| Feature | Notes |
+|---------|-------|
+| Meshes | Multiple meshes, auto-normalized to unit cube |
+| Skeleton | Joint hierarchy with inverse bind matrices |
+| Animations | Translation, rotation, scale keyframes with interpolation |
+| Skin weights | Up to 4 bone influences per vertex |
+
+### Animation Viewer Tool
+
+Diagnostic tool for previewing all animations in a GLB:
+
+```
+dev/animation-viewer.html?model=path/to/model.glb
+```
+
+Controls: Drag=rotate, Scroll=zoom, Space=pause, ←/→=prev/next animation
 
 ---
 
