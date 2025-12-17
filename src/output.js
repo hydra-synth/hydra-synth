@@ -142,9 +142,22 @@ Output.prototype.init = function () {
   varying vec2 uv;
   varying float v_faceId;
 
+  // Vertex data for fragment shader (default values for fullscreen quad)
+  varying vec3 v_position;
+  varying vec3 v_normal;
+  varying vec3 v_viewDir;
+  varying float v_depth;
+
   void main () {
     uv = position.xy;
     v_faceId = 0.0;
+
+    // Default vertex data for fullscreen quad
+    v_position = vec3(position.xy * 2.0 - 1.0, 0.0);
+    v_normal = vec3(0.0, 0.0, 1.0);
+    v_viewDir = vec3(0.0, 0.0, 1.0);
+    v_depth = 1.0;
+
     gl_Position = vec4(2.0 * position.xy - 1.0, 0, 1);
   }`
 
@@ -245,10 +258,11 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   }
 
   // Create vertex buffer for this sprite
-  let positionBuffer, uvBuffer, faceIdBuffer, vertexCount
+  let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, vertexCount
   let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 }  // default fullscreen bounds
   let hasExplicitUVs = false
   let hasFaceIds = false
+  let hasNormals = false
 
   if (rawVerts && rawVerts.length >= 6) {
     // Custom geometry: reshape to vec3 for 3D forward-compatibility
@@ -282,6 +296,17 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
       // Wrap each faceId in array for explicit per-vertex scalar format
       // This matches how position [[x,y,z],...] and texcoord [[u,v],...] are structured
       faceIdBuffer = this.regl.buffer(vertexSource.faceIds.map(id => [id]))
+    }
+
+    // Check for normals from VertexSource (e.g., from GLB/OBJ models)
+    if (vertexSource && vertexSource.normals && vertexSource.normals.length > 0) {
+      hasNormals = true
+      // Reshape normals to vec3 array
+      const normalData = []
+      for (let i = 0; i < vertexSource.normals.length; i += 3) {
+        normalData.push([vertexSource.normals[i], vertexSource.normals[i + 1], vertexSource.normals[i + 2]])
+      }
+      normalBuffer = this.regl.buffer(normalData)
     }
   } else {
     // Default fullscreen triangle
@@ -362,7 +387,7 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   if (rawVerts) {
     if (hasChainedTransforms) {
       // Use generateVertexGlsl for chained transforms (Phase 5)
-      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds })
+      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals })
       vert = generated.glsl
       vertexUniforms = generated.uniforms
     } else if (hasVertexOptions) {
@@ -380,6 +405,12 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
       ${faceIdAttrDecl}
       varying vec2 uv;
       varying float v_faceId;
+
+      // Vertex data for fragment shader
+      varying vec3 v_position;
+      varying vec3 v_normal;
+      varying vec3 v_viewDir;
+      varying float v_depth;
 
       uniform vec2 u_scale;
       uniform vec2 u_offset;
@@ -403,6 +434,12 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
         // Offset
         pos += u_offset;
 
+        // Default vertex data for 2D geometry
+        v_position = vec3(pos, 0.0);
+        v_normal = vec3(0.0, 0.0, 1.0);
+        v_viewDir = vec3(0.0, 0.0, 1.0);
+        v_depth = 1.0;
+
         gl_Position = vec4(pos, 0.0, 1.0);
       }`
     } else {
@@ -421,6 +458,12 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
       varying vec2 uv;
       varying float v_faceId;
 
+      // Vertex data for fragment shader
+      varying vec3 v_position;
+      varying vec3 v_normal;
+      varying vec3 v_viewDir;
+      varying float v_depth;
+
       uniform vec2 u_boundsMin;
       uniform vec2 u_boundsMax;
 
@@ -428,6 +471,13 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
         // UV ${hasExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
         ${uvCode}
         ${faceIdCode}
+
+        // Default vertex data for 2D geometry
+        v_position = vec3(position.xy, 0.0);
+        v_normal = vec3(0.0, 0.0, 1.0);
+        v_viewDir = vec3(0.0, 0.0, 1.0);
+        v_depth = 1.0;
+
         gl_Position = vec4(position.xy, 0.0, 1.0);
       }`
     }
@@ -448,6 +498,9 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   }
   if (hasFaceIds && faceIdBuffer) {
     attributes.faceId = faceIdBuffer
+  }
+  if (hasNormals && normalBuffer) {
+    attributes.normal = normalBuffer
   }
 
   // Create the draw command

@@ -228,6 +228,13 @@ GlslSource.prototype.compile = function (transforms) {
   uniform vec2 resolution;
   varying vec2 uv;
   varying float v_faceId;
+
+  // Vertex data from vertex shader (for 3D geometry)
+  varying vec3 v_position;
+  varying vec3 v_normal;
+  varying vec3 v_viewDir;
+  varying float v_depth;
+
   uniform sampler2D prevBuffer;
   uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax (fallback when no faceId)
   uniform vec2 u_spriteGrid;  // cols, rows for faceId-based sprite picking

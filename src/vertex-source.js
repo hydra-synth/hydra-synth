@@ -135,7 +135,7 @@ class VertexSource {
 // Returns { glsl: string, uniforms: object }
 // Options: { useExplicitUVs: boolean, useFaceIds: boolean }
 export function generateVertexGlsl(vertexSource, precision, options = {}) {
-  const { useExplicitUVs = false, useFaceIds = false } = options
+  const { useExplicitUVs = false, useFaceIds = false, useNormals = false } = options
 
   // UV source code - either from attribute or computed from bounds
   const uvAttributeDecl = useExplicitUVs ? 'attribute vec2 texcoord;' : ''
@@ -149,6 +149,9 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
   const faceIdVaryingDecl = 'varying float v_faceId;'  // Always declare for fragment shader compatibility
   const faceIdPassthrough = useFaceIds ? 'v_faceId = faceId;' : 'v_faceId = 0.0;'
 
+  // Normal attribute - only if model has normals
+  const normalAttributeDecl = useNormals ? 'attribute vec3 normal;' : ''
+
   if (!vertexSource.hasTransforms) {
     // No transforms - use simple passthrough with bounds
     return {
@@ -160,6 +163,12 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
         varying vec2 uv;
         ${faceIdVaryingDecl}
 
+        // Vertex data for fragment shader (default values for 2D)
+        varying vec3 v_position;
+        varying vec3 v_normal;
+        varying vec3 v_viewDir;
+        varying float v_depth;
+
         uniform vec2 u_boundsMin;
         uniform vec2 u_boundsMax;
 
@@ -167,6 +176,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
           // UV ${useExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
           ${uvComputation}
           ${faceIdPassthrough}
+
+          // Set default vertex data for 2D geometry
+          v_position = vec3(position.xy, 0.0);
+          v_normal = vec3(0.0, 0.0, 1.0);
+          v_viewDir = vec3(0.0, 0.0, 1.0);
+          v_depth = 1.0;
+
           gl_Position = vec4(position.xy, 0.0, 1.0);
         }
       `,
@@ -324,13 +340,23 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       float aspect = resolution.x / resolution.y;
       gl_Position = vec4(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`
 
+    // Normal passthrough (model space - TODO: apply rotation transforms)
+    const normalPassthrough = useNormals ? `v_normal = normalize(normal);` : `v_normal = vec3(0.0, 0.0, 1.0);`
+
     glsl = `
     precision ${precision} float;
     attribute vec3 position;
     ${uvAttributeDecl}
     ${faceIdAttributeDecl}
+    ${normalAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
+
+    // Vertex data for fragment shader
+    varying vec3 v_position;
+    varying vec3 v_normal;
+    varying vec3 v_viewDir;
+    varying float v_depth;
 
     uniform vec2 resolution;
     uniform vec2 u_boundsMin;
@@ -346,6 +372,18 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       vec3 pos = position;
       ${transformCode.join('\n      ')}
 
+      // Compute vertex data for fragment shader
+      v_position = pos;
+      ${normalPassthrough}
+
+      // Camera is at z = 2.0 (matching perspective projection)
+      vec3 cameraPos = vec3(0.0, 0.0, 2.0);
+      v_viewDir = normalize(cameraPos - pos);
+
+      // Normalized depth: 0 = at camera, 1 = at far plane (approx 4 units away)
+      float dist = length(cameraPos - pos);
+      v_depth = clamp(dist / 4.0, 0.0, 1.0);
+
       ${projectionCode}
     }
   `
@@ -357,6 +395,12 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     ${faceIdAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
+
+    // Vertex data for fragment shader (default values for 2D)
+    varying vec3 v_position;
+    varying vec3 v_normal;
+    varying vec3 v_viewDir;
+    varying float v_depth;
 
     uniform vec2 u_boundsMin;
     uniform vec2 u_boundsMax;
@@ -370,6 +414,12 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       // Apply transforms (2D)
       vec2 pos = position.xy;
       ${transformCode.join('\n      ')}
+
+      // Set default vertex data for 2D geometry
+      v_position = vec3(pos, 0.0);
+      v_normal = vec3(0.0, 0.0, 1.0);  // Facing camera
+      v_viewDir = vec3(0.0, 0.0, 1.0);  // Looking at camera
+      v_depth = 1.0;
 
       gl_Position = vec4(pos, 0.0, 1.0);
     }
@@ -535,7 +585,12 @@ ${allUniformFields.join('\n')}
   const outputFields = [
     '  @builtin(position) position: vec4f,',
     '  @location(0) texcoord: vec2f,',
-    '  @location(1) faceId: f32,'  // Always include for fragment shader compatibility
+    '  @location(1) faceId: f32,',  // Always include for fragment shader compatibility
+    '  // Vertex data for fragment shader',
+    '  @location(2) v_position: vec3f,',
+    '  @location(3) v_normal: vec3f,',
+    '  @location(4) v_viewDir: vec3f,',
+    '  @location(5) v_depth: f32,'
   ]
 
   // UV computation
@@ -598,6 +653,16 @@ fn main(input: VertexInput) -> VertexOutput {
   var pos = input.position;
 ${transformCode.join('\n')}
 
+  // Compute vertex data for fragment shader
+  output.v_position = pos;
+  output.v_normal = vec3f(0.0, 0.0, 1.0);  // TODO: pass normals from vertex buffer
+  let cameraPos = vec3f(0.0, 0.0, 2.0);
+  output.v_viewDir = normalize(cameraPos - pos);
+
+  // Normalized depth: 0 = at camera, 1 = at far plane (approx 4 units away)
+  let dist = length(cameraPos - pos);
+  output.v_depth = clamp(dist / 4.0, 0.0, 1.0);
+
   ${projectionCode}
   return output;
 }
@@ -625,6 +690,12 @@ fn main(input: VertexInput) -> VertexOutput {
   var pos = input.position.xy;
 ${transformCode.join('\n')}
 
+  // Set default vertex data for 2D geometry
+  output.v_position = vec3f(pos, 0.0);
+  output.v_normal = vec3f(0.0, 0.0, 1.0);  // Facing camera
+  output.v_viewDir = vec3f(0.0, 0.0, 1.0);  // Looking at camera
+  output.v_depth = 1.0;
+
   output.position = vec4f(pos, 0.0, 1.0);
   return output;
 }
@@ -645,6 +716,11 @@ struct VertexOutput {
   @builtin(position) position: vec4f,
   @location(0) texcoord: vec2f,
   @location(1) faceId: f32,
+  // Vertex data for fragment shader
+  @location(2) v_position: vec3f,
+  @location(3) v_normal: vec3f,
+  @location(4) v_viewDir: vec3f,
+  @location(5) v_depth: f32,
 };
 
 struct VertexUniforms {
@@ -659,6 +735,13 @@ fn main(input: VertexInput) -> VertexOutput {
   // UV normalized to shape bounds (texture fills the shape)
   output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
   output.faceId = 0.0;
+
+  // Set default vertex data for 2D geometry
+  output.v_position = vec3f(input.position.xy, 0.0);
+  output.v_normal = vec3f(0.0, 0.0, 1.0);
+  output.v_viewDir = vec3f(0.0, 0.0, 1.0);
+  output.v_depth = 1.0;
+
   output.position = vec4f(input.position.xy, 0.0, 1.0);
   return output;
 }

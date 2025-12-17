@@ -1,4 +1,5 @@
 import arrayUtils from './lib/array-utils.js'
+import { isVaryingRef } from './lib/varying-proxy.js'
 
 // [WIP] how to treat different dimensions (?)
 const DEFAULT_CONVERSIONS = {
@@ -58,14 +59,21 @@ export default function formatArguments(transform, startIndex, synthContext) {
     if (userArgs.length > index) {
       typedArg.value = userArgs[index]
 
-      if (typedArg.type === 'vec4') {
+      // Check for VaryingRef first (e.g., v.normal.z) - handle before other type checks
+      if (isVaryingRef(userArgs[index])) {
+        // Varying reference from v proxy
+        // Store the VaryingRef directly - it will be resolved in generate-glsl based on backend
+        typedArg.value = userArgs[index]
+        typedArg.isVaryingRef = true
+        typedArg.isUniform = false
+      } else if (typedArg.type === 'vec4') {
         if (!(typedArg.value.type === "GlslSource" || typedArg.value.getTexture)) {
           throw new Error("Arguments must be a texture or GlslSource")
         }
       }
       // do something if a composite or transform
 
-      if (typeof userArgs[index] === 'function') {
+      if (!typedArg.isVaryingRef && typeof userArgs[index] === 'function') {
         // if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
         //    typedArg.value = (context, props, batchId) => (fillArrayWithDefaults(userArgs[index](props), typedArg.vecLen))
         // } else {
@@ -86,7 +94,7 @@ export default function formatArguments(transform, startIndex, synthContext) {
         //  }
 
         typedArg.isUniform = true
-      } else if (userArgs[index].constructor === Array) {
+      } else if (!typedArg.isVaryingRef && userArgs[index].constructor === Array) {
         //   if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
         //     typedArg.isUniform = true
         //     typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)

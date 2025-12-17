@@ -17,6 +17,11 @@ const vertexPrefix = `
   	@builtin(position) position : vec4f,
   	@location(0) texcoord : vec2f,
   	@location(1) faceId : f32,
+  	// Vertex data for fragment shader
+  	@location(2) v_position : vec3f,
+  	@location(3) v_normal : vec3f,
+  	@location(4) v_viewDir : vec3f,
+  	@location(5) v_depth : f32,
 	 };
 `;
 
@@ -48,6 +53,13 @@ const fragPrefix = `
      output.position = vec4<f32>( positions[vertexIndex], 0.0, 1.0);
      output.texcoord = positions[vertexIndex] / 2.0 + 0.5; // positions are -1 to 1, texcoords are 0
      output.faceId = 0.0;
+
+     // Default vertex data for fullscreen quad
+     output.v_position = vec3f(positions[vertexIndex], 0.0);
+     output.v_normal = vec3f(0.0, 0.0, 1.0);
+     output.v_viewDir = vec3f(0.0, 0.0, 1.0);
+     output.v_depth = 1.0;
+
      return output;
     }
 `;

@@ -2,6 +2,7 @@ import formatArguments from './format-arguments.js'
 
 // Add extra functionality to Array.prototype for generating sequences in time
 import arrayUtils from './lib/array-utils.js'
+import { isVaryingRef, getVaryingString } from './lib/varying-proxy.js'
 
 
 
@@ -90,6 +91,9 @@ function shaderString (uv, method, inputs, shaderParams) {
   const str = inputs.map((input) => {
     if (input.isUniform) {
       return shaderParams.wgsl ? 'uf.' + input.name : input.name // 'uf.' needed for value struct in wgsl.
+    } else if (input.isVaryingRef && isVaryingRef(input.value)) {
+      // Varying reference from v proxy (e.g., v.normal.z)
+      return getVaryingString(input.value, shaderParams.wgsl)
     } else if (input.value && input.value.transforms) {
       // this by definition needs to be a generator, hence we start with 'st' as the initial value for generating the glsl fragment
       const srcCode = `${generateGlsl(input.value.transforms, shaderParams)('st')}`

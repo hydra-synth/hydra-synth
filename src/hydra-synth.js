@@ -15,6 +15,7 @@ import {wgslHydra} from './wgsl/wgsl-hydra.js';
 import {Deglobalize} from './Deglobalize.js';
 import { tri, quad, poly, circle, line, ring, cube, loadObj, loadGlb, parseGlb, extractGlbTextures, createGlbSpriteSheet } from './lib/geometry.js';
 import { spriteSheet, spriteAtlas, parseAseprite, loadAseprite } from './lib/sprite-sheet.js';
+import { v } from './lib/varying-proxy.js';
 
 const AsyncGeneratorFunction = async function* () {}.constructor;
 
@@ -103,6 +104,9 @@ class HydraRenderer {
       spriteAtlas: spriteAtlas,
       parseAseprite: parseAseprite,
       loadAseprite: loadAseprite,
+      // Vertex data proxy for accessing vertex shader outputs in fragment shaders
+      // Usage: osc(10).mult(v.normal.z).out()
+      v: v,
     }
 
     if (makeGlobal) window.loadScript = this.loadScript

@@ -23,16 +23,31 @@ class VertexSource {
   rotate(angle = 0) {
     return this._addTransform("rotate", { angle });
   }
-  scale(x2 = 1, y) {
-    if (y === void 0) y = x2;
-    return this._addTransform("scale", { x: x2, y });
+  // 3D rotations
+  rotateX(angle = 0) {
+    return this._addTransform("rotateX", { angle });
   }
-  offset(x2 = 0, y = 0) {
-    return this._addTransform("offset", { x: x2, y });
+  rotateY(angle = 0) {
+    return this._addTransform("rotateY", { angle });
+  }
+  rotateZ(angle = 0) {
+    return this._addTransform("rotateZ", { angle });
+  }
+  scale(x2 = 1, y, z) {
+    if (y === void 0) y = x2;
+    if (z === void 0) z = 1;
+    return this._addTransform("scale", { x: x2, y, z });
+  }
+  offset(x2 = 0, y = 0, z = 0) {
+    return this._addTransform("offset", { x: x2, y, z });
   }
   // Alias for offset
-  translate(x2 = 0, y = 0) {
-    return this.offset(x2, y);
+  translate(x2 = 0, y = 0, z = 0) {
+    return this.offset(x2, y, z);
+  }
+  // Set perspective projection
+  perspective(fov = 45, near = 0.1, far = 100) {
+    return this._addTransform("perspective", { fov, near, far });
   }
   // ========== Immediate transforms (CPU, modify vertex array) ==========
   // Mirror geometry across an axis
@@ -84,20 +99,44 @@ class VertexSource {
     return this;
   }
 }
-function generateVertexGlsl(vertexSource, precision) {
+function generateVertexGlsl(vertexSource, precision, options = {}) {
+  const { useExplicitUVs = false, useFaceIds = false, useNormals = false } = options;
+  const uvAttributeDecl = useExplicitUVs ? "attribute vec2 texcoord;" : "";
+  const uvComputation = useExplicitUVs ? "uv = texcoord;" : "uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);";
+  const faceIdAttributeDecl = useFaceIds ? "attribute float faceId;" : "";
+  const faceIdVaryingDecl = "varying float v_faceId;";
+  const faceIdPassthrough = useFaceIds ? "v_faceId = faceId;" : "v_faceId = 0.0;";
+  const normalAttributeDecl = useNormals ? "attribute vec3 normal;" : "";
   if (!vertexSource.hasTransforms) {
     return {
       glsl: `
         precision ${precision} float;
         attribute vec3 position;
+        ${uvAttributeDecl}
+        ${faceIdAttributeDecl}
         varying vec2 uv;
+        ${faceIdVaryingDecl}
+
+        // Vertex data for fragment shader (default values for 2D)
+        varying vec3 v_position;
+        varying vec3 v_normal;
+        varying vec3 v_viewDir;
+        varying float v_depth;
 
         uniform vec2 u_boundsMin;
         uniform vec2 u_boundsMax;
 
         void main () {
-          // UV normalized to shape bounds (texture fills the shape)
-          uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+          // UV ${useExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
+          ${uvComputation}
+          ${faceIdPassthrough}
+
+          // Set default vertex data for 2D geometry
+          v_position = vec3(position.xy, 0.0);
+          v_normal = vec3(0.0, 0.0, 1.0);
+          v_viewDir = vec3(0.0, 0.0, 1.0);
+          v_depth = 1.0;
+
           gl_Position = vec4(position.xy, 0.0, 1.0);
         }
       `,
@@ -107,6 +146,11 @@ function generateVertexGlsl(vertexSource, precision) {
   const uniforms = {};
   const uniformDecls = [];
   const transformCode = [];
+  const has3D = vertexSource.transforms.some(
+    (t) => ["rotateX", "rotateY", "rotateZ", "perspective"].includes(t.type) || t.type === "offset" && t.args.z !== 0
+  );
+  let hasPerspective = false;
+  let perspectiveUniform = null;
   vertexSource.transforms.forEach((transform, i) => {
     const suffix = i;
     switch (transform.type) {
@@ -114,61 +158,216 @@ function generateVertexGlsl(vertexSource, precision) {
         const uniformName = `u_rotate_${suffix}`;
         uniformDecls.push(`uniform float ${uniformName};`);
         uniforms[uniformName] = makeUniformAccessor(transform.args.angle);
-        transformCode.push(`
+        if (has3D) {
+          transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`);
+        } else {
+          transformCode.push(`
           {
             float c = cos(${uniformName});
             float s = sin(${uniformName});
             pos = vec2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
-          }
-        `);
+          }`);
+        }
+        break;
+      }
+      case "rotateX": {
+        const uniformName = `u_rotateX_${suffix}`;
+        uniformDecls.push(`uniform float ${uniformName};`);
+        uniforms[uniformName] = makeUniformAccessor(transform.args.angle);
+        transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
+          }`);
+        break;
+      }
+      case "rotateY": {
+        const uniformName = `u_rotateY_${suffix}`;
+        uniformDecls.push(`uniform float ${uniformName};`);
+        uniforms[uniformName] = makeUniformAccessor(transform.args.angle);
+        transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
+          }`);
+        break;
+      }
+      case "rotateZ": {
+        const uniformName = `u_rotateZ_${suffix}`;
+        uniformDecls.push(`uniform float ${uniformName};`);
+        uniforms[uniformName] = makeUniformAccessor(transform.args.angle);
+        transformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`);
         break;
       }
       case "scale": {
         const uniformName = `u_scale_${suffix}`;
-        uniformDecls.push(`uniform vec2 ${uniformName};`);
-        uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y]);
-        transformCode.push(`
-          pos *= ${uniformName};
-        `);
+        if (has3D) {
+          uniformDecls.push(`uniform vec3 ${uniformName};`);
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y, transform.args.z || 1]);
+          transformCode.push(`
+          pos *= ${uniformName};`);
+        } else {
+          uniformDecls.push(`uniform vec2 ${uniformName};`);
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y]);
+          transformCode.push(`
+          pos *= ${uniformName};`);
+        }
         break;
       }
       case "offset": {
         const uniformName = `u_offset_${suffix}`;
-        uniformDecls.push(`uniform vec2 ${uniformName};`);
-        uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y]);
-        transformCode.push(`
-          pos += ${uniformName};
-        `);
+        if (has3D) {
+          uniformDecls.push(`uniform vec3 ${uniformName};`);
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y, transform.args.z || 0]);
+          transformCode.push(`
+          pos += ${uniformName};`);
+        } else {
+          uniformDecls.push(`uniform vec2 ${uniformName};`);
+          uniforms[uniformName] = makeUniformAccessor([transform.args.x, transform.args.y]);
+          transformCode.push(`
+          pos += ${uniformName};`);
+        }
+        break;
+      }
+      case "perspective": {
+        hasPerspective = true;
+        perspectiveUniform = `u_perspective_${suffix}`;
+        uniformDecls.push(`uniform vec3 ${perspectiveUniform};`);
+        uniforms[perspectiveUniform] = makeUniformAccessor([
+          transform.args.fov,
+          transform.args.near,
+          transform.args.far
+        ]);
         break;
       }
     }
   });
-  const glsl = `
+  let glsl;
+  if (has3D) {
+    const projectionCode = hasPerspective ? `
+      // Perspective projection with aspect ratio correction
+      float fov = ${perspectiveUniform}.x;
+      float near = ${perspectiveUniform}.y;
+      float far = ${perspectiveUniform}.z;
+      float f = 1.0 / tan(radians(fov) / 2.0);
+      float aspect = resolution.x / resolution.y;
+      float rangeInv = 1.0 / (near - far);
+
+      // Move camera back
+      pos.z -= 2.0;
+
+      // Apply perspective
+      float w = -pos.z;
+      gl_Position = vec4(
+        pos.x * f / aspect,
+        pos.y * f,
+        (pos.z * (near + far) + 2.0 * near * far) * rangeInv,
+        w
+      );` : `
+      // Simple projection - just use z for depth, no perspective divide
+      float aspect = resolution.x / resolution.y;
+      gl_Position = vec4(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`;
+    const normalPassthrough = useNormals ? `v_normal = normalize(normal);` : `v_normal = vec3(0.0, 0.0, 1.0);`;
+    glsl = `
     precision ${precision} float;
     attribute vec3 position;
+    ${uvAttributeDecl}
+    ${faceIdAttributeDecl}
+    ${normalAttributeDecl}
     varying vec2 uv;
+    ${faceIdVaryingDecl}
+
+    // Vertex data for fragment shader
+    varying vec3 v_position;
+    varying vec3 v_normal;
+    varying vec3 v_viewDir;
+    varying float v_depth;
+
+    uniform vec2 resolution;
+    uniform vec2 u_boundsMin;
+    uniform vec2 u_boundsMax;
+    ${uniformDecls.join("\n    ")}
+
+    void main () {
+      // UV ${useExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
+      ${uvComputation}
+      ${faceIdPassthrough}
+
+      // Apply transforms (3D)
+      vec3 pos = position;
+      ${transformCode.join("\n      ")}
+
+      // Compute vertex data for fragment shader
+      v_position = pos;
+      ${normalPassthrough}
+
+      // Camera is at z = 2.0 (matching perspective projection)
+      vec3 cameraPos = vec3(0.0, 0.0, 2.0);
+      v_viewDir = normalize(cameraPos - pos);
+
+      // Normalized depth: 0 = at camera, 1 = at far plane (approx 4 units away)
+      float dist = length(cameraPos - pos);
+      v_depth = clamp(dist / 4.0, 0.0, 1.0);
+
+      ${projectionCode}
+    }
+  `;
+  } else {
+    glsl = `
+    precision ${precision} float;
+    attribute vec3 position;
+    ${uvAttributeDecl}
+    ${faceIdAttributeDecl}
+    varying vec2 uv;
+    ${faceIdVaryingDecl}
+
+    // Vertex data for fragment shader (default values for 2D)
+    varying vec3 v_position;
+    varying vec3 v_normal;
+    varying vec3 v_viewDir;
+    varying float v_depth;
 
     uniform vec2 u_boundsMin;
     uniform vec2 u_boundsMax;
     ${uniformDecls.join("\n    ")}
 
     void main () {
-      // UV normalized to shape bounds (texture fills the shape)
-      uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+      // UV ${useExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
+      ${uvComputation}
+      ${faceIdPassthrough}
 
-      // Apply transforms
+      // Apply transforms (2D)
       vec2 pos = position.xy;
       ${transformCode.join("\n      ")}
+
+      // Set default vertex data for 2D geometry
+      v_position = vec3(pos, 0.0);
+      v_normal = vec3(0.0, 0.0, 1.0);  // Facing camera
+      v_viewDir = vec3(0.0, 0.0, 1.0);  // Looking at camera
+      v_depth = 1.0;
 
       gl_Position = vec4(pos, 0.0, 1.0);
     }
   `;
+  }
   return { glsl, uniforms };
 }
 function makeUniformAccessor(value) {
   return (context, props) => {
     if (Array.isArray(value)) {
-      return value.map((v) => typeof v === "function" ? v() : v);
+      return value.map((v2) => typeof v2 === "function" ? v2() : v2);
     }
     if (typeof value === "function") {
       return value();
@@ -176,9 +375,15 @@ function makeUniformAccessor(value) {
     return value;
   };
 }
-function generateVertexWgsl(vertexSource) {
+function generateVertexWgsl(vertexSource, options = {}) {
+  const { useExplicitUVs = false, useFaceIds = false } = options;
   const uniforms = [];
   const transformCode = [];
+  const has3D = vertexSource.hasTransforms && vertexSource.transforms.some(
+    (t) => ["rotateX", "rotateY", "rotateZ", "perspective"].includes(t.type) || t.type === "offset" && t.args.z !== 0
+  );
+  let hasPerspective = false;
+  let perspectiveUniform = null;
   if (vertexSource.hasTransforms) {
     vertexSource.transforms.forEach((transform, i) => {
       const suffix = i;
@@ -186,26 +391,82 @@ function generateVertexWgsl(vertexSource) {
         case "rotate": {
           const uniformName = `u_rotate_${suffix}`;
           uniforms.push({ name: uniformName, type: "f32", value: transform.args.angle });
-          transformCode.push(`
+          if (has3D) {
+            transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+      }`);
+          } else {
+            transformCode.push(`
       {
         let c = cos(vtx.${uniformName});
         let s = sin(vtx.${uniformName});
         pos = vec2f(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
       }`);
+          }
+          break;
+        }
+        case "rotateX": {
+          const uniformName = `u_rotateX_${suffix}`;
+          uniforms.push({ name: uniformName, type: "f32", value: transform.args.angle });
+          transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
+      }`);
+          break;
+        }
+        case "rotateY": {
+          const uniformName = `u_rotateY_${suffix}`;
+          uniforms.push({ name: uniformName, type: "f32", value: transform.args.angle });
+          transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
+      }`);
+          break;
+        }
+        case "rotateZ": {
+          const uniformName = `u_rotateZ_${suffix}`;
+          uniforms.push({ name: uniformName, type: "f32", value: transform.args.angle });
+          transformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+      }`);
           break;
         }
         case "scale": {
           const uniformName = `u_scale_${suffix}`;
-          uniforms.push({ name: uniformName, type: "vec2f", value: [transform.args.x, transform.args.y] });
+          if (has3D) {
+            uniforms.push({ name: uniformName, type: "vec3f", value: [transform.args.x, transform.args.y, transform.args.z || 1] });
+          } else {
+            uniforms.push({ name: uniformName, type: "vec2f", value: [transform.args.x, transform.args.y] });
+          }
           transformCode.push(`
       pos *= vtx.${uniformName};`);
           break;
         }
         case "offset": {
           const uniformName = `u_offset_${suffix}`;
-          uniforms.push({ name: uniformName, type: "vec2f", value: [transform.args.x, transform.args.y] });
+          if (has3D) {
+            uniforms.push({ name: uniformName, type: "vec3f", value: [transform.args.x, transform.args.y, transform.args.z || 0] });
+          } else {
+            uniforms.push({ name: uniformName, type: "vec2f", value: [transform.args.x, transform.args.y] });
+          }
           transformCode.push(`
       pos += vtx.${uniformName};`);
+          break;
+        }
+        case "perspective": {
+          hasPerspective = true;
+          perspectiveUniform = `u_perspective_${suffix}`;
+          uniforms.push({ name: perspectiveUniform, type: "vec3f", value: [transform.args.fov, transform.args.near, transform.args.far] });
           break;
         }
       }
@@ -221,13 +482,95 @@ ${allUniformFields.join("\n")}
 };
 @group(2) @binding(0) var<uniform> vtx: VertexUniforms;
 `;
-  const wgsl = `struct VertexInput {
-  @location(0) position: vec3f,
+  const inputFields = ["  @location(0) position: vec3f,"];
+  if (useExplicitUVs) {
+    inputFields.push("  @location(1) texcoord: vec2f,");
+  }
+  if (useFaceIds) {
+    inputFields.push("  @location(2) faceId: f32,");
+  }
+  const outputFields = [
+    "  @builtin(position) position: vec4f,",
+    "  @location(0) texcoord: vec2f,",
+    "  @location(1) faceId: f32,",
+    // Always include for fragment shader compatibility
+    "  // Vertex data for fragment shader",
+    "  @location(2) v_position: vec3f,",
+    "  @location(3) v_normal: vec3f,",
+    "  @location(4) v_viewDir: vec3f,",
+    "  @location(5) v_depth: f32,"
+  ];
+  const uvCode = useExplicitUVs ? "output.texcoord = input.texcoord;" : "output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);";
+  const faceIdCode = useFaceIds ? "output.faceId = input.faceId;" : "output.faceId = 0.0;";
+  let wgsl;
+  if (has3D) {
+    const projectionCode = hasPerspective ? `
+      // Perspective projection with aspect ratio correction
+      let fov = vtx.${perspectiveUniform}.x;
+      let near = vtx.${perspectiveUniform}.y;
+      let far = vtx.${perspectiveUniform}.z;
+      let f = 1.0 / tan(radians(fov) / 2.0);
+      let aspect = resolution.x / resolution.y;
+      let rangeInv = 1.0 / (near - far);
+
+      // Move camera back
+      pos.z -= 2.0;
+
+      // Apply perspective
+      let w = -pos.z;
+      output.position = vec4f(
+        pos.x * f / aspect,
+        pos.y * f,
+        (pos.z * (near + far) + 2.0 * near * far) * rangeInv,
+        w
+      );` : `
+      // Simple projection - just use z for depth, no perspective divide
+      let aspect = resolution.x / resolution.y;
+      output.position = vec4f(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`;
+    wgsl = `struct VertexInput {
+${inputFields.join("\n")}
 };
 
 struct VertexOutput {
-  @builtin(position) position: vec4f,
-  @location(0) texcoord: vec2f,
+${outputFields.join("\n")}
+};
+
+@group(0) @binding(1) var<uniform> resolution: vec2f;
+${uniformStruct}
+@vertex
+fn main(input: VertexInput) -> VertexOutput {
+  var output: VertexOutput;
+
+  // UV
+  ${uvCode}
+  // FaceId
+  ${faceIdCode}
+
+  // Apply transforms (3D)
+  var pos = input.position;
+${transformCode.join("\n")}
+
+  // Compute vertex data for fragment shader
+  output.v_position = pos;
+  output.v_normal = vec3f(0.0, 0.0, 1.0);  // TODO: pass normals from vertex buffer
+  let cameraPos = vec3f(0.0, 0.0, 2.0);
+  output.v_viewDir = normalize(cameraPos - pos);
+
+  // Normalized depth: 0 = at camera, 1 = at far plane (approx 4 units away)
+  let dist = length(cameraPos - pos);
+  output.v_depth = clamp(dist / 4.0, 0.0, 1.0);
+
+  ${projectionCode}
+  return output;
+}
+`;
+  } else {
+    wgsl = `struct VertexInput {
+${inputFields.join("\n")}
+};
+
+struct VertexOutput {
+${outputFields.join("\n")}
 };
 
 ${uniformStruct}
@@ -235,17 +578,26 @@ ${uniformStruct}
 fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
 
-  // UV normalized to shape bounds (texture fills the shape)
-  output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
+  // UV
+  ${uvCode}
+  // FaceId
+  ${faceIdCode}
 
-  // Apply transforms
+  // Apply transforms (2D)
   var pos = input.position.xy;
 ${transformCode.join("\n")}
+
+  // Set default vertex data for 2D geometry
+  output.v_position = vec3f(pos, 0.0);
+  output.v_normal = vec3f(0.0, 0.0, 1.0);  // Facing camera
+  output.v_viewDir = vec3f(0.0, 0.0, 1.0);  // Looking at camera
+  output.v_depth = 1.0;
 
   output.position = vec4f(pos, 0.0, 1.0);
   return output;
 }
 `;
+  }
   return { wgsl, uniforms };
 }
 function getPassthroughVertexWgsl() {
@@ -256,6 +608,12 @@ function getPassthroughVertexWgsl() {
 struct VertexOutput {
   @builtin(position) position: vec4f,
   @location(0) texcoord: vec2f,
+  @location(1) faceId: f32,
+  // Vertex data for fragment shader
+  @location(2) v_position: vec3f,
+  @location(3) v_normal: vec3f,
+  @location(4) v_viewDir: vec3f,
+  @location(5) v_depth: f32,
 };
 
 struct VertexUniforms {
@@ -269,6 +627,14 @@ fn main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
   // UV normalized to shape bounds (texture fills the shape)
   output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);
+  output.faceId = 0.0;
+
+  // Set default vertex data for 2D geometry
+  output.v_position = vec3f(input.position.xy, 0.0);
+  output.v_normal = vec3f(0.0, 0.0, 1.0);
+  output.v_viewDir = vec3f(0.0, 0.0, 1.0);
+  output.v_depth = 1.0;
+
   output.position = vec4f(input.position.xy, 0.0, 1.0);
   return output;
 }
@@ -329,6 +695,7 @@ var Output = function({ regl: regl2, precision, label = "", chanNum, hydraSynth,
   };
   this.init();
   this.pingPongIndex = 0;
+  this.hasDepthBuffer = false;
   this.fbos = Array(2).fill().map(() => this.regl.framebuffer({
     color: this.regl.texture({
       mag: "nearest",
@@ -343,6 +710,22 @@ Output.prototype.resize = function(width, height) {
   this.fbos.forEach((fbo) => {
     fbo.resize(width, height);
   });
+};
+Output.prototype.enableDepthBuffer = function() {
+  if (this.hasDepthBuffer) return;
+  const width = this.fbos[0].width;
+  const height = this.fbos[0].height;
+  this.fbos.forEach((fbo) => fbo.destroy());
+  this.fbos = Array(2).fill().map(() => this.regl.framebuffer({
+    color: this.regl.texture({
+      mag: "nearest",
+      width,
+      height,
+      format: "rgba"
+    }),
+    depth: true
+  }));
+  this.hasDepthBuffer = true;
 };
 Output.prototype.getCurrent = function() {
   return this.fbos[this.pingPongIndex];
@@ -364,9 +747,24 @@ Output.prototype.init = function() {
   precision ${this.precision} float;
   attribute vec3 position;
   varying vec2 uv;
+  varying float v_faceId;
+
+  // Vertex data for fragment shader (default values for fullscreen quad)
+  varying vec3 v_position;
+  varying vec3 v_normal;
+  varying vec3 v_viewDir;
+  varying float v_depth;
 
   void main () {
     uv = position.xy;
+    v_faceId = 0.0;
+
+    // Default vertex data for fullscreen quad
+    v_position = vec3(position.xy * 2.0 - 1.0, 0.0);
+    v_normal = vec3(0.0, 0.0, 1.0);
+    v_viewDir = vec3(0.0, 0.0, 1.0);
+    v_depth = 1.0;
+
     gl_Position = vec4(2.0 * position.xy - 1.0, 0, 1);
   }`;
   this.attributes = {
@@ -407,9 +805,8 @@ Output.prototype.init = function() {
   });
   return this;
 };
-function reshapeToVec3(flatArray) {
+function reshapeToVec3(flatArray, is3D = false) {
   const len = flatArray.length;
-  const is3D = len % 3 === 0 && len % 2 !== 0;
   const stride = is3D ? 3 : 2;
   const verts = [];
   for (let i = 0; i < len; i += stride) {
@@ -431,24 +828,53 @@ Output.prototype.registerSprite = function(spriteLevel, config) {
   const self2 = this;
   let rawVerts = null;
   let vertexSource = null;
+  let has3D = false;
   if (vertexData instanceof VertexSource) {
     vertexSource = vertexData;
     rawVerts = vertexData.vertices;
+    has3D = vertexData.is3D || false;
   } else if (vertexData && Array.isArray(vertexData)) {
     rawVerts = vertexData;
   }
-  let positionBuffer, vertexCount;
+  if (has3D) {
+    this.enableDepthBuffer();
+  }
+  let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, vertexCount;
   let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+  let hasExplicitUVs = false;
+  let hasFaceIds = false;
+  let hasNormals = false;
   if (rawVerts && rawVerts.length >= 6) {
-    const verts = reshapeToVec3(rawVerts);
+    const verts = reshapeToVec3(rawVerts, has3D);
     positionBuffer = this.regl.buffer(verts);
     vertexCount = verts.length;
-    bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
-    for (const v of verts) {
-      bounds.minX = Math.min(bounds.minX, v[0]);
-      bounds.maxX = Math.max(bounds.maxX, v[0]);
-      bounds.minY = Math.min(bounds.minY, v[1]);
-      bounds.maxY = Math.max(bounds.maxY, v[1]);
+    if (vertexSource && vertexSource.uvs && vertexSource.uvs.length > 0) {
+      hasExplicitUVs = true;
+      const uvData = [];
+      for (let i = 0; i < vertexSource.uvs.length; i += 2) {
+        uvData.push([vertexSource.uvs[i], vertexSource.uvs[i + 1]]);
+      }
+      uvBuffer = this.regl.buffer(uvData);
+    } else {
+      bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+      for (const v2 of verts) {
+        bounds.minX = Math.min(bounds.minX, v2[0]);
+        bounds.maxX = Math.max(bounds.maxX, v2[0]);
+        bounds.minY = Math.min(bounds.minY, v2[1]);
+        bounds.maxY = Math.max(bounds.maxY, v2[1]);
+      }
+    }
+    if (vertexSource && vertexSource.faceIds && vertexSource.faceIds.length > 0) {
+      hasFaceIds = true;
+      faceIdBuffer = this.regl.buffer(vertexSource.faceIds.map((id2) => [id2]));
+    }
+    if (vertexSource && vertexSource.normals && vertexSource.normals.length > 0) {
+      hasNormals = true;
+      const normalData = [];
+      for (let i = 0; i < vertexSource.normals.length; i += 3) {
+        normalData.push([vertexSource.normals[i], vertexSource.normals[i + 1], vertexSource.normals[i + 2]]);
+      }
+      normalBuffer = this.regl.buffer(normalData);
     }
   } else {
     positionBuffer = this.defaultPositionBuffer;
@@ -466,6 +892,11 @@ Output.prototype.registerSprite = function(spriteLevel, config) {
     };
   } else {
     uniforms.u_spriteUV = [0, 0, 1, 1];
+  }
+  if (sprite && sprite.cols && sprite.rows) {
+    uniforms.u_spriteGrid = [sprite.cols, sprite.rows];
+  } else {
+    uniforms.u_spriteGrid = [1, 1];
   }
   if (rawVerts) {
     uniforms.u_boundsMin = [bounds.minX, bounds.minY];
@@ -493,14 +924,27 @@ Output.prototype.registerSprite = function(spriteLevel, config) {
   let vertexUniforms = {};
   if (rawVerts) {
     if (hasChainedTransforms) {
-      const generated = generateVertexGlsl(vertexSource, this.precision);
+      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals });
       vert = generated.glsl;
       vertexUniforms = generated.uniforms;
     } else if (hasVertexOptions) {
+      const uvAttrDecl = hasExplicitUVs ? "attribute vec2 texcoord;" : "";
+      const faceIdAttrDecl = hasFaceIds ? "attribute float faceId;" : "";
+      const uvCode = hasExplicitUVs ? "uv = texcoord;" : "uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);";
+      const faceIdCode = hasFaceIds ? "v_faceId = faceId;" : "v_faceId = 0.0;";
       vert = `
       precision ${this.precision} float;
       attribute vec3 position;
+      ${uvAttrDecl}
+      ${faceIdAttrDecl}
       varying vec2 uv;
+      varying float v_faceId;
+
+      // Vertex data for fragment shader
+      varying vec3 v_position;
+      varying vec3 v_normal;
+      varying vec3 v_viewDir;
+      varying float v_depth;
 
       uniform vec2 u_scale;
       uniform vec2 u_offset;
@@ -509,8 +953,9 @@ Output.prototype.registerSprite = function(spriteLevel, config) {
       uniform vec2 u_boundsMax;
 
       void main () {
-        // UV normalized to shape bounds (texture fills the shape)
-        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+        // UV ${hasExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
+        ${uvCode}
+        ${faceIdCode}
 
         // Apply transforms
         vec2 pos = position.xy * u_scale;
@@ -523,20 +968,47 @@ Output.prototype.registerSprite = function(spriteLevel, config) {
         // Offset
         pos += u_offset;
 
+        // Default vertex data for 2D geometry
+        v_position = vec3(pos, 0.0);
+        v_normal = vec3(0.0, 0.0, 1.0);
+        v_viewDir = vec3(0.0, 0.0, 1.0);
+        v_depth = 1.0;
+
         gl_Position = vec4(pos, 0.0, 1.0);
       }`;
     } else {
+      const uvAttrDecl = hasExplicitUVs ? "attribute vec2 texcoord;" : "";
+      const faceIdAttrDecl = hasFaceIds ? "attribute float faceId;" : "";
+      const uvCode = hasExplicitUVs ? "uv = texcoord;" : "uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);";
+      const faceIdCode = hasFaceIds ? "v_faceId = faceId;" : "v_faceId = 0.0;";
       vert = `
       precision ${this.precision} float;
       attribute vec3 position;
+      ${uvAttrDecl}
+      ${faceIdAttrDecl}
       varying vec2 uv;
+      varying float v_faceId;
+
+      // Vertex data for fragment shader
+      varying vec3 v_position;
+      varying vec3 v_normal;
+      varying vec3 v_viewDir;
+      varying float v_depth;
 
       uniform vec2 u_boundsMin;
       uniform vec2 u_boundsMax;
 
       void main () {
-        // UV normalized to shape bounds (texture fills the shape)
-        uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);
+        // UV ${hasExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
+        ${uvCode}
+        ${faceIdCode}
+
+        // Default vertex data for 2D geometry
+        v_position = vec3(position.xy, 0.0);
+        v_normal = vec3(0.0, 0.0, 1.0);
+        v_viewDir = vec3(0.0, 0.0, 1.0);
+        v_depth = 1.0;
+
         gl_Position = vec4(position.xy, 0.0, 1.0);
       }`;
     }
@@ -544,22 +1016,33 @@ Output.prototype.registerSprite = function(spriteLevel, config) {
     vert = this.vert;
   }
   Object.assign(uniforms, vertexUniforms);
+  const attributes = {
+    position: positionBuffer
+  };
+  if (hasExplicitUVs && uvBuffer) {
+    attributes.texcoord = uvBuffer;
+  }
+  if (hasFaceIds && faceIdBuffer) {
+    attributes.faceId = faceIdBuffer;
+  }
+  if (hasNormals && normalBuffer) {
+    attributes.normal = normalBuffer;
+  }
   const drawCommand = this.regl({
     frag: pass.frag,
     vert,
-    attributes: {
-      position: positionBuffer
-    },
+    attributes,
     uniforms,
     count: vertexCount,
     primitive,
     blend: BLEND_MODES$1[blendMode] || BLEND_MODES$1.normal,
-    depth: { enable: false }
+    depth: { enable: has3D, func: "less" }
   });
   this.sprites.set(spriteLevel, {
     drawCommand,
     positionBuffer,
-    blendMode
+    blendMode,
+    has3D
   });
 };
 Output.prototype.clearSprites = function() {
@@ -590,9 +1073,11 @@ Output.prototype._renderSprites = function(props) {
   const targetFbo = this.fbos[this.pingPongIndex];
   const prevFbo = this.fbos[this.pingPongIndex ? 0 : 1];
   const hasLevel0 = levels.length > 0 && levels[0] === 0;
+  const needs3D = Array.from(this.sprites.values()).some((s) => s.has3D);
   if (!hasLevel0) {
     this.regl.clear({
       color: [0, 0, 0, 0],
+      depth: needs3D ? 1 : void 0,
       framebuffer: targetFbo
     });
     if (this.copyCommand) {
@@ -607,6 +1092,7 @@ Output.prototype._renderSprites = function(props) {
     if (level === 0) {
       this.regl.clear({
         color: [0, 0, 0, 1],
+        depth: needs3D ? 1 : void 0,
         framebuffer: targetFbo
       });
     }
@@ -696,20 +1182,28 @@ class OutputWgsl {
   }
   // Register a sprite at a given level (parallel to WebGL Output.registerSprite)
   async registerSprite(spriteLevel, config) {
-    const { passes, vertexData, blendMode = "normal", primitive = "triangles" } = config;
+    const { passes, vertexData, blendMode = "normal", primitive = "triangles", sprite = null } = config;
     const pass = passes[0];
     let rawVerts = null;
     let vertexSource = null;
+    let has3D = false;
     if (vertexData instanceof VertexSource) {
       vertexSource = vertexData;
       rawVerts = vertexData.vertices;
+      has3D = vertexData.is3D || false;
     } else if (vertexData && Array.isArray(vertexData)) {
       rawVerts = vertexData;
     }
+    let hasExplicitUVs = false;
+    let hasFaceIds = false;
+    if (vertexSource) {
+      hasExplicitUVs = vertexSource.uvs && vertexSource.uvs.length > 0;
+      hasFaceIds = vertexSource.faceIds && vertexSource.faceIds.length > 0;
+    }
     let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
-    if (rawVerts && rawVerts.length >= 6) {
+    if (rawVerts && rawVerts.length >= 6 && !hasExplicitUVs) {
       bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
-      const stride = rawVerts.length % 3 === 0 && rawVerts.length % 2 !== 0 ? 3 : 2;
+      const stride = has3D ? 3 : 2;
       for (let i = 0; i < rawVerts.length; i += stride) {
         bounds.minX = Math.min(bounds.minX, rawVerts[i]);
         bounds.maxX = Math.max(bounds.maxX, rawVerts[i]);
@@ -726,7 +1220,7 @@ class OutputWgsl {
         { name: "u_boundsMax", type: "vec2f", value: [bounds.maxX, bounds.maxY] }
       ];
       if (hasChainedTransforms) {
-        const generated = generateVertexWgsl(vertexSource);
+        const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds });
         vertexWgsl = generated.wgsl;
         vertexUniforms = [...boundsUniforms, ...generated.uniforms];
       } else {
@@ -743,7 +1237,11 @@ class OutputWgsl {
       primitive,
       vertexWgsl,
       vertexUniforms,
-      hasCustomGeometry: rawVerts !== null
+      hasCustomGeometry: rawVerts !== null,
+      has3D,
+      hasExplicitUVs,
+      hasFaceIds,
+      sprite
     });
     await this.wgslHydra.setupSpriteChain(this.chanNum, spriteLevel, {
       uniforms: pass.uniforms,
@@ -752,7 +1250,13 @@ class OutputWgsl {
       vertexUniforms,
       rawVerts,
       blendMode,
-      primitive
+      primitive,
+      has3D,
+      hasExplicitUVs,
+      hasFaceIds,
+      uvs: vertexSource == null ? void 0 : vertexSource.uvs,
+      faceIds: vertexSource == null ? void 0 : vertexSource.faceIds,
+      sprite
     });
   }
   // Legacy render method - registers at sprite level 0
@@ -962,8 +1466,27 @@ class HydraSource {
       if (!this.wgsl) {
         this.tex = this.regl.texture({ data: this.src, ...params });
       } else {
-        this.indirect = true;
-        this.tex = opts.src.tex;
+        if (opts.src.tex) {
+          this.indirect = true;
+          this.tex = opts.src.tex;
+        } else {
+          const w = opts.src.width || opts.src.videoWidth || this.width;
+          const h = opts.src.height || opts.src.videoHeight || this.height;
+          this.width = w;
+          this.height = h;
+          this.tex = this.wgsl.device.createTexture({
+            size: [w, h, 1],
+            format: this.wgsl.format,
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+          });
+          this.wgsl.device.queue.copyExternalImageToTexture(
+            { source: opts.src, flipY: true },
+            { texture: this.tex },
+            [w, h]
+          );
+          this.indirect = false;
+          this.lastTextureView = void 0;
+        }
       }
     }
     if ("dynamic" in opts) this.dynamic = opts.dynamic;
@@ -1540,12 +2063,12 @@ function requireMeyda_min() {
             return r3 / (m2[t4] || 1);
           });
         }), o2) {
-          var v2 = c2.map(function(r2) {
+          var v22 = c2.map(function(r2) {
             return Math.exp(-0.5 * Math.pow((r2 / t2 - n2) / o2, 2));
           });
           w2 = w2.map(function(r2) {
             return r2.map(function(r3, t3) {
-              return r3 * v2[t3];
+              return r3 * v22[t3];
             });
           });
         }
@@ -1605,7 +2128,7 @@ function requireMeyda_min() {
           }, 0);
         });
       });
-      var v = Object.freeze({ __proto__: null, amplitudeSpectrum: function(r2) {
+      var v2 = Object.freeze({ __proto__: null, amplitudeSpectrum: function(r2) {
         return r2.ampSpectrum;
       }, buffer: function(r2) {
         return r2.signal;
@@ -1741,9 +2264,9 @@ function requireMeyda_min() {
         for (var n2 = _.bitReverseArray(e2), o2 = { real: [], imag: [] }, i2 = 0; i2 < e2; i2++) o2.real[n2[i2]] = t2.real[i2], o2.imag[n2[i2]] = t2.imag[i2];
         for (var u2 = 0; u2 < e2; u2++) t2.real[u2] = o2.real[u2], t2.imag[u2] = o2.imag[u2];
         for (var f2 = 1; f2 <= a22; f2++) for (var c2 = Math.pow(2, f2), l2 = 0; l2 < c2 / 2; l2++) for (var s2 = _.euler(l2, c2), m2 = 0; m2 < e2 / c2; m2++) {
-          var p2 = c2 * m2 + l2, h2 = c2 * m2 + l2 + c2 / 2, g2 = { real: t2.real[p2], imag: t2.imag[p2] }, w2 = { real: t2.real[h2], imag: t2.imag[h2] }, v2 = _.multiply(s2, w2), d2 = _.subtract(g2, v2);
+          var p2 = c2 * m2 + l2, h2 = c2 * m2 + l2 + c2 / 2, g2 = { real: t2.real[p2], imag: t2.imag[p2] }, w2 = { real: t2.real[h2], imag: t2.imag[h2] }, v22 = _.multiply(s2, w2), d2 = _.subtract(g2, v22);
           t2.real[h2] = d2.real, t2.imag[h2] = d2.imag;
-          var y2 = _.add(v2, g2);
+          var y2 = _.add(v22, g2);
           t2.real[p2] = y2.real, t2.imag[p2] = y2.imag;
         }
         return t2;
@@ -1753,7 +2276,7 @@ function requireMeyda_min() {
           if (this._m = t2, !r3.audioContext) throw this._m.errors.noAC;
           if (r3.bufferSize && !a2(r3.bufferSize)) throw this._m._errors.notPow2;
           if (!r3.source) throw this._m._errors.noSource;
-          this._m.audioContext = r3.audioContext, this._m.bufferSize = r3.bufferSize || this._m.bufferSize || 256, this._m.hopSize = r3.hopSize || this._m.hopSize || this._m.bufferSize, this._m.sampleRate = r3.sampleRate || this._m.audioContext.sampleRate || 44100, this._m.callback = r3.callback, this._m.windowingFunction = r3.windowingFunction || "hanning", this._m.featureExtractors = v, this._m.EXTRACTION_STARTED = r3.startImmediately || false, this._m.channel = "number" == typeof r3.channel ? r3.channel : 0, this._m.inputs = r3.inputs || 1, this._m.outputs = r3.outputs || 1, this._m.numberOfMFCCCoefficients = r3.numberOfMFCCCoefficients || this._m.numberOfMFCCCoefficients || 13, this._m.numberOfBarkBands = r3.numberOfBarkBands || this._m.numberOfBarkBands || 24, this._m.spn = this._m.audioContext.createScriptProcessor(this._m.bufferSize, this._m.inputs, this._m.outputs), this._m.spn.connect(this._m.audioContext.destination), this._m._featuresToExtract = r3.featureExtractors || [], this._m.barkScale = o(this._m.bufferSize, this._m.sampleRate, this._m.bufferSize), this._m.melFilterBank = f(Math.max(this._m.melBands, this._m.numberOfMFCCCoefficients), this._m.sampleRate, this._m.bufferSize), this._m.inputData = null, this._m.previousInputData = null, this._m.frame = null, this._m.previousFrame = null, this.setSource(r3.source), this._m.spn.onaudioprocess = function(r4) {
+          this._m.audioContext = r3.audioContext, this._m.bufferSize = r3.bufferSize || this._m.bufferSize || 256, this._m.hopSize = r3.hopSize || this._m.hopSize || this._m.bufferSize, this._m.sampleRate = r3.sampleRate || this._m.audioContext.sampleRate || 44100, this._m.callback = r3.callback, this._m.windowingFunction = r3.windowingFunction || "hanning", this._m.featureExtractors = v2, this._m.EXTRACTION_STARTED = r3.startImmediately || false, this._m.channel = "number" == typeof r3.channel ? r3.channel : 0, this._m.inputs = r3.inputs || 1, this._m.outputs = r3.outputs || 1, this._m.numberOfMFCCCoefficients = r3.numberOfMFCCCoefficients || this._m.numberOfMFCCCoefficients || 13, this._m.numberOfBarkBands = r3.numberOfBarkBands || this._m.numberOfBarkBands || 24, this._m.spn = this._m.audioContext.createScriptProcessor(this._m.bufferSize, this._m.inputs, this._m.outputs), this._m.spn.connect(this._m.audioContext.destination), this._m._featuresToExtract = r3.featureExtractors || [], this._m.barkScale = o(this._m.bufferSize, this._m.sampleRate, this._m.bufferSize), this._m.melFilterBank = f(Math.max(this._m.melBands, this._m.numberOfMFCCCoefficients), this._m.sampleRate, this._m.bufferSize), this._m.inputData = null, this._m.previousInputData = null, this._m.frame = null, this._m.previousFrame = null, this.setSource(r3.source), this._m.spn.onaudioprocess = function(r4) {
             var t3;
             null !== e2._m.inputData && (e2._m.previousInputData = e2._m.inputData), e2._m.inputData = r4.inputBuffer.getChannelData(e2._m.channel), e2._m.previousInputData ? ((t3 = new Float32Array(e2._m.previousInputData.length + e2._m.inputData.length - e2._m.hopSize)).set(e2._m.previousInputData.slice(e2._m.hopSize)), t3.set(e2._m.inputData, e2._m.previousInputData.length - e2._m.hopSize)) : t3 = e2._m.inputData;
             var a22 = function(r5, t4, e3) {
@@ -1783,7 +2306,7 @@ function requireMeyda_min() {
         }, r2.prototype.get = function(r3) {
           return this._m.inputData ? this._m.extract(r3 || this._m._featuresToExtract, this._m.inputData, this._m.previousInputData) : null;
         }, r2;
-      }(), A = { audioContext: null, spn: null, bufferSize: 512, sampleRate: 44100, melBands: 26, chromaBands: 12, callback: null, windowingFunction: "hanning", featureExtractors: v, EXTRACTION_STARTED: false, numberOfMFCCCoefficients: 13, numberOfBarkBands: 24, _featuresToExtract: [], windowing: n, _errors: { notPow2: new Error("Meyda: Buffer size must be a power of 2, e.g. 64 or 512"), featureUndef: new Error("Meyda: No features defined."), invalidFeatureFmt: new Error("Meyda: Invalid feature format"), invalidInput: new Error("Meyda: Invalid input."), noAC: new Error("Meyda: No AudioContext specified."), noSource: new Error("Meyda: No source node specified.") }, createMeydaAnalyzer: function(r2) {
+      }(), A = { audioContext: null, spn: null, bufferSize: 512, sampleRate: 44100, melBands: 26, chromaBands: 12, callback: null, windowingFunction: "hanning", featureExtractors: v2, EXTRACTION_STARTED: false, numberOfMFCCCoefficients: 13, numberOfBarkBands: 24, _featuresToExtract: [], windowing: n, _errors: { notPow2: new Error("Meyda: Buffer size must be a power of 2, e.g. 64 or 512"), featureUndef: new Error("Meyda: No features defined."), invalidFeatureFmt: new Error("Meyda: Invalid feature format"), invalidInput: new Error("Meyda: Invalid input."), noAC: new Error("Meyda: No AudioContext specified."), noSource: new Error("Meyda: No source node specified.") }, createMeydaAnalyzer: function(r2) {
         return new F(r2, Object.assign({}, A));
       }, listAvailableFeatureExtractors: function() {
         return Object.keys(this.featureExtractors);
@@ -2226,6 +2749,57 @@ class EvalSandbox {
     this.sandbox.eval(code);
   }
 }
+class VaryingRef {
+  constructor(glslName, wgslName) {
+    this.glslName = glslName;
+    this.wgslName = wgslName;
+    this._isVaryingRef = true;
+  }
+  // Default toString returns GLSL name
+  toString() {
+    return this.glslName;
+  }
+}
+function createComponentProxy(baseName) {
+  return new Proxy({}, {
+    get(target, prop) {
+      if (typeof prop === "string") {
+        const glslPath = `${baseName}.${prop}`;
+        const wgslPath = `ourIn.${baseName}.${prop}`;
+        return new VaryingRef(glslPath, wgslPath);
+      }
+      return void 0;
+    }
+  });
+}
+const v = new Proxy({}, {
+  get(target, prop) {
+    switch (prop) {
+      case "position":
+        return createComponentProxy("v_position");
+      case "normal":
+        return createComponentProxy("v_normal");
+      case "viewDir":
+        return createComponentProxy("v_viewDir");
+      case "depth":
+        return new VaryingRef("v_depth", "ourIn.v_depth");
+      case "uv":
+        return createComponentProxy("uv");
+      case "faceId":
+        return new VaryingRef("v_faceId", "ourIn.faceId");
+      default:
+        console.warn(`Unknown varying property: v.${prop}`);
+        return void 0;
+    }
+  }
+});
+function isVaryingRef(value) {
+  return value && value._isVaryingRef === true;
+}
+function getVaryingString(varyingRef, isWGSL) {
+  if (!isVaryingRef(varyingRef)) return varyingRef;
+  return isWGSL ? varyingRef.wgslName : varyingRef.glslName;
+}
 const ensure_decimal_dot = (val) => {
   val = val.toString();
   if (val.indexOf(".") < 0) {
@@ -2258,12 +2832,16 @@ function formatArguments(transform, startIndex, synthContext) {
     }
     if (userArgs.length > index) {
       typedArg.value = userArgs[index];
-      if (typedArg.type === "vec4") {
+      if (isVaryingRef(userArgs[index])) {
+        typedArg.value = userArgs[index];
+        typedArg.isVaryingRef = true;
+        typedArg.isUniform = false;
+      } else if (typedArg.type === "vec4") {
         if (!(typedArg.value.type === "GlslSource" || typedArg.value.getTexture)) {
           throw new Error("Arguments must be a texture or GlslSource");
         }
       }
-      if (typeof userArgs[index] === "function") {
+      if (!typedArg.isVaryingRef && typeof userArgs[index] === "function") {
         typedArg.value = (context, props, batchId) => {
           try {
             const val = userArgs[index](props);
@@ -2279,7 +2857,7 @@ function formatArguments(transform, startIndex, synthContext) {
           }
         };
         typedArg.isUniform = true;
-      } else if (userArgs[index].constructor === Array) {
+      } else if (!typedArg.isVaryingRef && userArgs[index].constructor === Array) {
         typedArg.value = (context, props, batchId) => ArrayUtils.getValue(userArgs[index])(props);
         typedArg.isUniform = true;
       }
@@ -2368,6 +2946,8 @@ function shaderString(uv, method, inputs, shaderParams) {
   const str = inputs.map((input) => {
     if (input.isUniform) {
       return shaderParams.wgsl ? "uf." + input.name : input.name;
+    } else if (input.isVaryingRef && isVaryingRef(input.value)) {
+      return getVaryingString(input.value, shaderParams.wgsl);
     } else if (input.value && input.value.transforms) {
       const srcCode = `${generateGlsl$1(input.value.transforms, shaderParams)("st")}`;
       if (input.type === "float") {
@@ -2895,10 +3475,23 @@ GlslSource.prototype.compile = function(transforms) {
     }).join("")}
 
   @fragment
-  	 fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
-     let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
-     let st : vec2<f32> = ourIn.texcoord;
-     return ${shaderInfo.fragColor};
+  fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
+    let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
+    var st : vec2<f32>;
+
+    // If using sprite grid (cols > 1 or rows > 1), use faceId to pick cell
+    if (u_spriteGrid.x > 1.0 || u_spriteGrid.y > 1.0) {
+      // faceId maps to cell in row-major order (left-to-right, top-to-bottom)
+      let cellX = ourIn.faceId % u_spriteGrid.x;
+      let cellY = floor(ourIn.faceId / u_spriteGrid.x);
+      let cellSize = vec2<f32>(1.0 / u_spriteGrid.x, 1.0 / u_spriteGrid.y);
+      st = ourIn.texcoord * cellSize + vec2<f32>(cellX, cellY) * cellSize;
+    } else {
+      // Fallback to u_spriteUV for single sprite picking
+      st = u_spriteUV.xy + ourIn.texcoord * (u_spriteUV.zw - u_spriteUV.xy);
+    }
+
+    return ${shaderInfo.fragColor};
   }
 		`;
   } else {
@@ -2917,8 +3510,17 @@ GlslSource.prototype.compile = function(transforms) {
   uniform float time;
   uniform vec2 resolution;
   varying vec2 uv;
+  varying float v_faceId;
+
+  // Vertex data from vertex shader (for 3D geometry)
+  varying vec3 v_position;
+  varying vec3 v_normal;
+  varying vec3 v_viewDir;
+  varying float v_depth;
+
   uniform sampler2D prevBuffer;
-  uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax
+  uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax (fallback when no faceId)
+  uniform vec2 u_spriteGrid;  // cols, rows for faceId-based sprite picking
 
   ${Object.values(utilityGlsl).map((transform) => {
       return `
@@ -2933,9 +3535,18 @@ GlslSource.prototype.compile = function(transforms) {
     }).join("")}
 
   void main () {
-    // Transform UV for sprite sheet picking
-    // u_spriteUV: x=uMin, y=vMin, z=uMax, w=vMax (default 0,0,1,1 = full texture)
-    vec2 st = u_spriteUV.xy + uv * (u_spriteUV.zw - u_spriteUV.xy);
+    vec2 st;
+    // If using sprite grid (cols > 1 or rows > 1), use faceId to pick cell
+    if (u_spriteGrid.x > 1.0 || u_spriteGrid.y > 1.0) {
+      // faceId maps to cell in row-major order (left-to-right, top-to-bottom)
+      float cellX = mod(v_faceId, u_spriteGrid.x);
+      float cellY = floor(v_faceId / u_spriteGrid.x);
+      vec2 cellSize = vec2(1.0 / u_spriteGrid.x, 1.0 / u_spriteGrid.y);
+      st = uv * cellSize + vec2(cellX, cellY) * cellSize;
+    } else {
+      // Fallback to u_spriteUV for single sprite picking
+      st = u_spriteUV.xy + uv * (u_spriteUV.zw - u_spriteUV.xy);
+    }
 
     gl_FragColor = ${shaderInfo.fragColor};
   }
@@ -4827,8 +5438,8 @@ function requireRegl() {
           return TYPE_SIZE[type] * channels;
         }
       }
-      function isPow2(v) {
-        return !(v & v - 1) && !!v;
+      function isPow2(v2) {
+        return !(v2 & v2 - 1) && !!v2;
       }
       function checkTexture2D(info, mipData, limits) {
         var i;
@@ -5324,28 +5935,28 @@ function requireRegl() {
       var GL_INT$1 = 5124;
       var GL_UNSIGNED_INT$1 = 5125;
       var GL_FLOAT$2 = 5126;
-      function nextPow16(v) {
+      function nextPow16(v2) {
         for (var i = 16; i <= 1 << 28; i *= 16) {
-          if (v <= i) {
+          if (v2 <= i) {
             return i;
           }
         }
         return 0;
       }
-      function log2(v) {
+      function log2(v2) {
         var r, shift;
-        r = (v > 65535) << 4;
-        v >>>= r;
-        shift = (v > 255) << 3;
-        v >>>= shift;
+        r = (v2 > 65535) << 4;
+        v2 >>>= r;
+        shift = (v2 > 255) << 3;
+        v2 >>>= shift;
         r |= shift;
-        shift = (v > 15) << 2;
-        v >>>= shift;
+        shift = (v2 > 15) << 2;
+        v2 >>>= shift;
         r |= shift;
-        shift = (v > 3) << 1;
-        v >>>= shift;
+        shift = (v2 > 3) << 1;
+        v2 >>>= shift;
         r |= shift;
-        return r | v >> 1;
+        return r | v2 >> 1;
       }
       function createPool() {
         var bufferPool = loop2(8, function() {
@@ -6320,8 +6931,8 @@ function requireRegl() {
       function isArrayLike(s) {
         return Array.isArray(s) || isTypedArray(s);
       }
-      var isPow2$1 = function(v) {
-        return !(v & v - 1) && !!v;
+      var isPow2$1 = function(v2) {
+        return !(v2 & v2 - 1) && !!v2;
       };
       var GL_COMPRESSED_TEXTURE_FORMATS = 34467;
       var GL_TEXTURE_2D$1 = 3553;
@@ -8692,14 +9303,14 @@ function requireRegl() {
             }
             params.color = Array(colorCubes.length);
             for (i = 0; i < colorCubes.length; ++i) {
-              var cube = colorCubes[i];
+              var cube2 = colorCubes[i];
               check$1(
-                typeof cube === "function" && cube._reglType === "textureCube",
+                typeof cube2 === "function" && cube2._reglType === "textureCube",
                 "invalid cube map"
               );
-              radius = radius || cube.width;
+              radius = radius || cube2.width;
               check$1(
-                cube.width === radius && cube.height === radius,
+                cube2.width === radius && cube2.height === radius,
                 "invalid cube map shape"
               );
               params.color[i] = {
@@ -11322,8 +11933,8 @@ function requireRegl() {
                       "color.mask must be length 4 array",
                       env.commandStr
                     );
-                    return value.map(function(v) {
-                      return !!v;
+                    return value.map(function(v2) {
+                      return !!v2;
                     });
                   },
                   function(env2, scope, value) {
@@ -12004,8 +12615,8 @@ function requireRegl() {
                 "(",
                 variable,
                 ");",
-                variable.map(function(v, i) {
-                  return CURRENT + "[" + i + "]=" + v;
+                variable.map(function(v2, i) {
+                  return CURRENT + "[" + i + "]=" + v2;
                 }).join(";"),
                 ";"
               );
@@ -13204,8 +13815,8 @@ function requireRegl() {
             var defn = args.state[name];
             var value = defn.append(env, scope);
             if (isArrayLike(value)) {
-              value.forEach(function(v, i) {
-                scope.set(env.next[name], "[" + i + "]", v);
+              value.forEach(function(v2, i) {
+                scope.set(env.next[name], "[" + i + "]", v2);
               });
             } else {
               scope.set(shared.next, "." + name, value);
@@ -14556,12 +15167,20 @@ const vertexPrefix = `
 	 struct VertexOutput {
   	@builtin(position) position : vec4f,
   	@location(0) texcoord : vec2f,
+  	@location(1) faceId : f32,
+  	// Vertex data for fragment shader
+  	@location(2) v_position : vec3f,
+  	@location(3) v_normal : vec3f,
+  	@location(4) v_viewDir : vec3f,
+  	@location(5) v_depth : f32,
 	 };
 `;
 const fragPrefix = `
    @group(0) @binding(0) var<uniform> time: f32;
    @group(0) @binding(1) var<uniform> resolution: vec2<f32>;
    @group(0) @binding(2) var<uniform> mouse: vec2<f32>;
+   @group(0) @binding(3) var<uniform> u_spriteUV: vec4<f32>;
+   @group(0) @binding(4) var<uniform> u_spriteGrid: vec2<f32>;
 `;
 const vertexShaderCode = vertexPrefix + `
     @vertex
@@ -14578,7 +15197,15 @@ const vertexShaderCode = vertexPrefix + `
 
      var output : VertexOutput;
      output.position = vec4<f32>( positions[vertexIndex], 0.0, 1.0);
-     output.texcoord = positions[vertexIndex] / 2.0 + 0.5; // positions are -1 to 1, texcoords are 0 
+     output.texcoord = positions[vertexIndex] / 2.0 + 0.5; // positions are -1 to 1, texcoords are 0
+     output.faceId = 0.0;
+
+     // Default vertex data for fullscreen quad
+     output.v_position = vec3f(positions[vertexIndex], 0.0);
+     output.v_normal = vec3f(0.0, 0.0, 1.0);
+     output.v_viewDir = vec3f(0.0, 0.0, 1.0);
+     output.v_depth = 1.0;
+
      return output;
     }
 `;
@@ -14687,6 +15314,17 @@ class wgslHydra {
       outp.createTexturesAndViews(this.device, this.destTextureDescriptor);
     }
   }
+  // Lazily create depth texture for 3D rendering
+  ensureDepthTexture() {
+    if (this.depthTexture) return;
+    this.depthTexture = this.device.createTexture({
+      label: "depthTexture",
+      size: { width: this.canvas.width, height: this.canvas.height },
+      format: "depth24plus",
+      usage: GPUTextureUsage.RENDER_ATTACHMENT
+    });
+    this.depthTextureView = this.depthTexture.createView();
+  }
   async setupHydra() {
     if (!navigator.gpu) {
       console.error("WebGPU is not supported on this browser.");
@@ -14736,7 +15374,7 @@ class wgslHydra {
         {
           binding: 1,
           // Binding index "resolution"
-          visibility: GPUShaderStage.FRAGMENT,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           // Shader stages where this binding is used
           buffer: { type: "uniform" }
           // Resource type
@@ -14748,6 +15386,18 @@ class wgslHydra {
           // Shader stages where this binding is used
           buffer: { type: "uniform" }
           // Resource type
+        },
+        {
+          binding: 3,
+          // Binding index "u_spriteUV"
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: "uniform" }
+        },
+        {
+          binding: 4,
+          // Binding index "u_spriteGrid"
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: "uniform" }
         }
       ]
     });
@@ -14772,6 +15422,20 @@ class wgslHydra {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     });
     this.mouseUniformValues = new Float32Array(2);
+    this.spriteUVUniformBuffer = this.device.createBuffer({
+      label: "spriteUV uniform buffer",
+      size: 16,
+      // 4 x 32-bit float
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+    this.spriteUVUniformValues = new Float32Array([0, 0, 1, 1]);
+    this.spriteGridUniformBuffer = this.device.createBuffer({
+      label: "spriteGrid uniform buffer",
+      size: 8,
+      // 2 x 32-bit float
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+    this.spriteGridUniformValues = new Float32Array([1, 1]);
     this.sharedBindGroup = this.device.createBindGroup({
       label: "shared bind group",
       layout: this.sharedBindGroupLayout,
@@ -14790,6 +15454,14 @@ class wgslHydra {
           binding: 2,
           resource: { buffer: this.mouseUniformBuffer }
           // Resource for the binding
+        },
+        {
+          binding: 3,
+          resource: { buffer: this.spriteUVUniformBuffer }
+        },
+        {
+          binding: 4,
+          resource: { buffer: this.spriteGridUniformBuffer }
         }
       ]
     });
@@ -14834,7 +15506,21 @@ class wgslHydra {
   // Setup a sprite render chain with optional custom geometry and vertex shader
   //
   async setupSpriteChain(chan, spriteLevel, config) {
-    const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive } = config;
+    const {
+      uniforms,
+      fragShader,
+      vertexWgsl,
+      vertexUniforms,
+      rawVerts,
+      blendMode,
+      primitive,
+      has3D,
+      hasExplicitUVs,
+      hasFaceIds,
+      uvs,
+      faceIds,
+      sprite
+    } = config;
     const rpe = this.renderPassInfo[chan];
     rpe.outputObject = this.outputChannelObjects[chan];
     let spe = rpe.sprites.get(spriteLevel);
@@ -14847,6 +15533,9 @@ class wgslHydra {
     spe.uniformList = uniforms;
     spe.blendMode = blendMode || "normal";
     spe.hasCustomGeometry = rawVerts !== null && rawVerts !== void 0;
+    spe.hasExplicitUVs = hasExplicitUVs || false;
+    spe.hasFaceIds = hasFaceIds || false;
+    spe.sprite = sprite || null;
     this.generateSpriteUniformDeclarations(spe);
     spe.fragmentShaderSource = vertexPrefix + fragPrefix + spe.bindGroupHeader + fragShader;
     spe.fragmentShaderModule = this.device.createShaderModule({
@@ -14856,11 +15545,12 @@ class wgslHydra {
     if (spe.hasCustomGeometry && vertexWgsl) {
       spe.vertexWgsl = vertexWgsl;
       spe.vertexUniforms = vertexUniforms || [];
+      spe.has3D = has3D || false;
       spe.vertexShaderModule = this.device.createShaderModule({
         label: `vert_c${chan}_s${spriteLevel}`,
         code: vertexWgsl
       });
-      const verts = this.reshapeToVec3(rawVerts);
+      const verts = this.reshapeToVec3(rawVerts, spe.has3D);
       spe.vertexCount = verts.length;
       const vertexData = new Float32Array(verts.flat());
       spe.vertexBuffer = this.device.createBuffer({
@@ -14869,6 +15559,24 @@ class wgslHydra {
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
       });
       this.device.queue.writeBuffer(spe.vertexBuffer, 0, vertexData);
+      if (spe.hasExplicitUVs && uvs && uvs.length > 0) {
+        const uvData = new Float32Array(uvs);
+        spe.uvBuffer = this.device.createBuffer({
+          label: `uvbuf_c${chan}_s${spriteLevel}`,
+          size: uvData.byteLength,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(spe.uvBuffer, 0, uvData);
+      }
+      if (spe.hasFaceIds && faceIds && faceIds.length > 0) {
+        const faceIdData = new Float32Array(faceIds);
+        spe.faceIdBuffer = this.device.createBuffer({
+          label: `faceidbuf_c${chan}_s${spriteLevel}`,
+          size: faceIdData.byteLength,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(spe.faceIdBuffer, 0, faceIdData);
+      }
       if (spe.vertexUniforms.length > 0) {
         this.setupVertexUniforms(spe);
       }
@@ -14902,15 +15610,46 @@ class wgslHydra {
       }
     };
     if (spe.hasCustomGeometry) {
-      pipelineDescriptor.vertex.buffers = [{
+      const bufferLayouts = [{
         arrayStride: 12,
-        // 3 floats * 4 bytes
+        // 3 floats * 4 bytes (position)
         attributes: [{
           shaderLocation: 0,
           offset: 0,
           format: "float32x3"
         }]
       }];
+      if (spe.hasExplicitUVs && spe.uvBuffer) {
+        bufferLayouts.push({
+          arrayStride: 8,
+          // 2 floats * 4 bytes (texcoord)
+          attributes: [{
+            shaderLocation: 1,
+            offset: 0,
+            format: "float32x2"
+          }]
+        });
+      }
+      if (spe.hasFaceIds && spe.faceIdBuffer) {
+        bufferLayouts.push({
+          arrayStride: 4,
+          // 1 float * 4 bytes (faceId)
+          attributes: [{
+            shaderLocation: 2,
+            offset: 0,
+            format: "float32"
+          }]
+        });
+      }
+      pipelineDescriptor.vertex.buffers = bufferLayouts;
+    }
+    if (spe.has3D) {
+      this.ensureDepthTexture();
+      pipelineDescriptor.depthStencil = {
+        format: "depth24plus",
+        depthWriteEnabled: true,
+        depthCompare: "less"
+      };
     }
     spe.pipeline = this.device.createRenderPipeline(pipelineDescriptor);
     this.createSamplerOrBuffersForSprite(spe);
@@ -14923,6 +15662,12 @@ class wgslHydra {
         if (spe.vertexBuffer) {
           spe.vertexBuffer.destroy();
         }
+        if (spe.uvBuffer) {
+          spe.uvBuffer.destroy();
+        }
+        if (spe.faceIdBuffer) {
+          spe.faceIdBuffer.destroy();
+        }
         if (spe.vertexUniformBuffer) {
           spe.vertexUniformBuffer.destroy();
         }
@@ -14930,10 +15675,10 @@ class wgslHydra {
       rpe.sprites.clear();
     }
   }
-  // Reshape 2D vertex data to vec3 format
-  reshapeToVec3(flatArray) {
+  // Reshape vertex data to vec3 format
+  // is3D: explicit flag indicating 3D data (required for ambiguous lengths divisible by both 2 and 3)
+  reshapeToVec3(flatArray, is3D = false) {
     const len = flatArray.length;
-    const is3D = len % 3 === 0 && len % 2 !== 0;
     const stride = is3D ? 3 : 2;
     const verts = [];
     for (let i = 0; i < len; i += stride) {
@@ -14949,8 +15694,16 @@ class wgslHydra {
   setupVertexUniforms(spe) {
     let size = 0;
     for (const u of spe.vertexUniforms) {
-      if (u.type === "f32") size += 4;
-      else if (u.type === "vec2f") size += 8;
+      if (u.type === "f32") {
+        size = Math.ceil(size / 4) * 4;
+        size += 4;
+      } else if (u.type === "vec2f") {
+        size = Math.ceil(size / 8) * 8;
+        size += 8;
+      } else if (u.type === "vec3f") {
+        size = Math.ceil(size / 16) * 16;
+        size += 12;
+      }
     }
     size = Math.ceil(size / 16) * 16;
     spe.vertexUniformBuffer = this.device.createBuffer({
@@ -15081,17 +15834,44 @@ class wgslHydra {
   // Update vertex uniforms for a sprite
   updateVertexUniforms(spe) {
     if (!spe.vertexUniforms || spe.vertexUniforms.length === 0) return;
-    const data2 = [];
+    let totalSize = 0;
     for (const u of spe.vertexUniforms) {
-      let val = typeof u.value === "function" ? u.value() : u.value;
-      if (Array.isArray(val)) {
-        data2.push(...val.map((v) => typeof v === "function" ? v() : v));
-      } else {
-        data2.push(val);
+      if (u.type === "f32") {
+        totalSize = Math.ceil(totalSize / 4) * 4;
+        totalSize += 4;
+      } else if (u.type === "vec2f") {
+        totalSize = Math.ceil(totalSize / 8) * 8;
+        totalSize += 8;
+      } else if (u.type === "vec3f") {
+        totalSize = Math.ceil(totalSize / 16) * 16;
+        totalSize += 12;
       }
     }
-    while (data2.length < 4) data2.push(0);
-    const floatData = new Float32Array(data2);
+    totalSize = Math.ceil(totalSize / 16) * 16;
+    const floatData = new Float32Array(Math.max(totalSize / 4, 4));
+    let offset2 = 0;
+    for (const u of spe.vertexUniforms) {
+      let val = typeof u.value === "function" ? u.value() : u.value;
+      if (u.type === "f32") {
+        offset2 = Math.ceil(offset2);
+        const v2 = Array.isArray(val) ? val[0] : val;
+        floatData[offset2] = typeof v2 === "function" ? v2() : v2;
+        offset2 += 1;
+      } else if (u.type === "vec2f") {
+        offset2 = Math.ceil(offset2 / 2) * 2;
+        const arr = Array.isArray(val) ? val : [val, val];
+        floatData[offset2] = typeof arr[0] === "function" ? arr[0]() : arr[0];
+        floatData[offset2 + 1] = typeof arr[1] === "function" ? arr[1]() : arr[1];
+        offset2 += 2;
+      } else if (u.type === "vec3f") {
+        offset2 = Math.ceil(offset2 / 4) * 4;
+        const arr = Array.isArray(val) ? val : [val, val, val];
+        floatData[offset2] = typeof arr[0] === "function" ? arr[0]() : arr[0];
+        floatData[offset2 + 1] = typeof arr[1] === "function" ? arr[1]() : arr[1];
+        floatData[offset2 + 2] = typeof arr[2] === "function" ? arr[2]() : arr[2];
+        offset2 += 3;
+      }
+    }
     this.device.queue.writeBuffer(spe.vertexUniformBuffer, 0, floatData);
   }
   // ------------------------------------------------------------------------------
@@ -15107,6 +15887,8 @@ class wgslHydra {
     this.mouseUniformValues[0] = this.mousePos.x;
     this.mouseUniformValues[1] = this.mousePos.y;
     this.device.queue.writeBuffer(this.mouseUniformBuffer, 0, this.mouseUniformValues);
+    this.device.queue.writeBuffer(this.spriteUVUniformBuffer, 0, this.spriteUVUniformValues);
+    this.device.queue.writeBuffer(this.spriteGridUniformBuffer, 0, this.spriteGridUniformValues);
     for (let chan = 0; chan < this.numChannels; ++chan) {
       const rpe = this.renderPassInfo[chan];
       const hasSprites = rpe.sprites && rpe.sprites.size > 0;
@@ -15115,6 +15897,7 @@ class wgslHydra {
       rpe.outputObject.flipPingPong();
       if (hasSprites) {
         const levels = Array.from(rpe.sprites.keys()).sort((a2, b) => a2 - b);
+        let depthCleared = false;
         for (let i = 0; i < levels.length; i++) {
           const level = levels[i];
           const spe = rpe.sprites.get(level);
@@ -15129,11 +15912,29 @@ class wgslHydra {
               storeOp: "store"
             }]
           };
+          if (spe.has3D && this.depthTextureView) {
+            const shouldClearDepth = !depthCleared;
+            depthCleared = true;
+            renderPassDescriptor.depthStencilAttachment = {
+              view: this.depthTextureView,
+              depthClearValue: 1,
+              depthLoadOp: shouldClearDepth ? "clear" : "load",
+              depthStoreOp: "store"
+            };
+          }
           let ubgData = this.fillSpriteBindGroup(spe);
           let ubg = this.device.createBindGroup(ubgData);
           if (spe.vertexUniforms && spe.vertexUniforms.length > 0) {
             this.updateVertexUniforms(spe);
           }
+          if (spe.sprite && spe.sprite.cols && spe.sprite.rows) {
+            this.spriteGridUniformValues[0] = spe.sprite.cols;
+            this.spriteGridUniformValues[1] = spe.sprite.rows;
+          } else {
+            this.spriteGridUniformValues[0] = 1;
+            this.spriteGridUniformValues[1] = 1;
+          }
+          this.device.queue.writeBuffer(this.spriteGridUniformBuffer, 0, this.spriteGridUniformValues);
           const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
           passEncoder.setPipeline(spe.pipeline);
           passEncoder.setBindGroup(0, this.sharedBindGroup);
@@ -15143,6 +15944,12 @@ class wgslHydra {
           }
           if (spe.hasCustomGeometry && spe.vertexBuffer) {
             passEncoder.setVertexBuffer(0, spe.vertexBuffer);
+            if (spe.hasExplicitUVs && spe.uvBuffer) {
+              passEncoder.setVertexBuffer(1, spe.uvBuffer);
+            }
+            if (spe.hasFaceIds && spe.faceIdBuffer) {
+              passEncoder.setVertexBuffer(2, spe.faceIdBuffer);
+            }
             passEncoder.draw(spe.vertexCount);
           } else {
             passEncoder.draw(6);
@@ -18850,7 +19657,7 @@ pp$1.validateRegExpFlags = function(state) {
   var validFlags = state.validFlags;
   var flags = state.flags;
   var u = false;
-  var v = false;
+  var v2 = false;
   for (var i = 0; i < flags.length; i++) {
     var flag = flags.charAt(i);
     if (validFlags.indexOf(flag) === -1) {
@@ -18863,10 +19670,10 @@ pp$1.validateRegExpFlags = function(state) {
       u = true;
     }
     if (flag === "v") {
-      v = true;
+      v2 = true;
     }
   }
-  if (this.options.ecmaVersion >= 15 && u && v) {
+  if (this.options.ecmaVersion >= 15 && u && v2) {
     this.raise(state.start, "Invalid regular expression flag");
   }
 };
@@ -22491,6 +23298,376 @@ function stripOutStuff(inp) {
   let outp = inp.substring(firstX + 1, lastX);
   return outp;
 }
+function parseObj(objText, options = {}) {
+  const { swapYZ = false } = options;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const faces = [];
+  const materialNames = [];
+  const materialToId = /* @__PURE__ */ new Map();
+  let currentMaterial = null;
+  const lines = objText.split("\n");
+  for (const line2 of lines) {
+    const parts = line2.trim().split(/\s+/);
+    if (parts[0] === "v") {
+      const x2 = parseFloat(parts[1]);
+      const y = parseFloat(parts[2]);
+      const z = parseFloat(parts[3]);
+      vertices.push(swapYZ ? [x2, z, y] : [x2, y, z]);
+    } else if (parts[0] === "vn") {
+      const x2 = parseFloat(parts[1]);
+      const y = parseFloat(parts[2]);
+      const z = parseFloat(parts[3]);
+      normals.push(swapYZ ? [x2, z, y] : [x2, y, z]);
+    } else if (parts[0] === "vt") {
+      uvs.push([parseFloat(parts[1]), parseFloat(parts[2])]);
+    } else if (parts[0] === "usemtl") {
+      const matName = parts.slice(1).join(" ");
+      if (!materialToId.has(matName)) {
+        materialToId.set(matName, materialNames.length);
+        materialNames.push(matName);
+      }
+      currentMaterial = materialToId.get(matName);
+    } else if (parts[0] === "f") {
+      const faceVerts = [];
+      const faceUVs = [];
+      const faceNormals = [];
+      for (let i = 1; i < parts.length; i++) {
+        const indices = parts[i].split("/");
+        faceVerts.push(parseInt(indices[0]) - 1);
+        if (indices[1]) faceUVs.push(parseInt(indices[1]) - 1);
+        if (indices[2]) faceNormals.push(parseInt(indices[2]) - 1);
+      }
+      faces.push({ verts: faceVerts, uvs: faceUVs, normals: faceNormals, material: currentMaterial });
+    }
+  }
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  for (const v2 of vertices) {
+    minX = Math.min(minX, v2[0]);
+    maxX = Math.max(maxX, v2[0]);
+    minY = Math.min(minY, v2[1]);
+    maxY = Math.max(maxY, v2[1]);
+    minZ = Math.min(minZ, v2[2]);
+    maxZ = Math.max(maxZ, v2[2]);
+  }
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const rangeX = maxX - minX;
+  const rangeY = maxY - minY;
+  const rangeZ = maxZ - minZ;
+  const maxRange = Math.max(rangeX, rangeY, rangeZ);
+  const scale = 1 / maxRange;
+  const verts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const outFaceIds = [];
+  const hasNormals = normals.length > 0;
+  const hasExplicitUVs = uvs.length > 0;
+  const hasMaterials = materialNames.length > 0;
+  const defaultQuadUVs = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const defaultTriUVs = [[0, 0], [1, 0], [0.5, 1]];
+  const addVertex = (vertIdx, uv, normalIdx, materialId) => {
+    const v2 = vertices[vertIdx];
+    verts.push((v2[0] - centerX) * scale);
+    verts.push((v2[1] - centerY) * scale);
+    verts.push((v2[2] - centerZ) * scale);
+    if (hasNormals && normalIdx !== void 0) {
+      const n = normals[normalIdx];
+      outNormals.push(n[0], n[1], n[2]);
+    }
+    outUVs.push(uv[0], uv[1]);
+    if (hasMaterials) {
+      outFaceIds.push(materialId !== null ? materialId : 0);
+    }
+  };
+  for (const face of faces) {
+    const fv = face.verts;
+    const fu = face.uvs;
+    const fn = face.normals;
+    const fm = face.material;
+    if (fv.length === 3) {
+      for (let i = 0; i < 3; i++) {
+        const uv = hasExplicitUVs && fu[i] !== void 0 ? uvs[fu[i]] : defaultTriUVs[i];
+        addVertex(fv[i], uv, fn[i], fm);
+      }
+    } else if (fv.length >= 4) {
+      for (let i = 1; i < fv.length - 1; i++) {
+        const uv0 = hasExplicitUVs && fu[0] !== void 0 ? uvs[fu[0]] : defaultQuadUVs[0];
+        const uv1 = hasExplicitUVs && fu[i] !== void 0 ? uvs[fu[i]] : defaultQuadUVs[i];
+        const uv2 = hasExplicitUVs && fu[i + 1] !== void 0 ? uvs[fu[i + 1]] : defaultQuadUVs[i + 1];
+        addVertex(fv[0], uv0, fn[0], fm);
+        addVertex(fv[i], uv1, fn[i], fm);
+        addVertex(fv[i + 1], uv2, fn[i + 1], fm);
+      }
+    }
+  }
+  const vs = new VertexSource(verts);
+  vs.is3D = true;
+  if (outNormals.length > 0) vs.normals = outNormals;
+  if (outUVs.length > 0) vs.uvs = outUVs;
+  if (outFaceIds.length > 0) {
+    vs.faceIds = outFaceIds;
+    vs.materialNames = materialNames;
+  }
+  return vs;
+}
+async function loadObj(url, options = {}) {
+  const response = await fetch(url);
+  const text = await response.text();
+  return parseObj(text, options);
+}
+function parseGlb(arrayBuffer, options = {}) {
+  const { meshIndex = 0, primitiveIndex } = options;
+  const view = new DataView(arrayBuffer);
+  const magic = view.getUint32(0, true);
+  if (magic !== 1179937895) {
+    throw new Error("Invalid GLB file: bad magic number");
+  }
+  const version2 = view.getUint32(4, true);
+  if (version2 !== 2) {
+    throw new Error(`Unsupported glTF version: ${version2}`);
+  }
+  let jsonChunk = null;
+  let binChunk = null;
+  let offset2 = 12;
+  while (offset2 < arrayBuffer.byteLength) {
+    const chunkLength = view.getUint32(offset2, true);
+    const chunkType = view.getUint32(offset2 + 4, true);
+    const chunkData = new Uint8Array(arrayBuffer, offset2 + 8, chunkLength);
+    if (chunkType === 1313821514) {
+      const decoder = new TextDecoder("utf-8");
+      jsonChunk = JSON.parse(decoder.decode(chunkData));
+    } else if (chunkType === 5130562) {
+      binChunk = chunkData.buffer.slice(chunkData.byteOffset, chunkData.byteOffset + chunkData.byteLength);
+    }
+    offset2 += 8 + chunkLength;
+    if (offset2 % 4 !== 0) offset2 += 4 - offset2 % 4;
+  }
+  if (!jsonChunk) throw new Error("GLB missing JSON chunk");
+  return extractMeshFromGltf(jsonChunk, binChunk, meshIndex, primitiveIndex);
+}
+function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
+  var _a;
+  const mesh = (_a = gltf.meshes) == null ? void 0 : _a[meshIndex];
+  if (!mesh) throw new Error(`Mesh ${meshIndex} not found`);
+  const readAccessor = (accessorIndex) => {
+    const accessor = gltf.accessors[accessorIndex];
+    const bufferView = gltf.bufferViews[accessor.bufferView];
+    const componentType = accessor.componentType;
+    const count = accessor.count;
+    const type = accessor.type;
+    const typeComponents = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+    const components = typeComponents[type] || 1;
+    const TypedArray = {
+      5120: Int8Array,
+      // BYTE
+      5121: Uint8Array,
+      // UNSIGNED_BYTE
+      5122: Int16Array,
+      // SHORT
+      5123: Uint16Array,
+      // UNSIGNED_SHORT
+      5125: Uint32Array,
+      // UNSIGNED_INT
+      5126: Float32Array
+      // FLOAT
+    }[componentType];
+    if (!TypedArray) throw new Error(`Unsupported component type: ${componentType}`);
+    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
+    const byteStride = bufferView.byteStride || 0;
+    if (byteStride === 0 || byteStride === components * TypedArray.BYTES_PER_ELEMENT) {
+      return new TypedArray(binBuffer, byteOffset, count * components);
+    }
+    const result = new TypedArray(count * components);
+    const srcView = new DataView(binBuffer);
+    for (let i = 0; i < count; i++) {
+      const srcOffset = byteOffset + i * byteStride;
+      for (let j = 0; j < components; j++) {
+        if (TypedArray === Float32Array) {
+          result[i * components + j] = srcView.getFloat32(srcOffset + j * 4, true);
+        } else if (TypedArray === Uint16Array) {
+          result[i * components + j] = srcView.getUint16(srcOffset + j * 2, true);
+        } else if (TypedArray === Uint32Array) {
+          result[i * components + j] = srcView.getUint32(srcOffset + j * 4, true);
+        }
+      }
+    }
+    return result;
+  };
+  const primitives = primitiveIndex !== void 0 ? [mesh.primitives[primitiveIndex]] : mesh.primitives;
+  if (!primitives || primitives.length === 0) {
+    throw new Error(`No primitives found in mesh ${meshIndex}`);
+  }
+  const verts = [];
+  const outNormals = [];
+  const outUVs = [];
+  let hasAnyUVs = false;
+  for (const primitive of primitives) {
+    const positionAccessor = primitive.attributes.POSITION;
+    if (positionAccessor === void 0) continue;
+    const positions = readAccessor(positionAccessor);
+    const normals = primitive.attributes.NORMAL !== void 0 ? readAccessor(primitive.attributes.NORMAL) : null;
+    const uvs = primitive.attributes.TEXCOORD_0 !== void 0 ? readAccessor(primitive.attributes.TEXCOORD_0) : null;
+    if (uvs) hasAnyUVs = true;
+    const indices = primitive.indices !== void 0 ? readAccessor(primitive.indices) : null;
+    const addVertex = (idx) => {
+      verts.push(positions[idx * 3], positions[idx * 3 + 1], positions[idx * 3 + 2]);
+      if (normals) {
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2]);
+      }
+      if (uvs) {
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
+      }
+    };
+    if (indices) {
+      for (let i = 0; i < indices.length; i++) {
+        addVertex(indices[i]);
+      }
+    } else {
+      const vertexCount = positions.length / 3;
+      for (let i = 0; i < vertexCount; i++) {
+        addVertex(i);
+      }
+    }
+  }
+  if (verts.length === 0) {
+    throw new Error("No vertex data found in mesh");
+  }
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < verts.length; i += 3) {
+    minX = Math.min(minX, verts[i]);
+    maxX = Math.max(maxX, verts[i]);
+    minY = Math.min(minY, verts[i + 1]);
+    maxY = Math.max(maxY, verts[i + 1]);
+    minZ = Math.min(minZ, verts[i + 2]);
+    maxZ = Math.max(maxZ, verts[i + 2]);
+  }
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const rangeX = maxX - minX;
+  const rangeY = maxY - minY;
+  const rangeZ = maxZ - minZ;
+  const maxRange = Math.max(rangeX, rangeY, rangeZ);
+  const scale = maxRange > 0 ? 1 / maxRange : 1;
+  for (let i = 0; i < verts.length; i += 3) {
+    verts[i] = (verts[i] - centerX) * scale;
+    verts[i + 1] = (verts[i + 1] - centerY) * scale;
+    verts[i + 2] = (verts[i + 2] - centerZ) * scale;
+  }
+  if (!hasAnyUVs) {
+    for (let i = 0; i < verts.length; i += 3) {
+      const x2 = verts[i], y = verts[i + 1], z = verts[i + 2];
+      const u = 0.5 + Math.atan2(z, x2) / (2 * Math.PI);
+      const v2 = 0.5 + Math.asin(Math.max(-1, Math.min(1, y))) / Math.PI;
+      outUVs.push(u, v2);
+    }
+  }
+  const vs = new VertexSource(verts);
+  vs.is3D = true;
+  if (outNormals.length > 0) vs.normals = outNormals;
+  if (outUVs.length > 0) vs.uvs = outUVs;
+  return vs;
+}
+async function loadGlb(url, options = {}) {
+  var _a;
+  const { extractTextures = true, ...parseOptions } = options;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to load GLB from ${url}: ${response.status} ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength < 12) {
+    throw new Error(`Invalid GLB file from ${url}: file too small (${arrayBuffer.byteLength} bytes)`);
+  }
+  const model = parseGlb(arrayBuffer, parseOptions);
+  if (extractTextures) {
+    const textures = await extractGlbTextures(arrayBuffer);
+    model.texture = ((_a = textures[0]) == null ? void 0 : _a.image) || null;
+    model.textures = textures.map((t) => t.image);
+  }
+  return model;
+}
+async function extractGlbTextures(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  const magic = view.getUint32(0, true);
+  if (magic !== 1179937895) throw new Error("Invalid GLB");
+  let jsonChunk = null;
+  let binStart = 0;
+  let offset2 = 12;
+  while (offset2 < arrayBuffer.byteLength) {
+    const chunkLength = view.getUint32(offset2, true);
+    const chunkType = view.getUint32(offset2 + 4, true);
+    if (chunkType === 1313821514) {
+      const chunkData = new Uint8Array(arrayBuffer, offset2 + 8, chunkLength);
+      jsonChunk = JSON.parse(new TextDecoder().decode(chunkData));
+    } else if (chunkType === 5130562) {
+      binStart = offset2 + 8;
+    }
+    offset2 += 8 + chunkLength;
+    if (offset2 % 4 !== 0) offset2 += 4 - offset2 % 4;
+  }
+  if (!jsonChunk || !jsonChunk.images) return [];
+  const textures = [];
+  for (let i = 0; i < jsonChunk.images.length; i++) {
+    const imgDef = jsonChunk.images[i];
+    if (imgDef.bufferView === void 0) continue;
+    const bv = jsonChunk.bufferViews[imgDef.bufferView];
+    const imgBytes = new Uint8Array(arrayBuffer, binStart + (bv.byteOffset || 0), bv.byteLength);
+    let mimeType = imgDef.mimeType;
+    if (!mimeType) {
+      if (imgBytes[0] === 137 && imgBytes[1] === 80) mimeType = "image/png";
+      else if (imgBytes[0] === 255 && imgBytes[1] === 216) mimeType = "image/jpeg";
+      else mimeType = "image/png";
+    }
+    const blob = new Blob([imgBytes], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = url;
+    });
+    textures.push({ image: img, index: i, blobUrl: url });
+  }
+  return textures;
+}
+async function createGlbSpriteSheet(urls, options = {}) {
+  const { cellSize = 256 } = options;
+  const results = await Promise.all(urls.map(async (url) => {
+    var _a;
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const model = parseGlb(arrayBuffer, options);
+    const textures = await extractGlbTextures(arrayBuffer);
+    return { model, texture: ((_a = textures[0]) == null ? void 0 : _a.image) || null };
+  }));
+  const count = results.length;
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const canvas = document.createElement("canvas");
+  canvas.width = cols * cellSize;
+  canvas.height = rows * cellSize;
+  const ctx = canvas.getContext("2d");
+  results.forEach((r, i) => {
+    if (r.texture) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      ctx.drawImage(r.texture, col * cellSize, row * cellSize, cellSize, cellSize);
+    }
+  });
+  const models = results.map((r, i) => {
+    r.model.spriteIndex = i;
+    return r.model;
+  });
+  return { canvas, models, cols, rows, cellSize };
+}
 function tri(size = 1, centerX = 0, centerY = 0) {
   const h = size * Math.sqrt(3) / 2;
   const verts = [
@@ -22574,6 +23751,57 @@ function ring(outerRadius = 1, innerRadius = 0.5, centerX = 0, centerY = 0, segm
     verts.push(centerX + cos2 * innerRadius, centerY + sin2 * innerRadius);
   }
   return new VertexSource(verts);
+}
+function cube(size = 0.5) {
+  const s = size;
+  const corners = [
+    [-s, -s, s],
+    // 0: front-bottom-left
+    [s, -s, s],
+    // 1: front-bottom-right
+    [s, s, s],
+    // 2: front-top-right
+    [-s, s, s],
+    // 3: front-top-left
+    [-s, -s, -s],
+    // 4: back-bottom-left
+    [s, -s, -s],
+    // 5: back-bottom-right
+    [s, s, -s],
+    // 6: back-top-right
+    [-s, s, -s]
+    // 7: back-top-left
+  ];
+  const faces = [
+    { indices: [0, 1, 2, 0, 2, 3], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // front (0)
+    { indices: [5, 4, 7, 5, 7, 6], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // back (1)
+    { indices: [3, 2, 6, 3, 6, 7], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // top (2)
+    { indices: [4, 5, 1, 4, 1, 0], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // bottom (3)
+    { indices: [1, 5, 6, 1, 6, 2], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // right (4)
+    { indices: [4, 0, 3, 4, 3, 7], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] }
+    // left (5)
+  ];
+  const verts = [];
+  const uvs = [];
+  const faceIds = [];
+  for (let faceIdx = 0; faceIdx < faces.length; faceIdx++) {
+    const face = faces[faceIdx];
+    for (let i = 0; i < face.indices.length; i++) {
+      verts.push(...corners[face.indices[i]]);
+      uvs.push(...face.uvs[i]);
+      faceIds.push(faceIdx);
+    }
+  }
+  const vs = new VertexSource(verts);
+  vs.uvs = uvs;
+  vs.faceIds = faceIds;
+  vs.is3D = true;
+  return vs;
 }
 class SpriteSheet {
   constructor(options = {}) {
@@ -22794,7 +24022,7 @@ async function loadAseprite(jsonUrl, source = null) {
   const json = await response.json();
   return parseAseprite(json, source);
 }
-const GeneratorFunction = (function* () {
+const AsyncGeneratorFunction = (async function* () {
 }).constructor;
 let Mouse;
 if (!(typeof self !== "undefined" && self.constructor && self.constructor.name === "DedicatedWorkerGlobalScope")) {
@@ -22868,11 +24096,20 @@ class HydraRenderer {
       circle,
       line,
       ring,
+      cube,
+      loadObj,
+      loadGlb,
+      parseGlb,
+      extractGlbTextures,
+      createGlbSpriteSheet,
       // Sprite sheet helpers
       spriteSheet,
       spriteAtlas,
       parseAseprite,
-      loadAseprite
+      loadAseprite,
+      // Vertex data proxy for accessing vertex shader outputs in fragment shaders
+      // Usage: osc(10).mult(v.normal.z).out()
+      v
     };
     if (makeGlobal) window.loadScript = this.loadScript;
     this.timeSinceLastUpdate = 0;
@@ -22946,7 +24183,7 @@ class HydraRenderer {
     keys.push("_h");
     values.push(h);
     try {
-      let fn = new GeneratorFunction(...keys, code);
+      let fn = new AsyncGeneratorFunction(...keys, code);
       this.done = false;
       this.generatorFunction = fn(...values);
     } catch (err) {
@@ -22957,7 +24194,7 @@ class HydraRenderer {
     }
     this.generatorFunctionTimer = -1;
     try {
-      let reply = this.generatorFunction.next();
+      let reply = await this.generatorFunction.next();
       this.planNext(reply);
     } catch (err) {
       console.log("Error calling initial generator function.next()");
@@ -22967,7 +24204,7 @@ class HydraRenderer {
     }
   }
   // Called from the general tick() function.
-  generatorTick() {
+  async generatorTick() {
     if (!this.generatorFunction || this.generatorFunctionTimer === -1) return;
     if (this.synth.time < this.generatorFunctionTimer) return;
     let f = this.generatorFunction;
@@ -22975,7 +24212,7 @@ class HydraRenderer {
       this.generatorFunctionTimer = -1;
     } else
       try {
-        let reply = f.next();
+        let reply = await f.next();
         this.planNext(reply);
       } catch (err) {
         console.log("Error calling generator function.next()");
