@@ -133,9 +133,9 @@ class VertexSource {
 
 // Generate vertex shader GLSL from transforms
 // Returns { glsl: string, uniforms: object }
-// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean, useTangents: boolean }
+// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean, useTangents: boolean, useColors: boolean }
 export function generateVertexGlsl(vertexSource, precision, options = {}) {
-  const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options
+  const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false, useColors = false } = options
 
   // UV source code - either from attribute or computed from bounds
   const uvAttributeDecl = useExplicitUVs ? 'attribute vec2 texcoord;' : ''
@@ -155,6 +155,10 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
   // Tangent attribute - vec4: xyz = tangent direction, w = handedness for bitangent
   const tangentAttributeDecl = useTangents ? 'attribute vec4 tangent;' : ''
 
+  // Color attribute - vec4 RGBA
+  const colorAttributeDecl = useColors ? 'attribute vec4 color;' : ''
+  const colorPassthrough = useColors ? 'v_color = color;' : 'v_color = vec4(1.0, 1.0, 1.0, 1.0);'
+
   if (!vertexSource.hasTransforms) {
     // No transforms - use simple passthrough with bounds
     return {
@@ -163,6 +167,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
         attribute vec3 position;
         ${uvAttributeDecl}
         ${faceIdAttributeDecl}
+        ${colorAttributeDecl}
         varying vec2 uv;
         ${faceIdVaryingDecl}
 
@@ -174,6 +179,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
         varying vec3 v_bitangent;
         varying vec3 v_viewDir;
         varying float v_depth;
+        varying vec4 v_color;
 
         uniform vec2 u_boundsMin;
         uniform vec2 u_boundsMax;
@@ -182,6 +188,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
           // UV ${useExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
           ${uvComputation}
           ${faceIdPassthrough}
+          ${colorPassthrough}
 
           // Set default vertex data for 2D geometry
           v_position = vec3(position.xy, 0.0);
@@ -440,6 +447,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     ${faceIdAttributeDecl}
     ${normalAttributeDecl}
     ${tangentAttributeDecl}
+    ${colorAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
 
@@ -451,6 +459,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
+    varying vec4 v_color;
 
     uniform vec2 resolution;
     uniform vec2 u_boundsMin;
@@ -461,6 +470,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       // UV ${useExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
       ${uvComputation}
       ${faceIdPassthrough}
+      ${colorPassthrough}
 
       // Apply transforms (3D)
       vec3 pos = position;
@@ -499,6 +509,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     attribute vec3 position;
     ${uvAttributeDecl}
     ${faceIdAttributeDecl}
+    ${colorAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
 
@@ -510,6 +521,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
+    varying vec4 v_color;
 
     uniform vec2 u_boundsMin;
     uniform vec2 u_boundsMax;
@@ -519,6 +531,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       // UV ${useExplicitUVs ? 'from explicit attribute' : 'normalized to shape bounds'}
       ${uvComputation}
       ${faceIdPassthrough}
+      ${colorPassthrough}
 
       // Apply transforms (2D)
       vec2 pos = position.xy;
@@ -559,9 +572,9 @@ function makeUniformAccessor(value) {
 
 // Generate WGSL vertex shader from transforms
 // Returns { wgsl: string, uniforms: array of {name, type, value} }
-// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean, useTangents: boolean }
+// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean, useTangents: boolean, useColors: boolean }
 export function generateVertexWgsl(vertexSource, options = {}) {
-  const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options
+  const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false, useColors = false } = options
 
   // Collect uniforms and build transform code
   const uniforms = []
@@ -756,6 +769,9 @@ ${allUniformFields.join('\n')}
   if (useTangents) {
     inputFields.push('  @location(4) tangent: vec4f,')  // xyz = tangent direction, w = handedness
   }
+  if (useColors) {
+    inputFields.push('  @location(5) color: vec4f,')  // RGBA vertex color
+  }
 
   // Build vertex output struct
   const outputFields = [
@@ -769,7 +785,8 @@ ${allUniformFields.join('\n')}
     '  @location(5) v_tangent: vec3f,',
     '  @location(6) v_bitangent: vec3f,',
     '  @location(7) v_viewDir: vec3f,',
-    '  @location(8) v_depth: f32,'
+    '  @location(8) v_depth: f32,',
+    '  @location(9) v_color: vec4f,'
   ]
 
   // UV computation
@@ -781,6 +798,11 @@ ${allUniformFields.join('\n')}
   const faceIdCode = useFaceIds
     ? 'output.faceId = input.faceId;'
     : 'output.faceId = 0.0;'
+
+  // Color passthrough
+  const colorCode = useColors
+    ? 'output.v_color = input.color;'
+    : 'output.v_color = vec4f(1.0, 1.0, 1.0, 1.0);'
 
   // Build the vertex shader
   let wgsl
@@ -852,6 +874,8 @@ fn main(input: VertexInput) -> VertexOutput {
   ${uvCode}
   // FaceId
   ${faceIdCode}
+  // Color
+  ${colorCode}
 
   // Apply transforms (3D)
   var pos = input.position;
@@ -902,6 +926,8 @@ fn main(input: VertexInput) -> VertexOutput {
   ${uvCode}
   // FaceId
   ${faceIdCode}
+  // Color
+  ${colorCode}
 
   // Apply transforms (2D)
   var pos = input.position.xy;
@@ -944,6 +970,7 @@ struct VertexOutput {
   @location(6) v_bitangent: vec3f,
   @location(7) v_viewDir: vec3f,
   @location(8) v_depth: f32,
+  @location(9) v_color: vec4f,
 };
 
 struct VertexUniforms {
@@ -967,6 +994,7 @@ fn main(input: VertexInput) -> VertexOutput {
   output.v_bitangent = vec3f(0.0, 1.0, 0.0);
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);
   output.v_depth = 1.0;
+  output.v_color = vec4f(1.0, 1.0, 1.0, 1.0);
 
   output.position = vec4f(input.position.xy, 0.0, 1.0);
   return output;

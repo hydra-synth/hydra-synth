@@ -264,12 +264,13 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   }
 
   // Create vertex buffer for this sprite
-  let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, tangentBuffer, vertexCount
+  let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, tangentBuffer, colorBuffer, vertexCount
   let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 }  // default fullscreen bounds
   let hasExplicitUVs = false
   let hasFaceIds = false
   let hasNormals = false
   let hasTangents = false
+  let hasColors = false
 
   if (rawVerts && rawVerts.length >= 6) {
     // Custom geometry: reshape to vec3 for 3D forward-compatibility
@@ -325,6 +326,17 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
         tangentData.push([vertexSource.tangents[i], vertexSource.tangents[i + 1], vertexSource.tangents[i + 2], vertexSource.tangents[i + 3]])
       }
       tangentBuffer = this.regl.buffer(tangentData)
+    }
+
+    // Check for vertex colors from VertexSource (vec4: RGBA)
+    if (vertexSource && vertexSource.colors && vertexSource.colors.length > 0) {
+      hasColors = true
+      // Reshape colors to vec4 array
+      const colorData = []
+      for (let i = 0; i < vertexSource.colors.length; i += 4) {
+        colorData.push([vertexSource.colors[i], vertexSource.colors[i + 1], vertexSource.colors[i + 2], vertexSource.colors[i + 3]])
+      }
+      colorBuffer = this.regl.buffer(colorData)
     }
   } else {
     // Default fullscreen triangle
@@ -405,7 +417,7 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   if (rawVerts) {
     if (hasChainedTransforms) {
       // Use generateVertexGlsl for chained transforms (Phase 5)
-      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents })
+      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents, useColors: hasColors })
       vert = generated.glsl
       vertexUniforms = generated.uniforms
     } else if (hasVertexOptions) {
@@ -522,6 +534,9 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   }
   if (hasTangents && tangentBuffer) {
     attributes.tangent = tangentBuffer
+  }
+  if (hasColors && colorBuffer) {
+    attributes.color = colorBuffer
   }
 
   // Create the draw command

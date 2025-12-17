@@ -55,6 +55,9 @@ const v = new Proxy({}, {
       case 'bitangent':
         // Bitangent vector (for normal mapping, in world space)
         return createComponentProxy('v_bitangent')
+      case 'color':
+        // Vertex color (RGBA)
+        return createComponentProxy('v_color')
       case 'viewDir':
         return createComponentProxy('v_viewDir')
       case 'depth':

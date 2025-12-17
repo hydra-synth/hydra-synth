@@ -9,6 +9,7 @@ import VertexSource from '../vertex-source.js'
 export function parseObj(objText, options = {}) {
   const { swapYZ = false } = options
   const vertices = []
+  const colors = []  // Vertex colors (OBJ extension: v x y z r g b)
   const normals = []
   const uvs = []
   const faces = []
@@ -27,6 +28,10 @@ export function parseObj(objText, options = {}) {
       const z = parseFloat(parts[3])
       // Swap Y and Z if needed (converts Z-up to Y-up)
       vertices.push(swapYZ ? [x, z, y] : [x, y, z])
+      // OBJ extension: vertex colors as r g b after coordinates
+      if (parts.length >= 7) {
+        colors.push([parseFloat(parts[4]), parseFloat(parts[5]), parseFloat(parts[6])])
+      }
     } else if (parts[0] === 'vn') {
       const x = parseFloat(parts[1])
       const y = parseFloat(parts[2])
@@ -82,9 +87,11 @@ export function parseObj(objText, options = {}) {
   const outNormals = []
   const outUVs = []
   const outFaceIds = []
+  const outColors = []
   const hasNormals = normals.length > 0
   const hasExplicitUVs = uvs.length > 0
   const hasMaterials = materialNames.length > 0
+  const hasColors = colors.length === vertices.length  // Must have color per vertex
 
   // Default per-face UVs for quads (when OBJ doesn't have vt coordinates)
   // Maps quad corners to (0,0), (1,0), (1,1), (0,1) so texture fills the face
@@ -106,6 +113,10 @@ export function parseObj(objText, options = {}) {
     outUVs.push(uv[0], uv[1])
     if (hasMaterials) {
       outFaceIds.push(materialId !== null ? materialId : 0)
+    }
+    if (hasColors) {
+      const c = colors[vertIdx]
+      outColors.push(c[0], c[1], c[2], 1.0)  // RGB + alpha=1
     }
   }
 
@@ -142,6 +153,7 @@ export function parseObj(objText, options = {}) {
     vs.faceIds = outFaceIds
     vs.materialNames = materialNames  // Expose material names for debugging/tooling
   }
+  if (outColors.length > 0) vs.colors = outColors
   return vs
 }
 
@@ -275,9 +287,11 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
   const outNormals = []
   const outUVs = []
   const outTangents = []
+  const outColors = []
   let hasAnyUVs = false
   let hasAnyNormals = false
   let hasAnyTangents = false
+  let hasAnyColors = false
 
   for (const primitive of primitives) {
     const positionAccessor = primitive.attributes.POSITION
@@ -291,10 +305,20 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
     // TANGENT is vec4: xyz = tangent direction, w = handedness for bitangent
     const tangents = primitive.attributes.TANGENT !== undefined
       ? readAccessor(primitive.attributes.TANGENT) : null
+    // COLOR_0 can be vec3 (RGB) or vec4 (RGBA), we'll normalize to vec4
+    const colors = primitive.attributes.COLOR_0 !== undefined
+      ? readAccessor(primitive.attributes.COLOR_0) : null
+    // Determine if colors are vec3 or vec4
+    let colorStride = 0
+    if (colors && primitive.attributes.COLOR_0 !== undefined) {
+      const colorAccessor = accessors[primitive.attributes.COLOR_0]
+      colorStride = colorAccessor.type === 'VEC4' ? 4 : 3
+    }
 
     if (normals) hasAnyNormals = true
     if (uvs) hasAnyUVs = true
     if (tangents) hasAnyTangents = true
+    if (colors) hasAnyColors = true
 
     // Read indices if present
     const indices = primitive.indices !== undefined
@@ -311,6 +335,14 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
       if (tangents) {
         // vec4: xyz = tangent, w = handedness
         outTangents.push(tangents[idx * 4], tangents[idx * 4 + 1], tangents[idx * 4 + 2], tangents[idx * 4 + 3])
+      }
+      if (colors) {
+        // Normalize to vec4 (RGBA), default alpha = 1.0
+        if (colorStride === 4) {
+          outColors.push(colors[idx * 4], colors[idx * 4 + 1], colors[idx * 4 + 2], colors[idx * 4 + 3])
+        } else {
+          outColors.push(colors[idx * 3], colors[idx * 3 + 1], colors[idx * 3 + 2], 1.0)
+        }
       }
     }
 
@@ -374,6 +406,7 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
   if (outNormals.length > 0) vs.normals = outNormals
   if (outUVs.length > 0) vs.uvs = outUVs
   if (outTangents.length > 0) vs.tangents = outTangents
+  if (outColors.length > 0) vs.colors = outColors
 
   return vs
 }

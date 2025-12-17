@@ -25,7 +25,7 @@ async function init () {
 let hydra;
 let hydra2;
 
-let wgsl = true;
+let wgsl = false;
 
 // Run in foreground 
 	 hydra = new Hydra({canvas: canvas, detectAudio:true, makeGlobal: true, useWGSL: wgsl}) // true false
@@ -53,7 +53,8 @@ loadObj('dev/headsSortedRandom.obj', { swapYZ: true }).then(head => {
 */
 // 3D GLB Model Test - With embedded texture extraction
 //const modelPath = 'dev/assets/AnimalKit/Cat.glb'
-const modelPath = 'dev/assets/AnimatedWomenPack/Woman.glb'
+//const modelPath = 'dev/assets/AnimatedWomenPack/Woman.glb'
+const modelPath = 'dev/assets/NormalTangentMirrorTest.glb'  // Has TANGENT data!
 
 // Drag-to-rotate state (3 axes) + zoom
 let rotX = 0, rotY = 0, rotZ = 0
@@ -98,14 +99,19 @@ console.log('v.normal.z:', v.normal.z)
 //osc(10).mult(solid(v.depth, 0, 0)).out()
 
 
-  // Test v.worldNormal vs v.normal
-  // v.normal = model space (doesn't change with rotation)
-  // v.worldNormal = world space (rotates with the model)
-  loadGlb(modelPath).then(model => {
-    // Use v.worldNormal for proper lighting that follows rotation
-    solid(v.worldNormal.x, v.worldNormal.y, v.worldNormal.z)
-      .out(o0, model.scale(() => zoom)
-        .rotateX(() => rotX + Math.PI)
+  // Test diffuse lighting with vertex colors
+  // Using test-cube-colors.obj which has RGB colors per vertex
+  loadObj('dev/test-cube-colors.obj').then(cube => {
+    console.log('Colored cube loaded:', cube)
+    console.log('Has colors:', cube.colors ? cube.colors.length : 'none')
+
+    // Vertex colors with diffuse lighting
+    // Light from top-right: lx=1, ly=1, lz=1
+
+
+  solid(0.1, 0.1, 0.2).fresnel(2, 1)
+      .out(o0, cube.scale(() => zoom)
+        .rotateX(() => rotX)
         .rotateY(() => rotY)
         .rotateZ(() => rotZ)
         .perspective(45))

@@ -104,7 +104,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
   }
   function generateVertexGlsl(vertexSource, precision, options = {}) {
-    const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options;
+    const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false, useColors = false } = options;
     const uvAttributeDecl = useExplicitUVs ? "attribute vec2 texcoord;" : "";
     const uvComputation = useExplicitUVs ? "uv = texcoord;" : "uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);";
     const faceIdAttributeDecl = useFaceIds ? "attribute float faceId;" : "";
@@ -112,6 +112,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const faceIdPassthrough = useFaceIds ? "v_faceId = faceId;" : "v_faceId = 0.0;";
     const normalAttributeDecl = useNormals ? "attribute vec3 normal;" : "";
     const tangentAttributeDecl = useTangents ? "attribute vec4 tangent;" : "";
+    const colorAttributeDecl = useColors ? "attribute vec4 color;" : "";
+    const colorPassthrough = useColors ? "v_color = color;" : "v_color = vec4(1.0, 1.0, 1.0, 1.0);";
     if (!vertexSource.hasTransforms) {
       return {
         glsl: `
@@ -119,6 +121,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         attribute vec3 position;
         ${uvAttributeDecl}
         ${faceIdAttributeDecl}
+        ${colorAttributeDecl}
         varying vec2 uv;
         ${faceIdVaryingDecl}
 
@@ -130,6 +133,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         varying vec3 v_bitangent;
         varying vec3 v_viewDir;
         varying float v_depth;
+        varying vec4 v_color;
 
         uniform vec2 u_boundsMin;
         uniform vec2 u_boundsMax;
@@ -138,6 +142,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           // UV ${useExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
           ${uvComputation}
           ${faceIdPassthrough}
+          ${colorPassthrough}
 
           // Set default vertex data for 2D geometry
           v_position = vec3(position.xy, 0.0);
@@ -358,6 +363,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     ${faceIdAttributeDecl}
     ${normalAttributeDecl}
     ${tangentAttributeDecl}
+    ${colorAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
 
@@ -369,6 +375,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
+    varying vec4 v_color;
 
     uniform vec2 resolution;
     uniform vec2 u_boundsMin;
@@ -379,6 +386,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       // UV ${useExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
       ${uvComputation}
       ${faceIdPassthrough}
+      ${colorPassthrough}
 
       // Apply transforms (3D)
       vec3 pos = position;
@@ -417,6 +425,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     attribute vec3 position;
     ${uvAttributeDecl}
     ${faceIdAttributeDecl}
+    ${colorAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
 
@@ -428,6 +437,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
+    varying vec4 v_color;
 
     uniform vec2 u_boundsMin;
     uniform vec2 u_boundsMax;
@@ -437,6 +447,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       // UV ${useExplicitUVs ? "from explicit attribute" : "normalized to shape bounds"}
       ${uvComputation}
       ${faceIdPassthrough}
+      ${colorPassthrough}
 
       // Apply transforms (2D)
       vec2 pos = position.xy;
@@ -469,7 +480,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
   }
   function generateVertexWgsl(vertexSource, options = {}) {
-    const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options;
+    const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false, useColors = false } = options;
     const uniforms = [];
     const transformCode = [];
     const normalTransformCode = [];
@@ -638,6 +649,9 @@ ${allUniformFields.join("\n")}
     if (useTangents) {
       inputFields.push("  @location(4) tangent: vec4f,");
     }
+    if (useColors) {
+      inputFields.push("  @location(5) color: vec4f,");
+    }
     const outputFields = [
       "  @builtin(position) position: vec4f,",
       "  @location(0) texcoord: vec2f,",
@@ -650,10 +664,12 @@ ${allUniformFields.join("\n")}
       "  @location(5) v_tangent: vec3f,",
       "  @location(6) v_bitangent: vec3f,",
       "  @location(7) v_viewDir: vec3f,",
-      "  @location(8) v_depth: f32,"
+      "  @location(8) v_depth: f32,",
+      "  @location(9) v_color: vec4f,"
     ];
     const uvCode = useExplicitUVs ? "output.texcoord = input.texcoord;" : "output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);";
     const faceIdCode = useFaceIds ? "output.faceId = input.faceId;" : "output.faceId = 0.0;";
+    const colorCode = useColors ? "output.v_color = input.color;" : "output.v_color = vec4f(1.0, 1.0, 1.0, 1.0);";
     let wgsl;
     if (has3D) {
       const projectionCode = hasPerspective ? `
@@ -707,6 +723,8 @@ fn main(input: VertexInput) -> VertexOutput {
   ${uvCode}
   // FaceId
   ${faceIdCode}
+  // Color
+  ${colorCode}
 
   // Apply transforms (3D)
   var pos = input.position;
@@ -757,6 +775,8 @@ fn main(input: VertexInput) -> VertexOutput {
   ${uvCode}
   // FaceId
   ${faceIdCode}
+  // Color
+  ${colorCode}
 
   // Apply transforms (2D)
   var pos = input.position.xy;
@@ -795,6 +815,7 @@ struct VertexOutput {
   @location(6) v_bitangent: vec3f,
   @location(7) v_viewDir: vec3f,
   @location(8) v_depth: f32,
+  @location(9) v_color: vec4f,
 };
 
 struct VertexUniforms {
@@ -818,6 +839,7 @@ fn main(input: VertexInput) -> VertexOutput {
   output.v_bitangent = vec3f(0.0, 1.0, 0.0);
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);
   output.v_depth = 1.0;
+  output.v_color = vec4f(1.0, 1.0, 1.0, 1.0);
 
   output.position = vec4f(input.position.xy, 0.0, 1.0);
   return output;
@@ -1029,12 +1051,13 @@ fn main(input: VertexInput) -> VertexOutput {
     if (has3D) {
       this.enableDepthBuffer();
     }
-    let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, tangentBuffer, vertexCount;
+    let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, tangentBuffer, colorBuffer, vertexCount;
     let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
     let hasExplicitUVs = false;
     let hasFaceIds = false;
     let hasNormals = false;
     let hasTangents = false;
+    let hasColors = false;
     if (rawVerts && rawVerts.length >= 6) {
       const verts = reshapeToVec3(rawVerts, has3D);
       positionBuffer = this.regl.buffer(verts);
@@ -1074,6 +1097,14 @@ fn main(input: VertexInput) -> VertexOutput {
           tangentData.push([vertexSource.tangents[i2], vertexSource.tangents[i2 + 1], vertexSource.tangents[i2 + 2], vertexSource.tangents[i2 + 3]]);
         }
         tangentBuffer = this.regl.buffer(tangentData);
+      }
+      if (vertexSource && vertexSource.colors && vertexSource.colors.length > 0) {
+        hasColors = true;
+        const colorData = [];
+        for (let i2 = 0; i2 < vertexSource.colors.length; i2 += 4) {
+          colorData.push([vertexSource.colors[i2], vertexSource.colors[i2 + 1], vertexSource.colors[i2 + 2], vertexSource.colors[i2 + 3]]);
+        }
+        colorBuffer = this.regl.buffer(colorData);
       }
     } else {
       positionBuffer = this.defaultPositionBuffer;
@@ -1123,7 +1154,7 @@ fn main(input: VertexInput) -> VertexOutput {
     let vertexUniforms = {};
     if (rawVerts) {
       if (hasChainedTransforms) {
-        const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents });
+        const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents, useColors: hasColors });
         vert = generated.glsl;
         vertexUniforms = generated.uniforms;
       } else if (hasVertexOptions) {
@@ -1229,6 +1260,9 @@ fn main(input: VertexInput) -> VertexOutput {
     }
     if (hasTangents && tangentBuffer) {
       attributes.tangent = tangentBuffer;
+    }
+    if (hasColors && colorBuffer) {
+      attributes.color = colorBuffer;
     }
     const drawCommand = this.regl({
       frag: pass.frag,
@@ -1400,11 +1434,13 @@ fn main(input: VertexInput) -> VertexOutput {
       let hasFaceIds = false;
       let hasNormals = false;
       let hasTangents = false;
+      let hasColors = false;
       if (vertexSource) {
         hasExplicitUVs = vertexSource.uvs && vertexSource.uvs.length > 0;
         hasFaceIds = vertexSource.faceIds && vertexSource.faceIds.length > 0;
         hasNormals = vertexSource.normals && vertexSource.normals.length > 0;
         hasTangents = vertexSource.tangents && vertexSource.tangents.length > 0;
+        hasColors = vertexSource.colors && vertexSource.colors.length > 0;
       }
       let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
       if (rawVerts && rawVerts.length >= 6 && !hasExplicitUVs) {
@@ -1426,7 +1462,7 @@ fn main(input: VertexInput) -> VertexOutput {
           { name: "u_boundsMax", type: "vec2f", value: [bounds.maxX, bounds.maxY] }
         ];
         if (hasChainedTransforms) {
-          const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents });
+          const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents, useColors: hasColors });
           vertexWgsl = generated.wgsl;
           vertexUniforms = [...boundsUniforms, ...generated.uniforms];
         } else {
@@ -1449,6 +1485,7 @@ fn main(input: VertexInput) -> VertexOutput {
         hasFaceIds,
         hasNormals,
         hasTangents,
+        hasColors,
         sprite
       });
       await this.wgslHydra.setupSpriteChain(this.chanNum, spriteLevel, {
@@ -1464,10 +1501,12 @@ fn main(input: VertexInput) -> VertexOutput {
         hasFaceIds,
         hasNormals,
         hasTangents,
+        hasColors,
         uvs: vertexSource == null ? void 0 : vertexSource.uvs,
         faceIds: vertexSource == null ? void 0 : vertexSource.faceIds,
         normals: vertexSource == null ? void 0 : vertexSource.normals,
         tangents: vertexSource == null ? void 0 : vertexSource.tangents,
+        colors: vertexSource == null ? void 0 : vertexSource.colors,
         sprite
       });
     }
@@ -2997,6 +3036,8 @@ fn main(input: VertexInput) -> VertexOutput {
           return createComponentProxy("v_tangent");
         case "bitangent":
           return createComponentProxy("v_bitangent");
+        case "color":
+          return createComponentProxy("v_color");
         case "viewDir":
           return createComponentProxy("v_viewDir");
         case "depth":
@@ -3738,6 +3779,7 @@ fn main(input: VertexInput) -> VertexOutput {
   varying vec3 v_bitangent;
   varying vec3 v_viewDir;
   varying float v_depth;
+  varying vec4 v_color;
 
   uniform sampler2D prevBuffer;
   uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax (fallback when no faceId)
@@ -5091,6 +5133,66 @@ fn main(input: VertexInput) -> VertexOutput {
    return vec4(l, l, l, _c0.a);`,
       wgsl: `   let l = length(_c0.rgb) * scale + offset;
    return vec4<f32>(l, l, l, _c0.a);`
+    },
+    {
+      name: "diffuse",
+      type: "color",
+      inputs: [
+        {
+          type: "float",
+          name: "lx",
+          default: 0
+        },
+        {
+          type: "float",
+          name: "ly",
+          default: 1
+        },
+        {
+          type: "float",
+          name: "lz",
+          default: 0
+        },
+        {
+          type: "float",
+          name: "ambient",
+          default: 0.2
+        }
+      ],
+      glsl: `   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   vec3 normal = normalize(v_worldNormal);
+   float diff = max(0.0, dot(normal, lightDir));
+   float lighting = ambient + (1.0 - ambient) * diff;
+   return vec4(_c0.rgb * lighting, _c0.a);`,
+      wgsl: `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let normal = normalize(ourIn.v_worldNormal);
+   let diff = max(0.0, dot(normal, lightDir));
+   let lighting = ambient + (1.0 - ambient) * diff;
+   return vec4<f32>(_c0.rgb * lighting, _c0.a);`
+    },
+    {
+      name: "fresnel",
+      type: "color",
+      inputs: [
+        {
+          type: "float",
+          name: "power",
+          default: 2
+        },
+        {
+          type: "float",
+          name: "intensity",
+          default: 1
+        }
+      ],
+      glsl: `   vec3 normal = normalize(v_worldNormal);
+   vec3 viewDir = normalize(v_viewDir);
+   float f = pow(1.0 - abs(dot(normal, viewDir)), power) * intensity;
+   return vec4(_c0.rgb + f, _c0.a);`,
+      wgsl: `   let normal = normalize(ourIn.v_worldNormal);
+   let viewDir = normalize(ourIn.v_viewDir);
+   let f = pow(1.0 - abs(dot(normal, viewDir)), power) * intensity;
+   return vec4<f32>(_c0.rgb + f, _c0.a);`
     }
   ];
   class GeneratorFactory {
@@ -15397,6 +15499,7 @@ fn main(input: VertexInput) -> VertexOutput {
   	@location(6) v_bitangent : vec3f,
   	@location(7) v_viewDir : vec3f,
   	@location(8) v_depth : f32,
+  	@location(9) v_color : vec4f,
 	 };
 `;
   const fragPrefix = `
@@ -15432,6 +15535,7 @@ fn main(input: VertexInput) -> VertexOutput {
      output.v_bitangent = vec3f(0.0, 1.0, 0.0);
      output.v_viewDir = vec3f(0.0, 0.0, 1.0);
      output.v_depth = 1.0;
+     output.v_color = vec4f(1.0, 1.0, 1.0, 1.0);
 
      return output;
     }
@@ -15464,6 +15568,7 @@ fn main(input: VertexInput) -> VertexOutput {
       this.faceIdBuffer = void 0;
       this.normalBuffer = void 0;
       this.tangentBuffer = void 0;
+      this.colorBuffer = void 0;
       this.vertexCount = 0;
       this.vertexWgsl = void 0;
       this.vertexUniforms = [];
@@ -15475,6 +15580,7 @@ fn main(input: VertexInput) -> VertexOutput {
       this.hasFaceIds = false;
       this.hasNormals = false;
       this.hasTangents = false;
+      this.hasColors = false;
       this.blendMode = "normal";
     }
   }
@@ -15754,10 +15860,12 @@ fn main(input: VertexInput) -> VertexOutput {
         hasFaceIds,
         hasNormals,
         hasTangents,
+        hasColors,
         uvs,
         faceIds,
         normals,
         tangents,
+        colors,
         sprite
       } = config;
       const rpe = this.renderPassInfo[chan];
@@ -15776,6 +15884,7 @@ fn main(input: VertexInput) -> VertexOutput {
       spe.hasFaceIds = hasFaceIds || false;
       spe.hasNormals = hasNormals || false;
       spe.hasTangents = hasTangents || false;
+      spe.hasColors = hasColors || false;
       spe.sprite = sprite || null;
       this.generateSpriteUniformDeclarations(spe);
       spe.fragmentShaderSource = vertexPrefix + fragPrefix + spe.bindGroupHeader + fragShader;
@@ -15835,6 +15944,15 @@ fn main(input: VertexInput) -> VertexOutput {
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
           });
           this.device.queue.writeBuffer(spe.tangentBuffer, 0, tangentData);
+        }
+        if (spe.hasColors && colors && colors.length > 0) {
+          const colorData = new Float32Array(colors);
+          spe.colorBuffer = this.device.createBuffer({
+            label: `colorbuf_c${chan}_s${spriteLevel}`,
+            size: colorData.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+          });
+          this.device.queue.writeBuffer(spe.colorBuffer, 0, colorData);
         }
         if (spe.vertexUniforms.length > 0) {
           this.setupVertexUniforms(spe);
@@ -15922,6 +16040,17 @@ fn main(input: VertexInput) -> VertexOutput {
             }]
           });
         }
+        if (spe.hasColors && spe.colorBuffer) {
+          bufferLayouts.push({
+            arrayStride: 16,
+            // 4 floats * 4 bytes (color vec4)
+            attributes: [{
+              shaderLocation: 5,
+              offset: 0,
+              format: "float32x4"
+            }]
+          });
+        }
         pipelineDescriptor.vertex.buffers = bufferLayouts;
       }
       if (spe.has3D) {
@@ -15954,6 +16083,9 @@ fn main(input: VertexInput) -> VertexOutput {
           }
           if (spe.tangentBuffer) {
             spe.tangentBuffer.destroy();
+          }
+          if (spe.colorBuffer) {
+            spe.colorBuffer.destroy();
           }
           if (spe.vertexUniformBuffer) {
             spe.vertexUniformBuffer.destroy();
@@ -16243,6 +16375,9 @@ fn main(input: VertexInput) -> VertexOutput {
               }
               if (spe.hasTangents && spe.tangentBuffer) {
                 passEncoder.setVertexBuffer(slot++, spe.tangentBuffer);
+              }
+              if (spe.hasColors && spe.colorBuffer) {
+                passEncoder.setVertexBuffer(slot++, spe.colorBuffer);
               }
               passEncoder.draw(spe.vertexCount);
             } else {
@@ -23595,6 +23730,7 @@ fn main(input: VertexInput) -> VertexOutput {
   function parseObj(objText, options = {}) {
     const { swapYZ = false } = options;
     const vertices = [];
+    const colors = [];
     const normals = [];
     const uvs = [];
     const faces = [];
@@ -23609,6 +23745,9 @@ fn main(input: VertexInput) -> VertexOutput {
         const y = parseFloat(parts[2]);
         const z = parseFloat(parts[3]);
         vertices.push(swapYZ ? [x2, z, y] : [x2, y, z]);
+        if (parts.length >= 7) {
+          colors.push([parseFloat(parts[4]), parseFloat(parts[5]), parseFloat(parts[6])]);
+        }
       } else if (parts[0] === "vn") {
         const x2 = parseFloat(parts[1]);
         const y = parseFloat(parts[2]);
@@ -23659,9 +23798,11 @@ fn main(input: VertexInput) -> VertexOutput {
     const outNormals = [];
     const outUVs = [];
     const outFaceIds = [];
+    const outColors = [];
     const hasNormals = normals.length > 0;
     const hasExplicitUVs = uvs.length > 0;
     const hasMaterials = materialNames.length > 0;
+    const hasColors = colors.length === vertices.length;
     const defaultQuadUVs = [[0, 0], [1, 0], [1, 1], [0, 1]];
     const defaultTriUVs = [[0, 0], [1, 0], [0.5, 1]];
     const addVertex = (vertIdx, uv, normalIdx, materialId) => {
@@ -23676,6 +23817,10 @@ fn main(input: VertexInput) -> VertexOutput {
       outUVs.push(uv[0], uv[1]);
       if (hasMaterials) {
         outFaceIds.push(materialId !== null ? materialId : 0);
+      }
+      if (hasColors) {
+        const c = colors[vertIdx];
+        outColors.push(c[0], c[1], c[2], 1);
       }
     };
     for (const face of faces) {
@@ -23707,6 +23852,7 @@ fn main(input: VertexInput) -> VertexOutput {
       vs.faceIds = outFaceIds;
       vs.materialNames = materialNames;
     }
+    if (outColors.length > 0) vs.colors = outColors;
     return vs;
   }
   async function loadObj(url, options = {}) {
@@ -23800,6 +23946,7 @@ fn main(input: VertexInput) -> VertexOutput {
     const outNormals = [];
     const outUVs = [];
     const outTangents = [];
+    const outColors = [];
     let hasAnyUVs = false;
     for (const primitive of primitives) {
       const positionAccessor = primitive.attributes.POSITION;
@@ -23808,6 +23955,12 @@ fn main(input: VertexInput) -> VertexOutput {
       const normals = primitive.attributes.NORMAL !== void 0 ? readAccessor(primitive.attributes.NORMAL) : null;
       const uvs = primitive.attributes.TEXCOORD_0 !== void 0 ? readAccessor(primitive.attributes.TEXCOORD_0) : null;
       const tangents = primitive.attributes.TANGENT !== void 0 ? readAccessor(primitive.attributes.TANGENT) : null;
+      const colors = primitive.attributes.COLOR_0 !== void 0 ? readAccessor(primitive.attributes.COLOR_0) : null;
+      let colorStride = 0;
+      if (colors && primitive.attributes.COLOR_0 !== void 0) {
+        const colorAccessor = accessors[primitive.attributes.COLOR_0];
+        colorStride = colorAccessor.type === "VEC4" ? 4 : 3;
+      }
       if (uvs) hasAnyUVs = true;
       const indices = primitive.indices !== void 0 ? readAccessor(primitive.indices) : null;
       const addVertex = (idx) => {
@@ -23820,6 +23973,13 @@ fn main(input: VertexInput) -> VertexOutput {
         }
         if (tangents) {
           outTangents.push(tangents[idx * 4], tangents[idx * 4 + 1], tangents[idx * 4 + 2], tangents[idx * 4 + 3]);
+        }
+        if (colors) {
+          if (colorStride === 4) {
+            outColors.push(colors[idx * 4], colors[idx * 4 + 1], colors[idx * 4 + 2], colors[idx * 4 + 3]);
+          } else {
+            outColors.push(colors[idx * 3], colors[idx * 3 + 1], colors[idx * 3 + 2], 1);
+          }
         }
       };
       if (indices) {
@@ -23873,6 +24033,7 @@ fn main(input: VertexInput) -> VertexOutput {
     if (outNormals.length > 0) vs.normals = outNormals;
     if (outUVs.length > 0) vs.uvs = outUVs;
     if (outTangents.length > 0) vs.tangents = outTangents;
+    if (outColors.length > 0) vs.colors = outColors;
     return vs;
   }
   async function loadGlb(url, options = {}) {

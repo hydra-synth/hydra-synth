@@ -25,6 +25,7 @@ const vertexPrefix = `
   	@location(6) v_bitangent : vec3f,
   	@location(7) v_viewDir : vec3f,
   	@location(8) v_depth : f32,
+  	@location(9) v_color : vec4f,
 	 };
 `;
 
@@ -65,6 +66,7 @@ const fragPrefix = `
      output.v_bitangent = vec3f(0.0, 1.0, 0.0);
      output.v_viewDir = vec3f(0.0, 0.0, 1.0);
      output.v_depth = 1.0;
+     output.v_color = vec4f(1.0, 1.0, 1.0, 1.0);
 
      return output;
     }
@@ -104,6 +106,7 @@ class SpritePassEntry {
 		this.faceIdBuffer = undefined;
 		this.normalBuffer = undefined;
 		this.tangentBuffer = undefined;
+		this.colorBuffer = undefined;
 		this.vertexCount = 0;
 		this.vertexWgsl = undefined;
 		this.vertexUniforms = [];
@@ -115,6 +118,7 @@ class SpritePassEntry {
 		this.hasFaceIds = false;
 		this.hasNormals = false;
 		this.hasTangents = false;
+		this.hasColors = false;
 
 		// Blend mode
 		this.blendMode = 'normal';
@@ -450,7 +454,7 @@ class wgslHydra {
 	async setupSpriteChain(chan, spriteLevel, config) {
 		if (trace) console.timeStamp("setupSpriteChain");
 		const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive, has3D,
-			hasExplicitUVs, hasFaceIds, hasNormals, hasTangents, uvs, faceIds, normals, tangents, sprite } = config;
+			hasExplicitUVs, hasFaceIds, hasNormals, hasTangents, hasColors, uvs, faceIds, normals, tangents, colors, sprite } = config;
 
 		const rpe = this.renderPassInfo[chan];
 		rpe.outputObject = this.outputChannelObjects[chan];
@@ -471,6 +475,7 @@ class wgslHydra {
 		spe.hasFaceIds = hasFaceIds || false;
 		spe.hasNormals = hasNormals || false;
 		spe.hasTangents = hasTangents || false;
+		spe.hasColors = hasColors || false;
 		spe.sprite = sprite || null;
 
 		// Generate uniform declarations for fragment shader
@@ -547,6 +552,17 @@ class wgslHydra {
 					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 				});
 				this.device.queue.writeBuffer(spe.tangentBuffer, 0, tangentData);
+			}
+
+			// Create color buffer if colors provided (vec4: RGBA)
+			if (spe.hasColors && colors && colors.length > 0) {
+				const colorData = new Float32Array(colors);
+				spe.colorBuffer = this.device.createBuffer({
+					label: `colorbuf_c${chan}_s${spriteLevel}`,
+					size: colorData.byteLength,
+					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+				});
+				this.device.queue.writeBuffer(spe.colorBuffer, 0, colorData);
 			}
 
 			// Setup vertex uniform buffer if needed
@@ -649,6 +665,18 @@ class wgslHydra {
 				});
 			}
 
+			// Add color buffer layout if colors (vec4: RGBA)
+			if (spe.hasColors && spe.colorBuffer) {
+				bufferLayouts.push({
+					arrayStride: 16, // 4 floats * 4 bytes (color vec4)
+					attributes: [{
+						shaderLocation: 5,
+						offset: 0,
+						format: 'float32x4'
+					}]
+				});
+			}
+
 			pipelineDescriptor.vertex.buffers = bufferLayouts;
 		}
 
@@ -689,6 +717,9 @@ class wgslHydra {
 				}
 				if (spe.tangentBuffer) {
 					spe.tangentBuffer.destroy();
+				}
+				if (spe.colorBuffer) {
+					spe.colorBuffer.destroy();
 				}
 				if (spe.vertexUniformBuffer) {
 					spe.vertexUniformBuffer.destroy();
@@ -1057,6 +1088,10 @@ class wgslHydra {
 						// Set tangent buffer if tangents
 						if (spe.hasTangents && spe.tangentBuffer) {
 							passEncoder.setVertexBuffer(slot++, spe.tangentBuffer);
+						}
+						// Set color buffer if colors
+						if (spe.hasColors && spe.colorBuffer) {
+							passEncoder.setVertexBuffer(slot++, spe.colorBuffer);
 						}
 						passEncoder.draw(spe.vertexCount);
 					} else {

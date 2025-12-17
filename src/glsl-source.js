@@ -237,6 +237,7 @@ GlslSource.prototype.compile = function (transforms) {
   varying vec3 v_bitangent;
   varying vec3 v_viewDir;
   varying float v_depth;
+  varying vec4 v_color;
 
   uniform sampler2D prevBuffer;
   uniform vec4 u_spriteUV;  // x=uMin, y=vMin, z=uMax, w=vMax (fallback when no faceId)
