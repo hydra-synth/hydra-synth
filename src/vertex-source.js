@@ -2,6 +2,8 @@
 // Usage: tri(0.3).rotate(() => time).scale(0.5)
 // Then pass to out(): osc(10).out(o0, tri(0.3).rotate(0.5), 1)
 
+import { extractSkeletonFromGltf, extractAnimationsFromGltf, computeSkinningMatrices, applySkinning } from './lib/geometry.js'
+
 class VertexSource {
   constructor(vertices) {
     // Raw vertex array (flat [x,y, x,y, ...] or [x,y,z, ...])
@@ -291,6 +293,70 @@ class VertexSource {
     this.instanceCount = count
 
     return this
+  }
+
+  // ========== Animation ==========
+
+  // Animate a skinned model using embedded animation clips
+  // clipName: name of animation clip (or uses first clip if not found)
+  // timeFunc: function returning current time, e.g., () => time
+  // Returns new VertexSource with animated vertices (called each frame)
+  animate(clipName = null, timeFunc = () => 0) {
+    // Check if we have skinning data
+    if (!this.joints || !this.weights || !this._gltf) {
+      console.warn('animate() called on model without skinning data')
+      return this
+    }
+
+    // Lazy-extract skeleton and animations on first call
+    if (!this._skeleton) {
+      this._skeleton = extractSkeletonFromGltf(this._gltf, this._binBuffer)
+      this._animations = extractAnimationsFromGltf(this._gltf, this._binBuffer)
+
+      if (this._animations.length > 0) {
+        console.log(`Loaded ${this._animations.length} animation(s):`,
+          this._animations.map(a => `${a.name} (${a.duration.toFixed(2)}s)`).join(', '))
+      }
+    }
+
+    if (!this._skeleton || this._animations.length === 0) {
+      console.warn('Model has no skeleton or animations')
+      return this
+    }
+
+    // Create animated copy
+    const animated = new VertexSource([...this.vertices])
+    animated.is3D = this.is3D
+    animated.normals = this.normals ? [...this.normals] : null
+    animated.uvs = this.uvs ? [...this.uvs] : null
+    animated.tangents = this.tangents ? [...this.tangents] : null
+    animated.colors = this.colors ? [...this.colors] : null
+    animated.faceIds = this.faceIds ? [...this.faceIds] : null
+    animated.transforms = [...this.transforms]
+
+    // Store animation state for the renderer to apply
+    animated._animClip = clipName
+    animated._animTimeFunc = timeFunc
+    animated._skeleton = this._skeleton
+    animated._animations = this._animations
+    animated._gltf = this._gltf
+    animated._originalVerts = this.vertices
+    animated._originalNormals = this.normals
+    animated.joints = this.joints
+    animated.weights = this.weights
+    animated._normCenter = this._normCenter  // For denormalize/renormalize during skinning
+    animated._normScale = this._normScale
+
+    return animated
+  }
+
+  // Get list of available animation clip names
+  getAnimations() {
+    if (!this._gltf) return []
+    if (!this._animations) {
+      this._animations = extractAnimationsFromGltf(this._gltf, this._binBuffer)
+    }
+    return this._animations.map(a => ({ name: a.name, duration: a.duration }))
   }
 }
 

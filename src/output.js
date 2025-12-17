@@ -1,4 +1,5 @@
 import VertexSource, { generateVertexGlsl } from './vertex-source.js'
+import { computeSkinningMatrices, applySkinning } from './lib/geometry.js'
 
 // Blend mode configurations for regl
 const BLEND_MODES = {
@@ -552,12 +553,33 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   })
 
   // Store sprite config
-  this.sprites.set(spriteLevel, {
+  const spriteConfig = {
     drawCommand,
     positionBuffer,
+    normalBuffer,
     blendMode,
     has3D
-  })
+  }
+
+  // Store animation data if present
+  if (vertexSource && vertexSource._animTimeFunc) {
+    spriteConfig.animation = {
+      skeleton: vertexSource._skeleton,
+      animations: vertexSource._animations,
+      clipName: vertexSource._animClip,
+      timeFunc: vertexSource._animTimeFunc,
+      originalVerts: vertexSource._originalVerts || vertexSource.vertices,
+      originalNormals: vertexSource._originalNormals || vertexSource.normals,
+      joints: vertexSource.joints,
+      weights: vertexSource.weights,
+      gltf: vertexSource._gltf,
+      normCenter: vertexSource._normCenter,  // For denormalize/renormalize during skinning
+      normScale: vertexSource._normScale,
+      is3D: has3D
+    }
+  }
+
+  this.sprites.set(spriteLevel, spriteConfig)
 }
 
 // Clear all sprites (called by hush)
@@ -635,6 +657,49 @@ Output.prototype._renderSprites = function (props) {
         depth: needs3D ? 1 : undefined,
         framebuffer: targetFbo
       })
+    }
+
+    // Update animation buffers if this sprite is animated
+    if (sprite.animation) {
+      const anim = sprite.animation
+      const time = typeof anim.timeFunc === 'function' ? anim.timeFunc() : 0
+
+      // Support dynamic clip name (function or string)
+      const clipName = typeof anim.clipName === 'function' ? anim.clipName() : anim.clipName
+
+      // Find clip and compute looped time (don't loop here - let timeFunc handle it for dynamic clips)
+      const clip = anim.animations.find(a => a.name === clipName) || anim.animations[0]
+      const loopedTime = clip ? (time % clip.duration) : time
+
+      // Compute skinning matrices (pre-transformed for normalized coordinate space)
+      const skinningMatrices = computeSkinningMatrices(
+        anim.skeleton, anim.animations, clipName, loopedTime, anim.gltf,
+        anim.normCenter, anim.normScale
+      )
+
+      if (skinningMatrices) {
+        // Apply skinning to vertices
+        const skinned = applySkinning(
+          anim.originalVerts, anim.originalNormals,
+          anim.joints, anim.weights, skinningMatrices
+        )
+
+        // Update position buffer with skinned vertices
+        const skinnedVec3 = []
+        for (let j = 0; j < skinned.vertices.length; j += 3) {
+          skinnedVec3.push([skinned.vertices[j], skinned.vertices[j + 1], skinned.vertices[j + 2]])
+        }
+        sprite.positionBuffer(skinnedVec3)
+
+        // Update normal buffer if present
+        if (sprite.normalBuffer && skinned.normals) {
+          const skinnedNormals = []
+          for (let j = 0; j < skinned.normals.length; j += 3) {
+            skinnedNormals.push([skinned.normals[j], skinned.normals[j + 1], skinned.normals[j + 2]])
+          }
+          sprite.normalBuffer(skinnedNormals)
+        }
+      }
     }
 
     // Draw to framebuffer

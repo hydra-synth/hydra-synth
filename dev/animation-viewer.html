@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GLB Animation Viewer</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    import { viewAnimations } from './animation-viewer.js'
+
+    // Default model - change this or use URL parameter
+    const params = new URLSearchParams(window.location.search)
+    let modelPath = params.get('model') || 'assets/AnimatedWomenPack/Woman.glb'
+
+    // Handle paths - if it starts with dev/, strip it since we're already in dev/
+    if (modelPath.startsWith('dev/')) {
+      modelPath = modelPath.slice(4)
+    }
+
+    console.log('Loading model:', modelPath)
+
+    viewAnimations(modelPath).then(({ animations }) => {
+      console.log(`Loaded ${animations.length} animations`)
+    }).catch(err => {
+      console.error('Failed to load model:', err)
+      document.body.innerHTML = `<pre style="color:red;padding:20px;">Error loading model: ${modelPath}\n\n${err.message}</pre>`
+    })
+  </script>
+</body>
+</html>

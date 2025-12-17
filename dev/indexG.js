@@ -99,19 +99,50 @@ console.log('v.normal.z:', v.normal.z)
 //osc(10).mult(solid(v.depth, 0, 0)).out()
 
 
-  // Test diffuse lighting with vertex colors
-  // Using test-cube-colors.obj which has RGB colors per vertex
-  loadObj('dev/test-cube-colors.obj').then(cube => {
-    console.log('Colored cube loaded:', cube)
-    console.log('Has colors:', cube.colors ? cube.colors.length : 'none')
+  // Test animation with Woman.glb - cycle through all animations
+  loadGlb('dev/assets/AnimatedWomenPack/WomanInDress.glb').then(model => {
+    console.log('Woman model loaded:', model)
+    console.log('Has joints:', model.joints ? model.joints.length / 4 + ' vertices with skin weights' : 'none')
 
-    // Vertex colors with diffuse lighting
-    // Light from top-right: lx=1, ly=1, lz=1
+    const animations = model.getAnimations()
+    console.log('Available animations:', animations)
 
+    let currentAnimIndex = 0
+    let animStartTime = 0
 
-  solid(0.1, 0.1, 0.2).fresnel(2, 1)
-      .out(o0, cube.scale(() => zoom)
-        .rotateX(() => rotX)
+    // Create overlay to show animation name
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position:fixed;top:20px;left:20px;color:white;font:24px monospace;text-shadow:2px 2px 4px black;z-index:1000'
+    document.body.appendChild(overlay)
+
+    // Time function that cycles through animations
+    const cyclingTime = () => {
+      const currentAnim = animations[currentAnimIndex]
+      const elapsed = time - animStartTime
+
+      // Show current animation name
+      overlay.textContent = `${currentAnimIndex + 1}/${animations.length}: ${currentAnim.name} (${currentAnim.duration.toFixed(1)}s)`
+
+      // When animation completes, move to next
+      if (elapsed >= currentAnim.duration) {
+        currentAnimIndex = (currentAnimIndex + 1) % animations.length
+        animStartTime = time
+        console.log('Switching to:', animations[currentAnimIndex].name)
+        return 0
+      }
+
+      return elapsed
+    }
+
+    // Get current animation name for animate()
+    const currentAnimName = () => animations[currentAnimIndex].name
+
+    // Play animation
+    solid(0.9, 0.7, 0.5)
+      .diffuse(0, 1, 0, 0.2)
+      .out(o0, model.animate(currentAnimName, cyclingTime)
+        .scale(() => zoom)
+        .rotateX(() => rotX + Math.PI)
         .rotateY(() => rotY)
         .rotateZ(() => rotZ)
         .perspective(45))

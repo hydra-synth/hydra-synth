@@ -288,10 +288,13 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
   const outUVs = []
   const outTangents = []
   const outColors = []
+  const outJoints = []
+  const outWeights = []
   let hasAnyUVs = false
   let hasAnyNormals = false
   let hasAnyTangents = false
   let hasAnyColors = false
+  let hasAnySkinning = false
 
   for (const primitive of primitives) {
     const positionAccessor = primitive.attributes.POSITION
@@ -311,14 +314,21 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
     // Determine if colors are vec3 or vec4
     let colorStride = 0
     if (colors && primitive.attributes.COLOR_0 !== undefined) {
-      const colorAccessor = accessors[primitive.attributes.COLOR_0]
+      const colorAccessor = gltf.accessors[primitive.attributes.COLOR_0]
       colorStride = colorAccessor.type === 'VEC4' ? 4 : 3
     }
+
+    // Skinning data for animation
+    const joints = primitive.attributes.JOINTS_0 !== undefined
+      ? readAccessor(primitive.attributes.JOINTS_0) : null
+    const weights = primitive.attributes.WEIGHTS_0 !== undefined
+      ? readAccessor(primitive.attributes.WEIGHTS_0) : null
 
     if (normals) hasAnyNormals = true
     if (uvs) hasAnyUVs = true
     if (tangents) hasAnyTangents = true
     if (colors) hasAnyColors = true
+    if (joints && weights) hasAnySkinning = true
 
     // Read indices if present
     const indices = primitive.indices !== undefined
@@ -344,6 +354,11 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
           outColors.push(colors[idx * 3], colors[idx * 3 + 1], colors[idx * 3 + 2], 1.0)
         }
       }
+      if (joints && weights) {
+        // 4 joint indices and 4 weights per vertex
+        outJoints.push(joints[idx * 4], joints[idx * 4 + 1], joints[idx * 4 + 2], joints[idx * 4 + 3])
+        outWeights.push(weights[idx * 4], weights[idx * 4 + 1], weights[idx * 4 + 2], weights[idx * 4 + 3])
+      }
     }
 
     if (indices) {
@@ -362,7 +377,7 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
     throw new Error('No vertex data found in mesh')
   }
 
-  // Compute bounding box and normalize
+  // Compute bounding box and normalize (but NOT for skinned meshes - skeleton defines scale)
   let minX = Infinity, maxX = -Infinity
   let minY = Infinity, maxY = -Infinity
   let minZ = Infinity, maxZ = -Infinity
@@ -382,7 +397,7 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
   const maxRange = Math.max(rangeX, rangeY, rangeZ)
   const scale = maxRange > 0 ? 1.0 / maxRange : 1.0
 
-  // Normalize vertices
+  // Always normalize vertices
   for (let i = 0; i < verts.length; i += 3) {
     verts[i] = (verts[i] - centerX) * scale
     verts[i + 1] = (verts[i + 1] - centerY) * scale
@@ -407,6 +422,20 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
   if (outUVs.length > 0) vs.uvs = outUVs
   if (outTangents.length > 0) vs.tangents = outTangents
   if (outColors.length > 0) vs.colors = outColors
+  if (hasAnySkinning) {
+    vs.joints = outJoints
+    vs.weights = outWeights
+  }
+
+  // Store reference to gltf data for animation extraction
+  vs._gltf = gltf
+  vs._binBuffer = binBuffer
+
+  // Store normalization params for skinning (need to denormalize before skinning, renormalize after)
+  if (hasAnySkinning) {
+    vs._normCenter = [centerX, centerY, centerZ]
+    vs._normScale = scale
+  }
 
   return vs
 }
@@ -545,6 +574,460 @@ export async function createGlbSpriteSheet(urls, options = {}) {
   })
 
   return { canvas, models, cols, rows, cellSize }
+}
+
+// ============================================================================
+// Animation Support
+// ============================================================================
+
+// Extract skeleton data from glTF
+// Returns { joints: [...], inverseBindMatrices: [...] }
+function extractSkeleton(gltf, binBuffer, skinIndex = 0) {
+  if (!gltf.skins || !gltf.skins[skinIndex]) return null
+
+  const skin = gltf.skins[skinIndex]
+  const joints = skin.joints  // Array of node indices
+
+  // Read inverse bind matrices
+  let inverseBindMatrices = null
+  if (skin.inverseBindMatrices !== undefined) {
+    const accessor = gltf.accessors[skin.inverseBindMatrices]
+    const bufferView = gltf.bufferViews[accessor.bufferView]
+    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0)
+
+    // Create a properly aligned copy of the data
+    const byteLength = accessor.count * 16 * 4  // 16 floats * 4 bytes
+    const slice = binBuffer.slice(byteOffset, byteOffset + byteLength)
+    inverseBindMatrices = new Float32Array(slice)
+  }
+
+  // Build joint info with hierarchy
+  const jointData = joints.map((nodeIndex, i) => {
+    const node = gltf.nodes[nodeIndex]
+    return {
+      index: i,
+      nodeIndex: nodeIndex,
+      name: node.name || `joint_${i}`,
+      children: node.children || [],
+      // Local transform (TRS)
+      translation: node.translation || [0, 0, 0],
+      rotation: node.rotation || [0, 0, 0, 1],  // quaternion
+      scale: node.scale || [1, 1, 1],
+      // Inverse bind matrix (16 floats)
+      inverseBindMatrix: inverseBindMatrices
+        ? Array.from(inverseBindMatrices.slice(i * 16, i * 16 + 16))
+        : identityMatrix()
+    }
+  })
+
+  return {
+    joints: jointData,
+    jointCount: joints.length,
+    jointNodeIndices: joints
+  }
+}
+
+// Extract animation clips from glTF
+// Returns array of { name, duration, channels: [...] }
+function extractAnimations(gltf, binBuffer) {
+  if (!gltf.animations) return []
+
+  const readAccessor = (accessorIndex) => {
+    const accessor = gltf.accessors[accessorIndex]
+    const bufferView = gltf.bufferViews[accessor.bufferView]
+    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0)
+    return new Float32Array(binBuffer, byteOffset, accessor.count * (
+      accessor.type === 'SCALAR' ? 1 :
+      accessor.type === 'VEC3' ? 3 :
+      accessor.type === 'VEC4' ? 4 : 1
+    ))
+  }
+
+  return gltf.animations.map((anim, animIndex) => {
+    const channels = anim.channels.map(channel => {
+      const sampler = anim.samplers[channel.sampler]
+      const times = readAccessor(sampler.input)
+      const values = readAccessor(sampler.output)
+
+      return {
+        targetNode: channel.target.node,
+        targetPath: channel.target.path,  // 'translation', 'rotation', 'scale'
+        interpolation: sampler.interpolation || 'LINEAR',
+        times: Array.from(times),
+        values: Array.from(values)
+      }
+    })
+
+    // Calculate duration from max time
+    const duration = channels.reduce((max, ch) =>
+      Math.max(max, ch.times[ch.times.length - 1] || 0), 0)
+
+    return {
+      name: anim.name || `animation_${animIndex}`,
+      duration,
+      channels
+    }
+  })
+}
+
+// Matrix math helpers
+function identityMatrix() {
+  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+}
+
+// Invert a 4x4 matrix (column-major)
+function invertMatrix(m) {
+  const inv = new Array(16)
+  inv[0] = m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10]
+  inv[4] = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10]
+  inv[8] = m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9]
+  inv[12] = -m[4]*m[9]*m[14] + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9]
+  inv[1] = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10]
+  inv[5] = m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10]
+  inv[9] = -m[0]*m[9]*m[15] + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9]
+  inv[13] = m[0]*m[9]*m[14] - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9]
+  inv[2] = m[1]*m[6]*m[15] - m[1]*m[7]*m[14] - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7] - m[13]*m[3]*m[6]
+  inv[6] = -m[0]*m[6]*m[15] + m[0]*m[7]*m[14] + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7] + m[12]*m[3]*m[6]
+  inv[10] = m[0]*m[5]*m[15] - m[0]*m[7]*m[13] - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7] - m[12]*m[3]*m[5]
+  inv[14] = -m[0]*m[5]*m[14] + m[0]*m[6]*m[13] + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6] + m[12]*m[2]*m[5]
+  inv[3] = -m[1]*m[6]*m[11] + m[1]*m[7]*m[10] + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7] + m[9]*m[3]*m[6]
+  inv[7] = m[0]*m[6]*m[11] - m[0]*m[7]*m[10] - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7] - m[8]*m[3]*m[6]
+  inv[11] = -m[0]*m[5]*m[11] + m[0]*m[7]*m[9] + m[4]*m[1]*m[11] - m[4]*m[3]*m[9] - m[8]*m[1]*m[7] + m[8]*m[3]*m[5]
+  inv[15] = m[0]*m[5]*m[10] - m[0]*m[6]*m[9] - m[4]*m[1]*m[10] + m[4]*m[2]*m[9] + m[8]*m[1]*m[6] - m[8]*m[2]*m[5]
+  const det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12]
+  if (Math.abs(det) < 1e-10) return identityMatrix()
+  const invDet = 1.0 / det
+  return inv.map(v => v * invDet)
+}
+
+function multiplyMatrices(a, b) {
+  // Column-major matrix multiplication (glTF standard)
+  // C[col][row] = sum of A[k][row] * B[col][k]
+  const result = new Array(16)
+  for (let col = 0; col < 4; col++) {
+    for (let row = 0; row < 4; row++) {
+      result[col * 4 + row] =
+        a[0 * 4 + row] * b[col * 4 + 0] +
+        a[1 * 4 + row] * b[col * 4 + 1] +
+        a[2 * 4 + row] * b[col * 4 + 2] +
+        a[3 * 4 + row] * b[col * 4 + 3]
+    }
+  }
+  return result
+}
+
+function trsToMatrix(t, r, s) {
+  // Convert translation, rotation (quaternion), scale to 4x4 matrix (column-major)
+  const [tx, ty, tz] = t
+  const [qx, qy, qz, qw] = r
+  const [sx, sy, sz] = s
+
+  // Rotation matrix from quaternion - column major layout
+  const xx = qx * qx, yy = qy * qy, zz = qz * qz
+  const xy = qx * qy, xz = qx * qz, yz = qy * qz
+  const wx = qw * qx, wy = qw * qy, wz = qw * qz
+
+  // Column 0
+  const m0 = (1 - 2 * (yy + zz)) * sx
+  const m1 = 2 * (xy + wz) * sx
+  const m2 = 2 * (xz - wy) * sx
+
+  // Column 1
+  const m4 = 2 * (xy - wz) * sy
+  const m5 = (1 - 2 * (xx + zz)) * sy
+  const m6 = 2 * (yz + wx) * sy
+
+  // Column 2
+  const m8 = 2 * (xz + wy) * sz
+  const m9 = 2 * (yz - wx) * sz
+  const m10 = (1 - 2 * (xx + yy)) * sz
+
+  // Return in column-major order: col0, col1, col2, col3
+  return [
+    m0, m1, m2, 0,      // column 0
+    m4, m5, m6, 0,      // column 1
+    m8, m9, m10, 0,     // column 2
+    tx, ty, tz, 1       // column 3 (translation)
+  ]
+}
+
+function transformPoint(m, p) {
+  const x = p[0], y = p[1], z = p[2]
+  return [
+    m[0] * x + m[4] * y + m[8] * z + m[12],
+    m[1] * x + m[5] * y + m[9] * z + m[13],
+    m[2] * x + m[6] * y + m[10] * z + m[14]
+  ]
+}
+
+function transformNormal(m, n) {
+  // Transform normal (ignore translation, use inverse transpose for proper normals)
+  // For uniform scale, we can just use the rotation part
+  const x = n[0], y = n[1], z = n[2]
+  const nx = m[0] * x + m[4] * y + m[8] * z
+  const ny = m[1] * x + m[5] * y + m[9] * z
+  const nz = m[2] * x + m[6] * y + m[10] * z
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz)
+  return len > 0 ? [nx / len, ny / len, nz / len] : [0, 1, 0]
+}
+
+// Interpolate between keyframes
+function sampleAnimation(channel, time) {
+  const { times, values, targetPath, interpolation } = channel
+  const componentCount = targetPath === 'rotation' ? 4 : 3
+
+  // Clamp time to animation range
+  if (time <= times[0]) {
+    return values.slice(0, componentCount)
+  }
+  if (time >= times[times.length - 1]) {
+    const start = (times.length - 1) * componentCount
+    return values.slice(start, start + componentCount)
+  }
+
+  // Find surrounding keyframes
+  let i = 0
+  while (i < times.length - 1 && times[i + 1] < time) i++
+
+  const t0 = times[i], t1 = times[i + 1]
+  const alpha = (time - t0) / (t1 - t0)
+
+  const v0Start = i * componentCount
+  const v1Start = (i + 1) * componentCount
+
+  if (interpolation === 'STEP') {
+    return values.slice(v0Start, v0Start + componentCount)
+  }
+
+  // LINEAR interpolation
+  if (targetPath === 'rotation') {
+    // Spherical linear interpolation for quaternions
+    return slerpQuat(
+      values.slice(v0Start, v0Start + 4),
+      values.slice(v1Start, v1Start + 4),
+      alpha
+    )
+  } else {
+    // Linear interpolation for translation/scale
+    const result = []
+    for (let j = 0; j < componentCount; j++) {
+      result.push(values[v0Start + j] * (1 - alpha) + values[v1Start + j] * alpha)
+    }
+    return result
+  }
+}
+
+// Quaternion spherical interpolation
+function slerpQuat(q1, q2, t) {
+  let dot = q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3]
+
+  // Handle negative dot (take shorter path)
+  if (dot < 0) {
+    q2 = [-q2[0], -q2[1], -q2[2], -q2[3]]
+    dot = -dot
+  }
+
+  if (dot > 0.9995) {
+    // Linear interpolation for very close quaternions
+    const result = [
+      q1[0] + t * (q2[0] - q1[0]),
+      q1[1] + t * (q2[1] - q1[1]),
+      q1[2] + t * (q2[2] - q1[2]),
+      q1[3] + t * (q2[3] - q1[3])
+    ]
+    const len = Math.sqrt(result[0] ** 2 + result[1] ** 2 + result[2] ** 2 + result[3] ** 2)
+    return result.map(v => v / len)
+  }
+
+  const theta0 = Math.acos(dot)
+  const theta = theta0 * t
+  const sinTheta = Math.sin(theta)
+  const sinTheta0 = Math.sin(theta0)
+
+  const s0 = Math.cos(theta) - dot * sinTheta / sinTheta0
+  const s1 = sinTheta / sinTheta0
+
+  return [
+    s0 * q1[0] + s1 * q2[0],
+    s0 * q1[1] + s1 * q2[1],
+    s0 * q1[2] + s1 * q2[2],
+    s0 * q1[3] + s1 * q2[3]
+  ]
+}
+
+// Compute skinning matrices for all joints at a given time
+// normCenter/normScale: if provided, pre-transform matrices to work in normalized coordinate space
+function computeSkinningMatrices(skeleton, animations, clipName, time, gltf, normCenter = null, normScale = 1) {
+  if (!skeleton) return null
+
+  const clip = animations.find(a => a.name === clipName) || animations[0]
+  if (!clip) return null
+
+  // Build node-to-joint mapping
+  const nodeToJoint = new Map()
+  skeleton.joints.forEach((joint, i) => {
+    nodeToJoint.set(joint.nodeIndex, i)
+  })
+
+  // For each joint, sample the animation to get current local transform
+  // Animation values REPLACE the node's default TRS (they're absolute, not deltas)
+  const localTransforms = skeleton.joints.map((joint, jointIdx) => {
+    // Start with node's default TRS
+    let t = [...joint.translation]
+    let r = [...joint.rotation]
+    let s = [...joint.scale]
+
+    // Apply animation channels - these REPLACE the base values
+    let animated = false
+    for (const channel of clip.channels) {
+      if (channel.targetNode === joint.nodeIndex) {
+        animated = true
+        const sampled = sampleAnimation(channel, time)
+        if (channel.targetPath === 'translation') t = sampled
+        else if (channel.targetPath === 'rotation') r = sampled
+        else if (channel.targetPath === 'scale') s = sampled
+      }
+    }
+
+    return trsToMatrix(t, r, s)
+  })
+
+  // Compute world transforms by traversing hierarchy
+  const worldTransforms = new Array(skeleton.joints.length)
+
+  // Build parent map from gltf nodes
+  const parentMap = new Map()
+  gltf.nodes.forEach((node, nodeIdx) => {
+    if (node.children) {
+      node.children.forEach(childIdx => parentMap.set(childIdx, nodeIdx))
+    }
+  })
+
+  // Compute world transform for each joint
+  const computeWorld = (jointIndex) => {
+    if (worldTransforms[jointIndex]) return worldTransforms[jointIndex]
+
+    const joint = skeleton.joints[jointIndex]
+    const parentNodeIndex = parentMap.get(joint.nodeIndex)
+
+    if (parentNodeIndex !== undefined && nodeToJoint.has(parentNodeIndex)) {
+      const parentJointIndex = nodeToJoint.get(parentNodeIndex)
+      const parentWorld = computeWorld(parentJointIndex)
+      worldTransforms[jointIndex] = multiplyMatrices(parentWorld, localTransforms[jointIndex])
+    } else {
+      worldTransforms[jointIndex] = localTransforms[jointIndex]
+    }
+
+    return worldTransforms[jointIndex]
+  }
+
+  // Standard glTF skinning: jointMatrix = globalTransform * inverseBindMatrix
+  const rawMatrices = skeleton.joints.map((joint, i) => {
+    const globalTransform = computeWorld(i)
+    return multiplyMatrices(globalTransform, joint.inverseBindMatrix)
+  })
+
+  // If normCenter provided, pre-transform matrices to work in normalized coordinate space
+  // Transform: N * jointMatrix * N^-1  where N = translate(-center) then scale(scale)
+  if (normCenter) {
+    const [cx, cy, cz] = normCenter
+    const s = normScale
+    const invS = 1 / s
+
+    // N = translate(-center) then scale = scale * translate(-center)
+    // N^-1 = translate(center) then scale(1/s) = scale(1/s) * translate(center)
+    // For column-major 4x4: result = N * M * N^-1
+    return rawMatrices.map(M => {
+      // Step 1: M' = M * N^-1 = M * (scale(1/s) * translate(center))
+      // This is: first translate by center, then scale by 1/s, then apply M
+      // Step 2: result = N * M' = (scale(s) * translate(-center)) * M'
+
+      // Compute M * N^-1 directly:
+      // N^-1 translates by center then scales by 1/s
+      // Column-major: N^-1[12..14] = [cx, cy, cz], and scale diagonal by 1/s
+      const MN = [
+        M[0] * invS, M[1] * invS, M[2] * invS, M[3],
+        M[4] * invS, M[5] * invS, M[6] * invS, M[7],
+        M[8] * invS, M[9] * invS, M[10] * invS, M[11],
+        M[0] * cx + M[4] * cy + M[8] * cz + M[12],
+        M[1] * cx + M[5] * cy + M[9] * cz + M[13],
+        M[2] * cx + M[6] * cy + M[10] * cz + M[14],
+        M[3] * cx + M[7] * cy + M[11] * cz + M[15]
+      ]
+
+      // Now compute N * MN where N = scale(s) * translate(-center)
+      // N scales by s then translates by -center
+      // Result[i] = s * MN[i] for position columns, translation adjusts
+      return [
+        s * MN[0], s * MN[1], s * MN[2], MN[3],
+        s * MN[4], s * MN[5], s * MN[6], MN[7],
+        s * MN[8], s * MN[9], s * MN[10], MN[11],
+        s * MN[12] - cx * s, s * MN[13] - cy * s, s * MN[14] - cz * s, MN[15]
+      ]
+    })
+  }
+
+  return rawMatrices
+}
+
+// Export animation helpers for use by VertexSource
+export { extractSkeleton as extractSkeletonFromGltf }
+export { extractAnimations as extractAnimationsFromGltf }
+export { computeSkinningMatrices, applySkinning }
+
+// Apply skinning to vertices
+// Matrices should already be pre-transformed for normalized coords (via computeSkinningMatrices)
+function applySkinning(vertices, normals, joints, weights, skinningMatrices) {
+  const vertexCount = vertices.length / 3
+  const skinnedVerts = new Array(vertices.length)
+  const skinnedNormals = normals ? new Array(normals.length) : null
+
+  for (let v = 0; v < vertexCount; v++) {
+    const vi = v * 3
+    const ji = v * 4
+
+    const pos = [vertices[vi], vertices[vi + 1], vertices[vi + 2]]
+    const norm = normals ? [normals[vi], normals[vi + 1], normals[vi + 2]] : null
+
+    // Blend up to 4 bone influences
+    let skinnedPos = [0, 0, 0]
+    let skinnedNorm = normals ? [0, 0, 0] : null
+
+    for (let i = 0; i < 4; i++) {
+      const jointIndex = joints[ji + i]
+      const weight = weights[ji + i]
+
+      if (weight > 0 && skinningMatrices[jointIndex]) {
+        const mat = skinningMatrices[jointIndex]
+        const transformedPos = transformPoint(mat, pos)
+
+        skinnedPos[0] += transformedPos[0] * weight
+        skinnedPos[1] += transformedPos[1] * weight
+        skinnedPos[2] += transformedPos[2] * weight
+
+        if (normals) {
+          const transformedNorm = transformNormal(mat, norm)
+          skinnedNorm[0] += transformedNorm[0] * weight
+          skinnedNorm[1] += transformedNorm[1] * weight
+          skinnedNorm[2] += transformedNorm[2] * weight
+        }
+      }
+    }
+
+    skinnedVerts[vi] = skinnedPos[0]
+    skinnedVerts[vi + 1] = skinnedPos[1]
+    skinnedVerts[vi + 2] = skinnedPos[2]
+
+    if (normals) {
+      // Normalize the normal vector
+      const len = Math.sqrt(skinnedNorm[0] ** 2 + skinnedNorm[1] ** 2 + skinnedNorm[2] ** 2)
+      skinnedNormals[vi] = len > 0 ? skinnedNorm[0] / len : 0
+      skinnedNormals[vi + 1] = len > 0 ? skinnedNorm[1] / len : 1
+      skinnedNormals[vi + 2] = len > 0 ? skinnedNorm[2] / len : 0
+    }
+  }
+
+  return { vertices: skinnedVerts, normals: skinnedNormals }
 }
 
 // Equilateral triangle centered at (centerX, centerY)
