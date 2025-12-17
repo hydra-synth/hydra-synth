@@ -129,6 +129,169 @@ class VertexSource {
     this.vertices = repeated
     return this
   }
+
+  // 3D grid instancing with faceId support
+  // Creates a grid of copies, each with unique faceId for variation
+  // nx, ny, nz: number of copies in each direction
+  // spacing: distance between copies (or {x, y, z} object)
+  grid(nx = 2, ny = 2, nz = 1, spacing = 1.0) {
+    const sx = typeof spacing === 'object' ? spacing.x || 1 : spacing
+    const sy = typeof spacing === 'object' ? spacing.y || 1 : spacing
+    const sz = typeof spacing === 'object' ? spacing.z || 1 : spacing
+
+    const orig = this.vertices
+    const stride = this.is3D ? 3 : 2
+    const vertexCount = orig.length / stride
+
+    // Safety check: limit total vertices to prevent browser crash
+    const maxVertices = 5000000  // 5 million vertex limit
+    const totalInstances = nx * ny * nz
+    const totalVertices = vertexCount * totalInstances
+    if (totalVertices > maxVertices) {
+      const maxInstances = Math.floor(maxVertices / vertexCount)
+      const scale = Math.cbrt(maxInstances / totalInstances)
+      const newNx = Math.max(1, Math.floor(nx * scale))
+      const newNy = Math.max(1, Math.floor(ny * scale))
+      const newNz = Math.max(1, Math.floor(nz * scale))
+      console.warn(`grid(${nx}, ${ny}, ${nz}) would create ${totalVertices.toLocaleString()} vertices. ` +
+        `Limiting to grid(${newNx}, ${newNy}, ${newNz}) to prevent crash. ` +
+        `Use lower-poly geometry (e.g., sphere(0.1, 8, 4)) for large grids.`)
+      nx = newNx
+      ny = newNy
+      nz = newNz
+    }
+
+    const newVerts = []
+    const newNormals = this.normals ? [] : null
+    const newUVs = this.uvs ? [] : null
+    const newColors = this.colors ? [] : null
+    const newFaceIds = []
+
+    // Center the grid
+    const offsetX = -((nx - 1) * sx) / 2
+    const offsetY = -((ny - 1) * sy) / 2
+    const offsetZ = -((nz - 1) * sz) / 2
+
+    let instanceId = 0
+    for (let iz = 0; iz < nz; iz++) {
+      for (let iy = 0; iy < ny; iy++) {
+        for (let ix = 0; ix < nx; ix++) {
+          const dx = offsetX + ix * sx
+          const dy = offsetY + iy * sy
+          const dz = offsetZ + iz * sz
+
+          // Copy all vertices with offset
+          for (let v = 0; v < vertexCount; v++) {
+            const vi = v * stride
+            newVerts.push(orig[vi] + dx, orig[vi + 1] + dy)
+            if (stride === 3) newVerts.push(orig[vi + 2] + dz)
+
+            // Copy normals (unchanged by translation)
+            if (this.normals) {
+              const ni = v * 3
+              newNormals.push(this.normals[ni], this.normals[ni + 1], this.normals[ni + 2])
+            }
+
+            // Copy UVs (unchanged)
+            if (this.uvs) {
+              const ui = v * 2
+              newUVs.push(this.uvs[ui], this.uvs[ui + 1])
+            }
+
+            // Copy colors (unchanged)
+            if (this.colors) {
+              const ci = v * 4
+              newColors.push(this.colors[ci], this.colors[ci + 1], this.colors[ci + 2], this.colors[ci + 3])
+            }
+
+            // FaceId = instance index (for per-instance variation)
+            newFaceIds.push(instanceId)
+          }
+          instanceId++
+        }
+      }
+    }
+
+    this.vertices = newVerts
+    if (newNormals) this.normals = newNormals
+    if (newUVs) this.uvs = newUVs
+    if (newColors) this.colors = newColors
+    this.faceIds = newFaceIds
+    this.instanceCount = nx * ny * nz
+
+    return this
+  }
+
+  // Scatter instances randomly
+  // count: number of instances
+  // range: {x, y, z} spread range (centered at origin)
+  // seed: optional random seed for reproducibility
+  scatter(count = 10, range = { x: 2, y: 2, z: 0 }, seed = 0) {
+    // Simple seeded random
+    const random = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      return seed / 0x7fffffff
+    }
+
+    const orig = this.vertices
+    const stride = this.is3D ? 3 : 2
+    const vertexCount = orig.length / stride
+
+    // Safety check: limit total vertices to prevent browser crash
+    const maxVertices = 5000000  // 5 million vertex limit
+    const totalVertices = vertexCount * count
+    if (totalVertices > maxVertices) {
+      const newCount = Math.floor(maxVertices / vertexCount)
+      console.warn(`scatter(${count}) would create ${totalVertices.toLocaleString()} vertices. ` +
+        `Limiting to scatter(${newCount}) to prevent crash. ` +
+        `Use lower-poly geometry for large scatter counts.`)
+      count = newCount
+    }
+
+    const newVerts = []
+    const newNormals = this.normals ? [] : null
+    const newUVs = this.uvs ? [] : null
+    const newColors = this.colors ? [] : null
+    const newFaceIds = []
+
+    for (let i = 0; i < count; i++) {
+      const dx = (random() - 0.5) * range.x
+      const dy = (random() - 0.5) * range.y
+      const dz = (random() - 0.5) * (range.z || 0)
+
+      for (let v = 0; v < vertexCount; v++) {
+        const vi = v * stride
+        newVerts.push(orig[vi] + dx, orig[vi + 1] + dy)
+        if (stride === 3) newVerts.push(orig[vi + 2] + dz)
+
+        if (this.normals) {
+          const ni = v * 3
+          newNormals.push(this.normals[ni], this.normals[ni + 1], this.normals[ni + 2])
+        }
+
+        if (this.uvs) {
+          const ui = v * 2
+          newUVs.push(this.uvs[ui], this.uvs[ui + 1])
+        }
+
+        if (this.colors) {
+          const ci = v * 4
+          newColors.push(this.colors[ci], this.colors[ci + 1], this.colors[ci + 2], this.colors[ci + 3])
+        }
+
+        newFaceIds.push(i)
+      }
+    }
+
+    this.vertices = newVerts
+    if (newNormals) this.normals = newNormals
+    if (newUVs) this.uvs = newUVs
+    if (newColors) this.colors = newColors
+    this.faceIds = newFaceIds
+    this.instanceCount = count
+
+    return this
+  }
 }
 
 // Generate vertex shader GLSL from transforms

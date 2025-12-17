@@ -1579,5 +1579,332 @@ wgsl:
    let viewDir = normalize(ourIn.v_viewDir);
    let f = pow(1.0 - abs(dot(normal, viewDir)), power) * intensity;
    return vec4<f32>(_c0.rgb + f, _c0.a);`
+},
+{
+  name: 'specular',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'lx',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'ly',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'lz',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'shininess',
+      default: 32,
+    },
+    {
+      type: 'float',
+      name: 'intensity',
+      default: 1,
+    }
+  ],
+  glsl:
+`   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   vec3 normal = normalize(v_worldNormal);
+   vec3 viewDir = normalize(v_viewDir);
+   vec3 halfDir = normalize(lightDir + viewDir);
+   float spec = pow(max(0.0, dot(normal, halfDir)), shininess) * intensity;
+   return vec4(_c0.rgb + spec, _c0.a);`,
+  wgsl:
+`   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let normal = normalize(ourIn.v_worldNormal);
+   let viewDir = normalize(ourIn.v_viewDir);
+   let halfDir = normalize(lightDir + viewDir);
+   let spec = pow(max(0.0, dot(normal, halfDir)), shininess) * intensity;
+   return vec4<f32>(_c0.rgb + spec, _c0.a);`
+},
+{
+  name: 'halfLambert',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'lx',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'ly',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'lz',
+      default: 0,
+    }
+  ],
+  glsl:
+`   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   vec3 normal = normalize(v_worldNormal);
+   float diff = dot(normal, lightDir) * 0.5 + 0.5;
+   return vec4(_c0.rgb * diff, _c0.a);`,
+  wgsl:
+`   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let normal = normalize(ourIn.v_worldNormal);
+   let diff = dot(normal, lightDir) * 0.5 + 0.5;
+   return vec4<f32>(_c0.rgb * diff, _c0.a);`
+},
+{
+  name: 'toon',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'lx',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'ly',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'lz',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'levels',
+      default: 4,
+    }
+  ],
+  glsl:
+`   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   vec3 normal = normalize(v_worldNormal);
+   float diff = max(0.0, dot(normal, lightDir));
+   float toonShade = floor(diff * levels) / (levels - 1.0);
+   return vec4(_c0.rgb * toonShade, _c0.a);`,
+  wgsl:
+`   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let normal = normalize(ourIn.v_worldNormal);
+   let diff = max(0.0, dot(normal, lightDir));
+   let toonShade = floor(diff * levels) / (levels - 1.0);
+   return vec4<f32>(_c0.rgb * toonShade, _c0.a);`
+},
+{
+  name: 'outline',
+  type: 'color',
+  inputs: [
+    {
+      type: 'float',
+      name: 'thickness',
+      default: 0.3,
+    },
+    {
+      type: 'float',
+      name: 'r',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'g',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'b',
+      default: 0,
+    }
+  ],
+  glsl:
+`   vec3 normal = normalize(v_worldNormal);
+   vec3 viewDir = normalize(v_viewDir);
+   float edge = 1.0 - abs(dot(normal, viewDir));
+   float outline = smoothstep(1.0 - thickness, 1.0, edge);
+   return vec4(mix(_c0.rgb, vec3(r, g, b), outline), _c0.a);`,
+  wgsl:
+`   let normal = normalize(ourIn.v_worldNormal);
+   let viewDir = normalize(ourIn.v_viewDir);
+   let edge = 1.0 - abs(dot(normal, viewDir));
+   let outlineAmt = smoothstep(1.0 - thickness, 1.0, edge);
+   return vec4<f32>(mix(_c0.rgb, vec3<f32>(r, g, b), outlineAmt), _c0.a);`
+},
+{
+  name: 'vscale',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'value',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'scale',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'offset',
+      default: 0,
+    }
+  ],
+  glsl:
+`   float v = value * scale + offset;
+   return vec4(v, v, v, 1.0);`,
+  wgsl:
+`   let v = value * scale + offset;
+   return vec4<f32>(v, v, v, 1.0);`
+},
+{
+  name: 'vcolor',
+  type: 'src',
+  inputs: [
+    {
+      type: 'float',
+      name: 'value',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'scale',
+      default: 0.1,
+    }
+  ],
+  glsl:
+`   float t = fract(value * scale);
+   // Rainbow color from hue
+   vec3 c = abs(mod(t * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0;
+   return vec4(clamp(c, 0.0, 1.0), 1.0);`,
+  wgsl:
+`   let t = fract(value * scale);
+   // Rainbow color from hue
+   let c = abs((t * 6.0 + vec3<f32>(0.0, 4.0, 2.0)) % 6.0 - 3.0) - 1.0;
+   return vec4<f32>(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);`
+},
+{
+  name: 'normalMap',
+  type: 'src',
+  inputs: [
+    {
+      type: 'sampler2D',
+      name: 'tex',
+    },
+    {
+      type: 'float',
+      name: 'strength',
+      default: 1,
+    }
+  ],
+  glsl:
+`   // Read normal from texture (stored as RGB in tangent space)
+   vec3 texNormal = texture2D(tex, _st).rgb * 2.0 - 1.0;
+   texNormal.xy *= strength;
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix to transform from tangent space to world space
+   vec3 T = normalize(v_tangent);
+   vec3 B = normalize(v_bitangent);
+   vec3 N = normalize(v_worldNormal);
+   mat3 TBN = mat3(T, B, N);
+
+   // Transform normal to world space
+   vec3 worldNormal = normalize(TBN * texNormal);
+
+   // Output as color (remapped to 0-1 range for visualization)
+   return vec4(worldNormal * 0.5 + 0.5, 1.0);`,
+  wgsl:
+`   // Read normal from texture (stored as RGB in tangent space)
+   var texNormal = textureSample(tex, texSampler, _st).rgb * 2.0 - 1.0;
+   texNormal = vec3<f32>(texNormal.x * strength, texNormal.y * strength, texNormal.z);
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix to transform from tangent space to world space
+   let T = normalize(ourIn.v_tangent);
+   let B = normalize(ourIn.v_bitangent);
+   let N = normalize(ourIn.v_worldNormal);
+
+   // Transform normal to world space (manual matrix multiply)
+   let worldNormal = normalize(T * texNormal.x + B * texNormal.y + N * texNormal.z);
+
+   // Output as color (remapped to 0-1 range for visualization)
+   return vec4<f32>(worldNormal * 0.5 + 0.5, 1.0);`
+},
+{
+  name: 'normalMapDiffuse',
+  type: 'color',
+  inputs: [
+    {
+      type: 'sampler2D',
+      name: 'tex',
+    },
+    {
+      type: 'float',
+      name: 'lx',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'ly',
+      default: 1,
+    },
+    {
+      type: 'float',
+      name: 'lz',
+      default: 0,
+    },
+    {
+      type: 'float',
+      name: 'ambient',
+      default: 0.2,
+    },
+    {
+      type: 'float',
+      name: 'strength',
+      default: 1,
+    }
+  ],
+  glsl:
+`   // Read normal from texture
+   vec3 texNormal = texture2D(tex, uv).rgb * 2.0 - 1.0;
+   texNormal.xy *= strength;
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix
+   vec3 T = normalize(v_tangent);
+   vec3 B = normalize(v_bitangent);
+   vec3 N = normalize(v_worldNormal);
+   mat3 TBN = mat3(T, B, N);
+
+   // Transform to world space
+   vec3 worldNormal = normalize(TBN * texNormal);
+
+   // Diffuse lighting with perturbed normal
+   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   float diff = max(0.0, dot(worldNormal, lightDir));
+   float lighting = ambient + (1.0 - ambient) * diff;
+   return vec4(_c0.rgb * lighting, _c0.a);`,
+  wgsl:
+`   // Read normal from texture
+   var texNormal = textureSample(tex, texSampler, ourIn.texcoord).rgb * 2.0 - 1.0;
+   texNormal = vec3<f32>(texNormal.x * strength, texNormal.y * strength, texNormal.z);
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix
+   let T = normalize(ourIn.v_tangent);
+   let B = normalize(ourIn.v_bitangent);
+   let N = normalize(ourIn.v_worldNormal);
+
+   // Transform to world space
+   let worldNormal = normalize(T * texNormal.x + B * texNormal.y + N * texNormal.z);
+
+   // Diffuse lighting with perturbed normal
+   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let diff = max(0.0, dot(worldNormal, lightDir));
+   let lighting = ambient + (1.0 - ambient) * diff;
+   return vec4<f32>(_c0.rgb * lighting, _c0.a);`
 }
 ]

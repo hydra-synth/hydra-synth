@@ -675,3 +675,373 @@ export function cube(size = 0.5) {
   vs.is3D = true
   return vs
 }
+
+// ============================================================================
+// Procedural 3D Geometry
+// ============================================================================
+
+// Generate a UV sphere with normals
+// segments: number of horizontal divisions (longitude)
+// rings: number of vertical divisions (latitude)
+export function sphere(radius = 0.5, segments = 32, rings = 16) {
+  const verts = []
+  const normals = []
+  const uvs = []
+
+  for (let ring = 0; ring <= rings; ring++) {
+    const theta = (ring / rings) * Math.PI  // 0 to PI (top to bottom)
+    const sinTheta = Math.sin(theta)
+    const cosTheta = Math.cos(theta)
+
+    for (let seg = 0; seg <= segments; seg++) {
+      const phi = (seg / segments) * Math.PI * 2  // 0 to 2PI (around)
+      const sinPhi = Math.sin(phi)
+      const cosPhi = Math.cos(phi)
+
+      // Normal is just the unit sphere position
+      const nx = sinTheta * cosPhi
+      const ny = cosTheta
+      const nz = sinTheta * sinPhi
+
+      // Position is normal * radius
+      const x = nx * radius
+      const y = ny * radius
+      const z = nz * radius
+
+      // UV coordinates
+      const u = seg / segments
+      const v = ring / rings
+
+      verts.push(x, y, z)
+      normals.push(nx, ny, nz)
+      uvs.push(u, v)
+    }
+  }
+
+  // Build triangle indices
+  const outVerts = []
+  const outNormals = []
+  const outUVs = []
+
+  const stride = segments + 1
+  for (let ring = 0; ring < rings; ring++) {
+    for (let seg = 0; seg < segments; seg++) {
+      const i0 = ring * stride + seg
+      const i1 = i0 + 1
+      const i2 = i0 + stride
+      const i3 = i2 + 1
+
+      // Two triangles per quad
+      const indices = [i0, i2, i1, i1, i2, i3]
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2])
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2])
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1])
+      }
+    }
+  }
+
+  const vs = new VertexSource(outVerts)
+  vs.normals = outNormals
+  vs.uvs = outUVs
+  vs.is3D = true
+  return vs
+}
+
+// Generate a subdivided plane with normals (facing +Y by default)
+// width, height: size of the plane
+// subdivisionsX, subdivisionsY: number of subdivisions
+export function plane(width = 1, height = 1, subdivisionsX = 1, subdivisionsY = 1) {
+  const verts = []
+  const normals = []
+  const uvs = []
+
+  const halfW = width / 2
+  const halfH = height / 2
+
+  for (let y = 0; y <= subdivisionsY; y++) {
+    for (let x = 0; x <= subdivisionsX; x++) {
+      const u = x / subdivisionsX
+      const v = y / subdivisionsY
+      const px = -halfW + u * width
+      const pz = -halfH + v * height
+
+      verts.push(px, 0, pz)
+      normals.push(0, 1, 0)  // Facing up
+      uvs.push(u, v)
+    }
+  }
+
+  // Build triangles
+  const outVerts = []
+  const outNormals = []
+  const outUVs = []
+
+  const stride = subdivisionsX + 1
+  for (let y = 0; y < subdivisionsY; y++) {
+    for (let x = 0; x < subdivisionsX; x++) {
+      const i0 = y * stride + x
+      const i1 = i0 + 1
+      const i2 = i0 + stride
+      const i3 = i2 + 1
+
+      // Two triangles per quad
+      const indices = [i0, i2, i1, i1, i2, i3]
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2])
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2])
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1])
+      }
+    }
+  }
+
+  const vs = new VertexSource(outVerts)
+  vs.normals = outNormals
+  vs.uvs = outUVs
+  vs.is3D = true
+  return vs
+}
+
+// Generate a torus (donut) with normals
+// radius: distance from center to tube center
+// tubeRadius: radius of the tube
+// radialSegments: segments around the ring
+// tubularSegments: segments around the tube
+export function torus(radius = 0.4, tubeRadius = 0.15, radialSegments = 32, tubularSegments = 16) {
+  const verts = []
+  const normals = []
+  const uvs = []
+
+  for (let i = 0; i <= radialSegments; i++) {
+    const u = i / radialSegments
+    const theta = u * Math.PI * 2
+
+    for (let j = 0; j <= tubularSegments; j++) {
+      const v = j / tubularSegments
+      const phi = v * Math.PI * 2
+
+      // Position on torus
+      const x = (radius + tubeRadius * Math.cos(phi)) * Math.cos(theta)
+      const y = tubeRadius * Math.sin(phi)
+      const z = (radius + tubeRadius * Math.cos(phi)) * Math.sin(theta)
+
+      // Normal: direction from ring center to surface
+      const cx = radius * Math.cos(theta)  // center of tube ring
+      const cz = radius * Math.sin(theta)
+      const nx = x - cx
+      const ny = y
+      const nz = z - cz
+      const len = Math.sqrt(nx * nx + ny * ny + nz * nz)
+
+      verts.push(x, y, z)
+      normals.push(nx / len, ny / len, nz / len)
+      uvs.push(u, v)
+    }
+  }
+
+  // Build triangles
+  const outVerts = []
+  const outNormals = []
+  const outUVs = []
+
+  const stride = tubularSegments + 1
+  for (let i = 0; i < radialSegments; i++) {
+    for (let j = 0; j < tubularSegments; j++) {
+      const i0 = i * stride + j
+      const i1 = i0 + 1
+      const i2 = i0 + stride
+      const i3 = i2 + 1
+
+      // Two triangles per quad
+      const indices = [i0, i1, i2, i1, i3, i2]
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2])
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2])
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1])
+      }
+    }
+  }
+
+  const vs = new VertexSource(outVerts)
+  vs.normals = outNormals
+  vs.uvs = outUVs
+  vs.is3D = true
+  return vs
+}
+
+// Generate a cylinder with normals
+// radius: radius of the cylinder
+// height: height of the cylinder
+// radialSegments: segments around the circumference
+// heightSegments: segments along the height
+// caps: whether to include top and bottom caps (default true)
+export function cylinder(radius = 0.3, height = 1, radialSegments = 32, heightSegments = 1, caps = true) {
+  const verts = []
+  const normals = []
+  const uvs = []
+
+  const halfHeight = height / 2
+
+  // Generate the tube
+  for (let y = 0; y <= heightSegments; y++) {
+    const v = y / heightSegments
+    const py = -halfHeight + v * height
+
+    for (let i = 0; i <= radialSegments; i++) {
+      const u = i / radialSegments
+      const theta = u * Math.PI * 2
+      const cosT = Math.cos(theta)
+      const sinT = Math.sin(theta)
+
+      verts.push(cosT * radius, py, sinT * radius)
+      normals.push(cosT, 0, sinT)  // Outward normal
+      uvs.push(u, v)
+    }
+  }
+
+  // Build tube triangles
+  const outVerts = []
+  const outNormals = []
+  const outUVs = []
+
+  const stride = radialSegments + 1
+  for (let y = 0; y < heightSegments; y++) {
+    for (let i = 0; i < radialSegments; i++) {
+      const i0 = y * stride + i
+      const i1 = i0 + 1
+      const i2 = i0 + stride
+      const i3 = i2 + 1
+
+      const indices = [i0, i2, i1, i1, i2, i3]
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2])
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2])
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1])
+      }
+    }
+  }
+
+  // Add caps
+  if (caps) {
+    // Top cap (y = halfHeight)
+    for (let i = 0; i < radialSegments; i++) {
+      const theta1 = (i / radialSegments) * Math.PI * 2
+      const theta2 = ((i + 1) / radialSegments) * Math.PI * 2
+
+      // Center vertex
+      outVerts.push(0, halfHeight, 0)
+      outNormals.push(0, 1, 0)
+      outUVs.push(0.5, 0.5)
+
+      // Edge vertices (CCW from above)
+      outVerts.push(Math.cos(theta2) * radius, halfHeight, Math.sin(theta2) * radius)
+      outNormals.push(0, 1, 0)
+      outUVs.push(0.5 + Math.cos(theta2) * 0.5, 0.5 + Math.sin(theta2) * 0.5)
+
+      outVerts.push(Math.cos(theta1) * radius, halfHeight, Math.sin(theta1) * radius)
+      outNormals.push(0, 1, 0)
+      outUVs.push(0.5 + Math.cos(theta1) * 0.5, 0.5 + Math.sin(theta1) * 0.5)
+    }
+
+    // Bottom cap (y = -halfHeight)
+    for (let i = 0; i < radialSegments; i++) {
+      const theta1 = (i / radialSegments) * Math.PI * 2
+      const theta2 = ((i + 1) / radialSegments) * Math.PI * 2
+
+      // Center vertex
+      outVerts.push(0, -halfHeight, 0)
+      outNormals.push(0, -1, 0)
+      outUVs.push(0.5, 0.5)
+
+      // Edge vertices (CCW from below)
+      outVerts.push(Math.cos(theta1) * radius, -halfHeight, Math.sin(theta1) * radius)
+      outNormals.push(0, -1, 0)
+      outUVs.push(0.5 + Math.cos(theta1) * 0.5, 0.5 + Math.sin(theta1) * 0.5)
+
+      outVerts.push(Math.cos(theta2) * radius, -halfHeight, Math.sin(theta2) * radius)
+      outNormals.push(0, -1, 0)
+      outUVs.push(0.5 + Math.cos(theta2) * 0.5, 0.5 + Math.sin(theta2) * 0.5)
+    }
+  }
+
+  const vs = new VertexSource(outVerts)
+  vs.normals = outNormals
+  vs.uvs = outUVs
+  vs.is3D = true
+  return vs
+}
+
+// Generate a cone with normals
+// radius: radius of the base
+// height: height of the cone
+// radialSegments: segments around the circumference
+// caps: whether to include bottom cap (default true)
+export function cone(radius = 0.3, height = 1, radialSegments = 32, caps = true) {
+  const outVerts = []
+  const outNormals = []
+  const outUVs = []
+
+  const halfHeight = height / 2
+  const apex = halfHeight
+  const base = -halfHeight
+
+  // Calculate the normal slope for cone surface
+  // Normal needs to point outward and up the slope
+  const slopeAngle = Math.atan2(radius, height)
+  const ny = Math.sin(slopeAngle)
+  const nxz = Math.cos(slopeAngle)
+
+  // Generate cone sides
+  for (let i = 0; i < radialSegments; i++) {
+    const theta1 = (i / radialSegments) * Math.PI * 2
+    const theta2 = ((i + 1) / radialSegments) * Math.PI * 2
+    const cosT1 = Math.cos(theta1), sinT1 = Math.sin(theta1)
+    const cosT2 = Math.cos(theta2), sinT2 = Math.sin(theta2)
+
+    // Triangle from apex to base edge
+    // Apex
+    outVerts.push(0, apex, 0)
+    // Normal at apex: average of surrounding normals, pointing up/out
+    const midTheta = (theta1 + theta2) / 2
+    outNormals.push(Math.cos(midTheta) * nxz, ny, Math.sin(midTheta) * nxz)
+    outUVs.push(0.5, 0)
+
+    // Base edge 1
+    outVerts.push(cosT1 * radius, base, sinT1 * radius)
+    outNormals.push(cosT1 * nxz, ny, sinT1 * nxz)
+    outUVs.push(i / radialSegments, 1)
+
+    // Base edge 2
+    outVerts.push(cosT2 * radius, base, sinT2 * radius)
+    outNormals.push(cosT2 * nxz, ny, sinT2 * nxz)
+    outUVs.push((i + 1) / radialSegments, 1)
+  }
+
+  // Add base cap
+  if (caps) {
+    for (let i = 0; i < radialSegments; i++) {
+      const theta1 = (i / radialSegments) * Math.PI * 2
+      const theta2 = ((i + 1) / radialSegments) * Math.PI * 2
+
+      // Center vertex
+      outVerts.push(0, base, 0)
+      outNormals.push(0, -1, 0)
+      outUVs.push(0.5, 0.5)
+
+      // Edge vertices (CCW from below)
+      outVerts.push(Math.cos(theta1) * radius, base, Math.sin(theta1) * radius)
+      outNormals.push(0, -1, 0)
+      outUVs.push(0.5 + Math.cos(theta1) * 0.5, 0.5 + Math.sin(theta1) * 0.5)
+
+      outVerts.push(Math.cos(theta2) * radius, base, Math.sin(theta2) * radius)
+      outNormals.push(0, -1, 0)
+      outUVs.push(0.5 + Math.cos(theta2) * 0.5, 0.5 + Math.sin(theta2) * 0.5)
+    }
+  }
+
+  const vs = new VertexSource(outVerts)
+  vs.normals = outNormals
+  vs.uvs = outUVs
+  vs.is3D = true
+  return vs
+}
