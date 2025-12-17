@@ -104,14 +104,16 @@ class OutputWgsl {
       rawVerts = vertexData
     }
 
-    // Check for explicit UVs, faceIds, and normals
+    // Check for explicit UVs, faceIds, normals, and tangents
     let hasExplicitUVs = false
     let hasFaceIds = false
     let hasNormals = false
+    let hasTangents = false
     if (vertexSource) {
       hasExplicitUVs = vertexSource.uvs && vertexSource.uvs.length > 0
       hasFaceIds = vertexSource.faceIds && vertexSource.faceIds.length > 0
       hasNormals = vertexSource.normals && vertexSource.normals.length > 0
+      hasTangents = vertexSource.tangents && vertexSource.tangents.length > 0
     }
 
     // Compute bounds for UV normalization
@@ -141,7 +143,7 @@ class OutputWgsl {
       ]
 
       if (hasChainedTransforms) {
-        const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals })
+        const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents })
         vertexWgsl = generated.wgsl
         vertexUniforms = [...boundsUniforms, ...generated.uniforms]
       } else {
@@ -165,6 +167,7 @@ class OutputWgsl {
       hasExplicitUVs,
       hasFaceIds,
       hasNormals,
+      hasTangents,
       sprite
     })
 
@@ -181,9 +184,11 @@ class OutputWgsl {
       hasExplicitUVs,
       hasFaceIds,
       hasNormals,
+      hasTangents,
       uvs: vertexSource?.uvs,
       faceIds: vertexSource?.faceIds,
       normals: vertexSource?.normals,
+      tangents: vertexSource?.tangents,
       sprite
     })
   }

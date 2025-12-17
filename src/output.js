@@ -146,6 +146,8 @@ Output.prototype.init = function () {
   varying vec3 v_position;
   varying vec3 v_normal;
   varying vec3 v_worldNormal;
+  varying vec3 v_tangent;
+  varying vec3 v_bitangent;
   varying vec3 v_viewDir;
   varying float v_depth;
 
@@ -157,6 +159,8 @@ Output.prototype.init = function () {
     v_position = vec3(position.xy * 2.0 - 1.0, 0.0);
     v_normal = vec3(0.0, 0.0, 1.0);
     v_worldNormal = vec3(0.0, 0.0, 1.0);
+    v_tangent = vec3(1.0, 0.0, 0.0);
+    v_bitangent = vec3(0.0, 1.0, 0.0);
     v_viewDir = vec3(0.0, 0.0, 1.0);
     v_depth = 1.0;
 
@@ -260,11 +264,12 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   }
 
   // Create vertex buffer for this sprite
-  let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, vertexCount
+  let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, tangentBuffer, vertexCount
   let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 }  // default fullscreen bounds
   let hasExplicitUVs = false
   let hasFaceIds = false
   let hasNormals = false
+  let hasTangents = false
 
   if (rawVerts && rawVerts.length >= 6) {
     // Custom geometry: reshape to vec3 for 3D forward-compatibility
@@ -309,6 +314,17 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
         normalData.push([vertexSource.normals[i], vertexSource.normals[i + 1], vertexSource.normals[i + 2]])
       }
       normalBuffer = this.regl.buffer(normalData)
+    }
+
+    // Check for tangents from VertexSource (vec4: xyz = tangent, w = handedness)
+    if (vertexSource && vertexSource.tangents && vertexSource.tangents.length > 0) {
+      hasTangents = true
+      // Reshape tangents to vec4 array
+      const tangentData = []
+      for (let i = 0; i < vertexSource.tangents.length; i += 4) {
+        tangentData.push([vertexSource.tangents[i], vertexSource.tangents[i + 1], vertexSource.tangents[i + 2], vertexSource.tangents[i + 3]])
+      }
+      tangentBuffer = this.regl.buffer(tangentData)
     }
   } else {
     // Default fullscreen triangle
@@ -389,7 +405,7 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   if (rawVerts) {
     if (hasChainedTransforms) {
       // Use generateVertexGlsl for chained transforms (Phase 5)
-      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals })
+      const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents })
       vert = generated.glsl
       vertexUniforms = generated.uniforms
     } else if (hasVertexOptions) {
@@ -503,6 +519,9 @@ Output.prototype.registerSprite = function (spriteLevel, config) {
   }
   if (hasNormals && normalBuffer) {
     attributes.normal = normalBuffer
+  }
+  if (hasTangents && tangentBuffer) {
+    attributes.tangent = tangentBuffer
   }
 
   // Create the draw command

@@ -233,6 +233,8 @@ GlslSource.prototype.compile = function (transforms) {
   varying vec3 v_position;
   varying vec3 v_normal;
   varying vec3 v_worldNormal;
+  varying vec3 v_tangent;
+  varying vec3 v_bitangent;
   varying vec3 v_viewDir;
   varying float v_depth;
 

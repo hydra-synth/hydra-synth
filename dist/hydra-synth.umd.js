@@ -104,13 +104,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
   }
   function generateVertexGlsl(vertexSource, precision, options = {}) {
-    const { useExplicitUVs = false, useFaceIds = false, useNormals = false } = options;
+    const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options;
     const uvAttributeDecl = useExplicitUVs ? "attribute vec2 texcoord;" : "";
     const uvComputation = useExplicitUVs ? "uv = texcoord;" : "uv = (position.xy - u_boundsMin) / (u_boundsMax - u_boundsMin);";
     const faceIdAttributeDecl = useFaceIds ? "attribute float faceId;" : "";
     const faceIdVaryingDecl = "varying float v_faceId;";
     const faceIdPassthrough = useFaceIds ? "v_faceId = faceId;" : "v_faceId = 0.0;";
     const normalAttributeDecl = useNormals ? "attribute vec3 normal;" : "";
+    const tangentAttributeDecl = useTangents ? "attribute vec4 tangent;" : "";
     if (!vertexSource.hasTransforms) {
       return {
         glsl: `
@@ -124,6 +125,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         // Vertex data for fragment shader (default values for 2D)
         varying vec3 v_position;
         varying vec3 v_normal;
+        varying vec3 v_worldNormal;
+        varying vec3 v_tangent;
+        varying vec3 v_bitangent;
         varying vec3 v_viewDir;
         varying float v_depth;
 
@@ -138,6 +142,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           // Set default vertex data for 2D geometry
           v_position = vec3(position.xy, 0.0);
           v_normal = vec3(0.0, 0.0, 1.0);
+          v_worldNormal = vec3(0.0, 0.0, 1.0);
+          v_tangent = vec3(1.0, 0.0, 0.0);
+          v_bitangent = vec3(0.0, 1.0, 0.0);
           v_viewDir = vec3(0.0, 0.0, 1.0);
           v_depth = 1.0;
 
@@ -150,6 +157,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const uniforms = {};
     const uniformDecls = [];
     const transformCode = [];
+    const normalTransformCode = [];
+    const tangentTransformCode = [];
     const has3D = vertexSource.transforms.some(
       (t) => ["rotateX", "rotateY", "rotateZ", "perspective"].includes(t.type) || t.type === "offset" && t.args.z !== 0
     );
@@ -163,11 +172,24 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           uniformDecls.push(`uniform float ${uniformName};`);
           uniforms[uniformName] = makeUniformAccessor(transform.args.angle);
           if (has3D) {
-            transformCode.push(`
+            const rotateCode = `
           {
             float c = cos(${uniformName});
             float s = sin(${uniformName});
             pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`;
+            transformCode.push(rotateCode);
+            normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
+          }`);
+            tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
           }`);
           } else {
             transformCode.push(`
@@ -189,6 +211,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             float s = sin(${uniformName});
             pos = vec3(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
           }`);
+          normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x, nrm.y * c - nrm.z * s, nrm.y * s + nrm.z * c);
+          }`);
+          tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x, tang.y * c - tang.z * s, tang.y * s + tang.z * c);
+          }`);
           break;
         }
         case "rotateY": {
@@ -201,6 +235,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             float s = sin(${uniformName});
             pos = vec3(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
           }`);
+          normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x * c + nrm.z * s, nrm.y, -nrm.x * s + nrm.z * c);
+          }`);
+          tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x * c + tang.z * s, tang.y, -tang.x * s + tang.z * c);
+          }`);
           break;
         }
         case "rotateZ": {
@@ -212,6 +258,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             float c = cos(${uniformName});
             float s = sin(${uniformName});
             pos = vec3(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+          }`);
+          normalTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            nrm = vec3(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
+          }`);
+          tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
           }`);
           break;
         }
@@ -283,19 +341,32 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       // Simple projection - just use z for depth, no perspective divide
       float aspect = resolution.x / resolution.y;
       gl_Position = vec4(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`;
-      const normalPassthrough = useNormals ? `v_normal = normalize(normal);` : `v_normal = vec3(0.0, 0.0, 1.0);`;
+      const normalInit = useNormals ? `vec3 nrm = normalize(normal);` : `vec3 nrm = vec3(0.0, 0.0, 1.0);`;
+      const tangentInit = useTangents ? `vec3 tang = normalize(tangent.xyz);
+      float tanW = tangent.w;` : `vec3 tang = vec3(1.0, 0.0, 0.0);
+      float tanW = 1.0;`;
+      const worldNormalCode = normalTransformCode.length > 0 ? `// Apply rotation transforms to normal for world space
+      ${normalTransformCode.join("\n      ")}
+      v_worldNormal = normalize(nrm);` : `v_worldNormal = nrm;`;
+      const worldTangentCode = tangentTransformCode.length > 0 ? `// Apply rotation transforms to tangent for world space
+      ${tangentTransformCode.join("\n      ")}
+      v_tangent = normalize(tang);` : `v_tangent = tang;`;
       glsl = `
     precision ${precision} float;
     attribute vec3 position;
     ${uvAttributeDecl}
     ${faceIdAttributeDecl}
     ${normalAttributeDecl}
+    ${tangentAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
 
     // Vertex data for fragment shader
     varying vec3 v_position;
     varying vec3 v_normal;
+    varying vec3 v_worldNormal;
+    varying vec3 v_tangent;
+    varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
 
@@ -315,7 +386,19 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 
       // Compute vertex data for fragment shader
       v_position = pos;
-      ${normalPassthrough}
+
+      // Model space normal (raw from vertex buffer)
+      ${normalInit}
+      v_normal = nrm;
+
+      // World space normal (after rotation transforms)
+      ${worldNormalCode}
+
+      // Tangent and bitangent for normal mapping
+      ${tangentInit}
+      ${worldTangentCode}
+      // Bitangent = cross(normal, tangent) * handedness
+      v_bitangent = cross(v_worldNormal, v_tangent) * tanW;
 
       // Camera is at z = 2.0 (matching perspective projection)
       vec3 cameraPos = vec3(0.0, 0.0, 2.0);
@@ -340,6 +423,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     // Vertex data for fragment shader (default values for 2D)
     varying vec3 v_position;
     varying vec3 v_normal;
+    varying vec3 v_worldNormal;
+    varying vec3 v_tangent;
+    varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
 
@@ -359,6 +445,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       // Set default vertex data for 2D geometry
       v_position = vec3(pos, 0.0);
       v_normal = vec3(0.0, 0.0, 1.0);  // Facing camera
+      v_worldNormal = vec3(0.0, 0.0, 1.0);  // Same as normal for 2D
+      v_tangent = vec3(1.0, 0.0, 0.0);
+      v_bitangent = vec3(0.0, 1.0, 0.0);
       v_viewDir = vec3(0.0, 0.0, 1.0);  // Looking at camera
       v_depth = 1.0;
 
@@ -380,9 +469,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
   }
   function generateVertexWgsl(vertexSource, options = {}) {
-    const { useExplicitUVs = false, useFaceIds = false } = options;
+    const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options;
     const uniforms = [];
     const transformCode = [];
+    const normalTransformCode = [];
+    const tangentTransformCode = [];
     const has3D = vertexSource.hasTransforms && vertexSource.transforms.some(
       (t) => ["rotateX", "rotateY", "rotateZ", "perspective"].includes(t.type) || t.type === "offset" && t.args.z !== 0
     );
@@ -401,6 +492,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         let c = cos(vtx.${uniformName});
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+      }`);
+              normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
+      }`);
+              tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
       }`);
             } else {
               transformCode.push(`
@@ -421,6 +524,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
       }`);
+            normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x, nrm.y * c - nrm.z * s, nrm.y * s + nrm.z * c);
+      }`);
+            tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x, tang.y * c - tang.z * s, tang.y * s + tang.z * c);
+      }`);
             break;
           }
           case "rotateY": {
@@ -432,6 +547,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
       }`);
+            normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x * c + nrm.z * s, nrm.y, -nrm.x * s + nrm.z * c);
+      }`);
+            tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x * c + tang.z * s, tang.y, -tang.x * s + tang.z * c);
+      }`);
             break;
           }
           case "rotateZ": {
@@ -442,6 +569,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         let c = cos(vtx.${uniformName});
         let s = sin(vtx.${uniformName});
         pos = vec3f(pos.x * c - pos.y * s, pos.x * s + pos.y * c, pos.z);
+      }`);
+            normalTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        nrm = vec3f(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
+      }`);
+            tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
       }`);
             break;
           }
@@ -493,6 +632,12 @@ ${allUniformFields.join("\n")}
     if (useFaceIds) {
       inputFields.push("  @location(2) faceId: f32,");
     }
+    if (useNormals) {
+      inputFields.push("  @location(3) normal: vec3f,");
+    }
+    if (useTangents) {
+      inputFields.push("  @location(4) tangent: vec4f,");
+    }
     const outputFields = [
       "  @builtin(position) position: vec4f,",
       "  @location(0) texcoord: vec2f,",
@@ -501,8 +646,11 @@ ${allUniformFields.join("\n")}
       "  // Vertex data for fragment shader",
       "  @location(2) v_position: vec3f,",
       "  @location(3) v_normal: vec3f,",
-      "  @location(4) v_viewDir: vec3f,",
-      "  @location(5) v_depth: f32,"
+      "  @location(4) v_worldNormal: vec3f,",
+      "  @location(5) v_tangent: vec3f,",
+      "  @location(6) v_bitangent: vec3f,",
+      "  @location(7) v_viewDir: vec3f,",
+      "  @location(8) v_depth: f32,"
     ];
     const uvCode = useExplicitUVs ? "output.texcoord = input.texcoord;" : "output.texcoord = (input.position.xy - vtx.u_boundsMin) / (vtx.u_boundsMax - vtx.u_boundsMin);";
     const faceIdCode = useFaceIds ? "output.faceId = input.faceId;" : "output.faceId = 0.0;";
@@ -531,6 +679,16 @@ ${allUniformFields.join("\n")}
       // Simple projection - just use z for depth, no perspective divide
       let aspect = resolution.x / resolution.y;
       output.position = vec4f(pos.x / aspect, pos.y, pos.z * 0.1, 1.0);`;
+      const normalInit = useNormals ? "var nrm = normalize(input.normal);" : "var nrm = vec3f(0.0, 0.0, 1.0);";
+      const tangentInit = useTangents ? `var tang = normalize(input.tangent.xyz);
+  let tanW = input.tangent.w;` : `var tang = vec3f(1.0, 0.0, 0.0);
+  let tanW = 1.0;`;
+      const worldNormalCode = normalTransformCode.length > 0 ? `// Apply rotation transforms to normal for world space
+${normalTransformCode.join("\n")}
+  output.v_worldNormal = normalize(nrm);` : `output.v_worldNormal = nrm;`;
+      const worldTangentCode = tangentTransformCode.length > 0 ? `// Apply rotation transforms to tangent for world space
+${tangentTransformCode.join("\n")}
+  output.v_tangent = normalize(tang);` : `output.v_tangent = tang;`;
       wgsl = `struct VertexInput {
 ${inputFields.join("\n")}
 };
@@ -556,7 +714,20 @@ ${transformCode.join("\n")}
 
   // Compute vertex data for fragment shader
   output.v_position = pos;
-  output.v_normal = vec3f(0.0, 0.0, 1.0);  // TODO: pass normals from vertex buffer
+
+  // Model space normal (raw from vertex buffer)
+  ${normalInit}
+  output.v_normal = nrm;
+
+  // World space normal (after rotation transforms)
+  ${worldNormalCode}
+
+  // Tangent and bitangent for normal mapping
+  ${tangentInit}
+  ${worldTangentCode}
+  // Bitangent = cross(normal, tangent) * handedness
+  output.v_bitangent = cross(output.v_worldNormal, output.v_tangent) * tanW;
+
   let cameraPos = vec3f(0.0, 0.0, 2.0);
   output.v_viewDir = normalize(cameraPos - pos);
 
@@ -594,6 +765,9 @@ ${transformCode.join("\n")}
   // Set default vertex data for 2D geometry
   output.v_position = vec3f(pos, 0.0);
   output.v_normal = vec3f(0.0, 0.0, 1.0);  // Facing camera
+  output.v_worldNormal = vec3f(0.0, 0.0, 1.0);  // Same as normal for 2D
+  output.v_tangent = vec3f(1.0, 0.0, 0.0);
+  output.v_bitangent = vec3f(0.0, 1.0, 0.0);
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);  // Looking at camera
   output.v_depth = 1.0;
 
@@ -616,8 +790,11 @@ struct VertexOutput {
   // Vertex data for fragment shader
   @location(2) v_position: vec3f,
   @location(3) v_normal: vec3f,
-  @location(4) v_viewDir: vec3f,
-  @location(5) v_depth: f32,
+  @location(4) v_worldNormal: vec3f,
+  @location(5) v_tangent: vec3f,
+  @location(6) v_bitangent: vec3f,
+  @location(7) v_viewDir: vec3f,
+  @location(8) v_depth: f32,
 };
 
 struct VertexUniforms {
@@ -636,6 +813,9 @@ fn main(input: VertexInput) -> VertexOutput {
   // Set default vertex data for 2D geometry
   output.v_position = vec3f(input.position.xy, 0.0);
   output.v_normal = vec3f(0.0, 0.0, 1.0);
+  output.v_worldNormal = vec3f(0.0, 0.0, 1.0);
+  output.v_tangent = vec3f(1.0, 0.0, 0.0);
+  output.v_bitangent = vec3f(0.0, 1.0, 0.0);
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);
   output.v_depth = 1.0;
 
@@ -756,6 +936,9 @@ fn main(input: VertexInput) -> VertexOutput {
   // Vertex data for fragment shader (default values for fullscreen quad)
   varying vec3 v_position;
   varying vec3 v_normal;
+  varying vec3 v_worldNormal;
+  varying vec3 v_tangent;
+  varying vec3 v_bitangent;
   varying vec3 v_viewDir;
   varying float v_depth;
 
@@ -766,6 +949,9 @@ fn main(input: VertexInput) -> VertexOutput {
     // Default vertex data for fullscreen quad
     v_position = vec3(position.xy * 2.0 - 1.0, 0.0);
     v_normal = vec3(0.0, 0.0, 1.0);
+    v_worldNormal = vec3(0.0, 0.0, 1.0);
+    v_tangent = vec3(1.0, 0.0, 0.0);
+    v_bitangent = vec3(0.0, 1.0, 0.0);
     v_viewDir = vec3(0.0, 0.0, 1.0);
     v_depth = 1.0;
 
@@ -843,11 +1029,12 @@ fn main(input: VertexInput) -> VertexOutput {
     if (has3D) {
       this.enableDepthBuffer();
     }
-    let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, vertexCount;
+    let positionBuffer, uvBuffer, faceIdBuffer, normalBuffer, tangentBuffer, vertexCount;
     let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
     let hasExplicitUVs = false;
     let hasFaceIds = false;
     let hasNormals = false;
+    let hasTangents = false;
     if (rawVerts && rawVerts.length >= 6) {
       const verts = reshapeToVec3(rawVerts, has3D);
       positionBuffer = this.regl.buffer(verts);
@@ -879,6 +1066,14 @@ fn main(input: VertexInput) -> VertexOutput {
           normalData.push([vertexSource.normals[i2], vertexSource.normals[i2 + 1], vertexSource.normals[i2 + 2]]);
         }
         normalBuffer = this.regl.buffer(normalData);
+      }
+      if (vertexSource && vertexSource.tangents && vertexSource.tangents.length > 0) {
+        hasTangents = true;
+        const tangentData = [];
+        for (let i2 = 0; i2 < vertexSource.tangents.length; i2 += 4) {
+          tangentData.push([vertexSource.tangents[i2], vertexSource.tangents[i2 + 1], vertexSource.tangents[i2 + 2], vertexSource.tangents[i2 + 3]]);
+        }
+        tangentBuffer = this.regl.buffer(tangentData);
       }
     } else {
       positionBuffer = this.defaultPositionBuffer;
@@ -928,7 +1123,7 @@ fn main(input: VertexInput) -> VertexOutput {
     let vertexUniforms = {};
     if (rawVerts) {
       if (hasChainedTransforms) {
-        const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals });
+        const generated = generateVertexGlsl(vertexSource, this.precision, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents });
         vert = generated.glsl;
         vertexUniforms = generated.uniforms;
       } else if (hasVertexOptions) {
@@ -1031,6 +1226,9 @@ fn main(input: VertexInput) -> VertexOutput {
     }
     if (hasNormals && normalBuffer) {
       attributes.normal = normalBuffer;
+    }
+    if (hasTangents && tangentBuffer) {
+      attributes.tangent = tangentBuffer;
     }
     const drawCommand = this.regl({
       frag: pass.frag,
@@ -1200,9 +1398,13 @@ fn main(input: VertexInput) -> VertexOutput {
       }
       let hasExplicitUVs = false;
       let hasFaceIds = false;
+      let hasNormals = false;
+      let hasTangents = false;
       if (vertexSource) {
         hasExplicitUVs = vertexSource.uvs && vertexSource.uvs.length > 0;
         hasFaceIds = vertexSource.faceIds && vertexSource.faceIds.length > 0;
+        hasNormals = vertexSource.normals && vertexSource.normals.length > 0;
+        hasTangents = vertexSource.tangents && vertexSource.tangents.length > 0;
       }
       let bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
       if (rawVerts && rawVerts.length >= 6 && !hasExplicitUVs) {
@@ -1224,7 +1426,7 @@ fn main(input: VertexInput) -> VertexOutput {
           { name: "u_boundsMax", type: "vec2f", value: [bounds.maxX, bounds.maxY] }
         ];
         if (hasChainedTransforms) {
-          const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds });
+          const generated = generateVertexWgsl(vertexSource, { useExplicitUVs: hasExplicitUVs, useFaceIds: hasFaceIds, useNormals: hasNormals, useTangents: hasTangents });
           vertexWgsl = generated.wgsl;
           vertexUniforms = [...boundsUniforms, ...generated.uniforms];
         } else {
@@ -1245,6 +1447,8 @@ fn main(input: VertexInput) -> VertexOutput {
         has3D,
         hasExplicitUVs,
         hasFaceIds,
+        hasNormals,
+        hasTangents,
         sprite
       });
       await this.wgslHydra.setupSpriteChain(this.chanNum, spriteLevel, {
@@ -1258,8 +1462,12 @@ fn main(input: VertexInput) -> VertexOutput {
         has3D,
         hasExplicitUVs,
         hasFaceIds,
+        hasNormals,
+        hasTangents,
         uvs: vertexSource == null ? void 0 : vertexSource.uvs,
         faceIds: vertexSource == null ? void 0 : vertexSource.faceIds,
+        normals: vertexSource == null ? void 0 : vertexSource.normals,
+        tangents: vertexSource == null ? void 0 : vertexSource.tangents,
         sprite
       });
     }
@@ -2783,6 +2991,12 @@ fn main(input: VertexInput) -> VertexOutput {
           return createComponentProxy("v_position");
         case "normal":
           return createComponentProxy("v_normal");
+        case "worldNormal":
+          return createComponentProxy("v_worldNormal");
+        case "tangent":
+          return createComponentProxy("v_tangent");
+        case "bitangent":
+          return createComponentProxy("v_bitangent");
         case "viewDir":
           return createComponentProxy("v_viewDir");
         case "depth":
@@ -3519,6 +3733,9 @@ fn main(input: VertexInput) -> VertexOutput {
   // Vertex data from vertex shader (for 3D geometry)
   varying vec3 v_position;
   varying vec3 v_normal;
+  varying vec3 v_worldNormal;
+  varying vec3 v_tangent;
+  varying vec3 v_bitangent;
   varying vec3 v_viewDir;
   varying float v_depth;
 
@@ -15175,8 +15392,11 @@ fn main(input: VertexInput) -> VertexOutput {
   	// Vertex data for fragment shader
   	@location(2) v_position : vec3f,
   	@location(3) v_normal : vec3f,
-  	@location(4) v_viewDir : vec3f,
-  	@location(5) v_depth : f32,
+  	@location(4) v_worldNormal : vec3f,
+  	@location(5) v_tangent : vec3f,
+  	@location(6) v_bitangent : vec3f,
+  	@location(7) v_viewDir : vec3f,
+  	@location(8) v_depth : f32,
 	 };
 `;
   const fragPrefix = `
@@ -15207,6 +15427,9 @@ fn main(input: VertexInput) -> VertexOutput {
      // Default vertex data for fullscreen quad
      output.v_position = vec3f(positions[vertexIndex], 0.0);
      output.v_normal = vec3f(0.0, 0.0, 1.0);
+     output.v_worldNormal = vec3f(0.0, 0.0, 1.0);
+     output.v_tangent = vec3f(1.0, 0.0, 0.0);
+     output.v_bitangent = vec3f(0.0, 1.0, 0.0);
      output.v_viewDir = vec3f(0.0, 0.0, 1.0);
      output.v_depth = 1.0;
 
@@ -15237,6 +15460,10 @@ fn main(input: VertexInput) -> VertexOutput {
       this.structUniformBuffer = void 0;
       this.hasCustomGeometry = false;
       this.vertexBuffer = void 0;
+      this.uvBuffer = void 0;
+      this.faceIdBuffer = void 0;
+      this.normalBuffer = void 0;
+      this.tangentBuffer = void 0;
       this.vertexCount = 0;
       this.vertexWgsl = void 0;
       this.vertexUniforms = [];
@@ -15244,6 +15471,10 @@ fn main(input: VertexInput) -> VertexOutput {
       this.vertexUniformView = void 0;
       this.vertexBindGroupLayout = void 0;
       this.vertexBindGroup = void 0;
+      this.hasExplicitUVs = false;
+      this.hasFaceIds = false;
+      this.hasNormals = false;
+      this.hasTangents = false;
       this.blendMode = "normal";
     }
   }
@@ -15521,8 +15752,12 @@ fn main(input: VertexInput) -> VertexOutput {
         has3D,
         hasExplicitUVs,
         hasFaceIds,
+        hasNormals,
+        hasTangents,
         uvs,
         faceIds,
+        normals,
+        tangents,
         sprite
       } = config;
       const rpe = this.renderPassInfo[chan];
@@ -15539,6 +15774,8 @@ fn main(input: VertexInput) -> VertexOutput {
       spe.hasCustomGeometry = rawVerts !== null && rawVerts !== void 0;
       spe.hasExplicitUVs = hasExplicitUVs || false;
       spe.hasFaceIds = hasFaceIds || false;
+      spe.hasNormals = hasNormals || false;
+      spe.hasTangents = hasTangents || false;
       spe.sprite = sprite || null;
       this.generateSpriteUniformDeclarations(spe);
       spe.fragmentShaderSource = vertexPrefix + fragPrefix + spe.bindGroupHeader + fragShader;
@@ -15580,6 +15817,24 @@ fn main(input: VertexInput) -> VertexOutput {
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
           });
           this.device.queue.writeBuffer(spe.faceIdBuffer, 0, faceIdData);
+        }
+        if (spe.hasNormals && normals && normals.length > 0) {
+          const normalData = new Float32Array(normals);
+          spe.normalBuffer = this.device.createBuffer({
+            label: `normalbuf_c${chan}_s${spriteLevel}`,
+            size: normalData.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+          });
+          this.device.queue.writeBuffer(spe.normalBuffer, 0, normalData);
+        }
+        if (spe.hasTangents && tangents && tangents.length > 0) {
+          const tangentData = new Float32Array(tangents);
+          spe.tangentBuffer = this.device.createBuffer({
+            label: `tangentbuf_c${chan}_s${spriteLevel}`,
+            size: tangentData.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+          });
+          this.device.queue.writeBuffer(spe.tangentBuffer, 0, tangentData);
         }
         if (spe.vertexUniforms.length > 0) {
           this.setupVertexUniforms(spe);
@@ -15645,6 +15900,28 @@ fn main(input: VertexInput) -> VertexOutput {
             }]
           });
         }
+        if (spe.hasNormals && spe.normalBuffer) {
+          bufferLayouts.push({
+            arrayStride: 12,
+            // 3 floats * 4 bytes (normal)
+            attributes: [{
+              shaderLocation: 3,
+              offset: 0,
+              format: "float32x3"
+            }]
+          });
+        }
+        if (spe.hasTangents && spe.tangentBuffer) {
+          bufferLayouts.push({
+            arrayStride: 16,
+            // 4 floats * 4 bytes (tangent vec4)
+            attributes: [{
+              shaderLocation: 4,
+              offset: 0,
+              format: "float32x4"
+            }]
+          });
+        }
         pipelineDescriptor.vertex.buffers = bufferLayouts;
       }
       if (spe.has3D) {
@@ -15671,6 +15948,12 @@ fn main(input: VertexInput) -> VertexOutput {
           }
           if (spe.faceIdBuffer) {
             spe.faceIdBuffer.destroy();
+          }
+          if (spe.normalBuffer) {
+            spe.normalBuffer.destroy();
+          }
+          if (spe.tangentBuffer) {
+            spe.tangentBuffer.destroy();
           }
           if (spe.vertexUniformBuffer) {
             spe.vertexUniformBuffer.destroy();
@@ -15947,12 +16230,19 @@ fn main(input: VertexInput) -> VertexOutput {
               passEncoder.setBindGroup(2, spe.vertexBindGroup);
             }
             if (spe.hasCustomGeometry && spe.vertexBuffer) {
-              passEncoder.setVertexBuffer(0, spe.vertexBuffer);
+              let slot = 0;
+              passEncoder.setVertexBuffer(slot++, spe.vertexBuffer);
               if (spe.hasExplicitUVs && spe.uvBuffer) {
-                passEncoder.setVertexBuffer(1, spe.uvBuffer);
+                passEncoder.setVertexBuffer(slot++, spe.uvBuffer);
               }
               if (spe.hasFaceIds && spe.faceIdBuffer) {
-                passEncoder.setVertexBuffer(2, spe.faceIdBuffer);
+                passEncoder.setVertexBuffer(slot++, spe.faceIdBuffer);
+              }
+              if (spe.hasNormals && spe.normalBuffer) {
+                passEncoder.setVertexBuffer(slot++, spe.normalBuffer);
+              }
+              if (spe.hasTangents && spe.tangentBuffer) {
+                passEncoder.setVertexBuffer(slot++, spe.tangentBuffer);
               }
               passEncoder.draw(spe.vertexCount);
             } else {
@@ -23509,6 +23799,7 @@ fn main(input: VertexInput) -> VertexOutput {
     const verts = [];
     const outNormals = [];
     const outUVs = [];
+    const outTangents = [];
     let hasAnyUVs = false;
     for (const primitive of primitives) {
       const positionAccessor = primitive.attributes.POSITION;
@@ -23516,6 +23807,7 @@ fn main(input: VertexInput) -> VertexOutput {
       const positions = readAccessor(positionAccessor);
       const normals = primitive.attributes.NORMAL !== void 0 ? readAccessor(primitive.attributes.NORMAL) : null;
       const uvs = primitive.attributes.TEXCOORD_0 !== void 0 ? readAccessor(primitive.attributes.TEXCOORD_0) : null;
+      const tangents = primitive.attributes.TANGENT !== void 0 ? readAccessor(primitive.attributes.TANGENT) : null;
       if (uvs) hasAnyUVs = true;
       const indices = primitive.indices !== void 0 ? readAccessor(primitive.indices) : null;
       const addVertex = (idx) => {
@@ -23525,6 +23817,9 @@ fn main(input: VertexInput) -> VertexOutput {
         }
         if (uvs) {
           outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
+        }
+        if (tangents) {
+          outTangents.push(tangents[idx * 4], tangents[idx * 4 + 1], tangents[idx * 4 + 2], tangents[idx * 4 + 3]);
         }
       };
       if (indices) {
@@ -23577,6 +23872,7 @@ fn main(input: VertexInput) -> VertexOutput {
     vs.is3D = true;
     if (outNormals.length > 0) vs.normals = outNormals;
     if (outUVs.length > 0) vs.uvs = outUVs;
+    if (outTangents.length > 0) vs.tangents = outTangents;
     return vs;
   }
   async function loadGlb(url, options = {}) {

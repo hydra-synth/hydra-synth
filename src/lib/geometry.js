@@ -274,8 +274,10 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
   const verts = []
   const outNormals = []
   const outUVs = []
+  const outTangents = []
   let hasAnyUVs = false
   let hasAnyNormals = false
+  let hasAnyTangents = false
 
   for (const primitive of primitives) {
     const positionAccessor = primitive.attributes.POSITION
@@ -286,9 +288,13 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
       ? readAccessor(primitive.attributes.NORMAL) : null
     const uvs = primitive.attributes.TEXCOORD_0 !== undefined
       ? readAccessor(primitive.attributes.TEXCOORD_0) : null
+    // TANGENT is vec4: xyz = tangent direction, w = handedness for bitangent
+    const tangents = primitive.attributes.TANGENT !== undefined
+      ? readAccessor(primitive.attributes.TANGENT) : null
 
     if (normals) hasAnyNormals = true
     if (uvs) hasAnyUVs = true
+    if (tangents) hasAnyTangents = true
 
     // Read indices if present
     const indices = primitive.indices !== undefined
@@ -301,6 +307,10 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
       }
       if (uvs) {
         outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1])
+      }
+      if (tangents) {
+        // vec4: xyz = tangent, w = handedness
+        outTangents.push(tangents[idx * 4], tangents[idx * 4 + 1], tangents[idx * 4 + 2], tangents[idx * 4 + 3])
       }
     }
 
@@ -363,6 +373,7 @@ function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
   vs.is3D = true
   if (outNormals.length > 0) vs.normals = outNormals
   if (outUVs.length > 0) vs.uvs = outUVs
+  if (outTangents.length > 0) vs.tangents = outTangents
 
   return vs
 }

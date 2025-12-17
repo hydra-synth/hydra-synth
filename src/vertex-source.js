@@ -133,9 +133,9 @@ class VertexSource {
 
 // Generate vertex shader GLSL from transforms
 // Returns { glsl: string, uniforms: object }
-// Options: { useExplicitUVs: boolean, useFaceIds: boolean }
+// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean, useTangents: boolean }
 export function generateVertexGlsl(vertexSource, precision, options = {}) {
-  const { useExplicitUVs = false, useFaceIds = false, useNormals = false } = options
+  const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options
 
   // UV source code - either from attribute or computed from bounds
   const uvAttributeDecl = useExplicitUVs ? 'attribute vec2 texcoord;' : ''
@@ -152,6 +152,9 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
   // Normal attribute - only if model has normals
   const normalAttributeDecl = useNormals ? 'attribute vec3 normal;' : ''
 
+  // Tangent attribute - vec4: xyz = tangent direction, w = handedness for bitangent
+  const tangentAttributeDecl = useTangents ? 'attribute vec4 tangent;' : ''
+
   if (!vertexSource.hasTransforms) {
     // No transforms - use simple passthrough with bounds
     return {
@@ -167,6 +170,8 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
         varying vec3 v_position;
         varying vec3 v_normal;
         varying vec3 v_worldNormal;
+        varying vec3 v_tangent;
+        varying vec3 v_bitangent;
         varying vec3 v_viewDir;
         varying float v_depth;
 
@@ -182,6 +187,8 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
           v_position = vec3(position.xy, 0.0);
           v_normal = vec3(0.0, 0.0, 1.0);
           v_worldNormal = vec3(0.0, 0.0, 1.0);
+          v_tangent = vec3(1.0, 0.0, 0.0);
+          v_bitangent = vec3(0.0, 1.0, 0.0);
           v_viewDir = vec3(0.0, 0.0, 1.0);
           v_depth = 1.0;
 
@@ -197,6 +204,7 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
   const uniformDecls = []
   const transformCode = []
   const normalTransformCode = []  // Rotation transforms for normals (no scale/offset)
+  const tangentTransformCode = []  // Rotation transforms for tangents (same as normals)
 
   // Check if any 3D transforms are used
   const has3D = vertexSource.transforms.some(t =>
@@ -231,6 +239,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
             float s = sin(${uniformName});
             nrm = vec3(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
           }`)
+          // Apply same rotation to tangent
+          tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
+          }`)
         } else {
           transformCode.push(`
           {
@@ -259,6 +274,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
             float s = sin(${uniformName});
             nrm = vec3(nrm.x, nrm.y * c - nrm.z * s, nrm.y * s + nrm.z * c);
           }`)
+        // Apply same rotation to tangent
+        tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x, tang.y * c - tang.z * s, tang.y * s + tang.z * c);
+          }`)
         break
       }
 
@@ -279,6 +301,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
             float s = sin(${uniformName});
             nrm = vec3(nrm.x * c + nrm.z * s, nrm.y, -nrm.x * s + nrm.z * c);
           }`)
+        // Apply same rotation to tangent
+        tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x * c + tang.z * s, tang.y, -tang.x * s + tang.z * c);
+          }`)
         break
       }
 
@@ -298,6 +327,13 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
             float c = cos(${uniformName});
             float s = sin(${uniformName});
             nrm = vec3(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
+          }`)
+        // Apply same rotation to tangent
+        tangentTransformCode.push(`
+          {
+            float c = cos(${uniformName});
+            float s = sin(${uniformName});
+            tang = vec3(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
           }`)
         break
       }
@@ -375,6 +411,14 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     // Model space normal (raw from vertex buffer)
     const normalInit = useNormals ? `vec3 nrm = normalize(normal);` : `vec3 nrm = vec3(0.0, 0.0, 1.0);`
 
+    // Tangent initialization (vec4: xyz = tangent, w = handedness)
+    // Note: use 'tang' not 'tan' to avoid collision with GLSL built-in tan() function
+    const tangentInit = useTangents
+      ? `vec3 tang = normalize(tangent.xyz);
+      float tanW = tangent.w;`
+      : `vec3 tang = vec3(1.0, 0.0, 0.0);
+      float tanW = 1.0;`
+
     // World space normal computation (apply rotation transforms)
     const worldNormalCode = normalTransformCode.length > 0
       ? `// Apply rotation transforms to normal for world space
@@ -382,12 +426,20 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       v_worldNormal = normalize(nrm);`
       : `v_worldNormal = nrm;`
 
+    // World space tangent computation (apply rotation transforms)
+    const worldTangentCode = tangentTransformCode.length > 0
+      ? `// Apply rotation transforms to tangent for world space
+      ${tangentTransformCode.join('\n      ')}
+      v_tangent = normalize(tang);`
+      : `v_tangent = tang;`
+
     glsl = `
     precision ${precision} float;
     attribute vec3 position;
     ${uvAttributeDecl}
     ${faceIdAttributeDecl}
     ${normalAttributeDecl}
+    ${tangentAttributeDecl}
     varying vec2 uv;
     ${faceIdVaryingDecl}
 
@@ -395,6 +447,8 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     varying vec3 v_position;
     varying vec3 v_normal;
     varying vec3 v_worldNormal;
+    varying vec3 v_tangent;
+    varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
 
@@ -422,6 +476,12 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       // World space normal (after rotation transforms)
       ${worldNormalCode}
 
+      // Tangent and bitangent for normal mapping
+      ${tangentInit}
+      ${worldTangentCode}
+      // Bitangent = cross(normal, tangent) * handedness
+      v_bitangent = cross(v_worldNormal, v_tangent) * tanW;
+
       // Camera is at z = 2.0 (matching perspective projection)
       vec3 cameraPos = vec3(0.0, 0.0, 2.0);
       v_viewDir = normalize(cameraPos - pos);
@@ -446,6 +506,8 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
     varying vec3 v_position;
     varying vec3 v_normal;
     varying vec3 v_worldNormal;
+    varying vec3 v_tangent;
+    varying vec3 v_bitangent;
     varying vec3 v_viewDir;
     varying float v_depth;
 
@@ -466,6 +528,8 @@ export function generateVertexGlsl(vertexSource, precision, options = {}) {
       v_position = vec3(pos, 0.0);
       v_normal = vec3(0.0, 0.0, 1.0);  // Facing camera
       v_worldNormal = vec3(0.0, 0.0, 1.0);  // Same as normal for 2D
+      v_tangent = vec3(1.0, 0.0, 0.0);
+      v_bitangent = vec3(0.0, 1.0, 0.0);
       v_viewDir = vec3(0.0, 0.0, 1.0);  // Looking at camera
       v_depth = 1.0;
 
@@ -495,14 +559,15 @@ function makeUniformAccessor(value) {
 
 // Generate WGSL vertex shader from transforms
 // Returns { wgsl: string, uniforms: array of {name, type, value} }
-// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean }
+// Options: { useExplicitUVs: boolean, useFaceIds: boolean, useNormals: boolean, useTangents: boolean }
 export function generateVertexWgsl(vertexSource, options = {}) {
-  const { useExplicitUVs = false, useFaceIds = false, useNormals = false } = options
+  const { useExplicitUVs = false, useFaceIds = false, useNormals = false, useTangents = false } = options
 
   // Collect uniforms and build transform code
   const uniforms = []
   const transformCode = []
   const normalTransformCode = []  // Rotation transforms for normals (no scale/offset)
+  const tangentTransformCode = []  // Rotation transforms for tangents (same as normals)
 
   // Check if any 3D transforms are used
   const has3D = vertexSource.hasTransforms && vertexSource.transforms.some(t =>
@@ -535,6 +600,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let s = sin(vtx.${uniformName});
         nrm = vec3f(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
       }`)
+            // Apply same rotation to tangent
+            tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
+      }`)
           } else {
             transformCode.push(`
       {
@@ -562,6 +634,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let s = sin(vtx.${uniformName});
         nrm = vec3f(nrm.x, nrm.y * c - nrm.z * s, nrm.y * s + nrm.z * c);
       }`)
+          // Apply same rotation to tangent
+          tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x, tang.y * c - tang.z * s, tang.y * s + tang.z * c);
+      }`)
           break
         }
 
@@ -581,6 +660,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let s = sin(vtx.${uniformName});
         nrm = vec3f(nrm.x * c + nrm.z * s, nrm.y, -nrm.x * s + nrm.z * c);
       }`)
+          // Apply same rotation to tangent
+          tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x * c + tang.z * s, tang.y, -tang.x * s + tang.z * c);
+      }`)
           break
         }
 
@@ -599,6 +685,13 @@ export function generateVertexWgsl(vertexSource, options = {}) {
         let c = cos(vtx.${uniformName});
         let s = sin(vtx.${uniformName});
         nrm = vec3f(nrm.x * c - nrm.y * s, nrm.x * s + nrm.y * c, nrm.z);
+      }`)
+          // Apply same rotation to tangent
+          tangentTransformCode.push(`
+      {
+        let c = cos(vtx.${uniformName});
+        let s = sin(vtx.${uniformName});
+        tang = vec3f(tang.x * c - tang.y * s, tang.x * s + tang.y * c, tang.z);
       }`)
           break
         }
@@ -660,6 +753,9 @@ ${allUniformFields.join('\n')}
   if (useNormals) {
     inputFields.push('  @location(3) normal: vec3f,')
   }
+  if (useTangents) {
+    inputFields.push('  @location(4) tangent: vec4f,')  // xyz = tangent direction, w = handedness
+  }
 
   // Build vertex output struct
   const outputFields = [
@@ -670,8 +766,10 @@ ${allUniformFields.join('\n')}
     '  @location(2) v_position: vec3f,',
     '  @location(3) v_normal: vec3f,',
     '  @location(4) v_worldNormal: vec3f,',
-    '  @location(5) v_viewDir: vec3f,',
-    '  @location(6) v_depth: f32,'
+    '  @location(5) v_tangent: vec3f,',
+    '  @location(6) v_bitangent: vec3f,',
+    '  @location(7) v_viewDir: vec3f,',
+    '  @location(8) v_depth: f32,'
   ]
 
   // UV computation
@@ -714,12 +812,27 @@ ${allUniformFields.join('\n')}
     // Model space normal initialization
     const normalInit = useNormals ? 'var nrm = normalize(input.normal);' : 'var nrm = vec3f(0.0, 0.0, 1.0);'
 
+    // Tangent initialization (vec4: xyz = tangent, w = handedness)
+    // Note: use 'tang' not 'tan' to avoid collision with WGSL built-in tan() function
+    const tangentInit = useTangents
+      ? `var tang = normalize(input.tangent.xyz);
+  let tanW = input.tangent.w;`
+      : `var tang = vec3f(1.0, 0.0, 0.0);
+  let tanW = 1.0;`
+
     // World space normal computation (apply rotation transforms)
     const worldNormalCode = normalTransformCode.length > 0
       ? `// Apply rotation transforms to normal for world space
 ${normalTransformCode.join('\n')}
   output.v_worldNormal = normalize(nrm);`
       : `output.v_worldNormal = nrm;`
+
+    // World space tangent computation (apply rotation transforms)
+    const worldTangentCode = tangentTransformCode.length > 0
+      ? `// Apply rotation transforms to tangent for world space
+${tangentTransformCode.join('\n')}
+  output.v_tangent = normalize(tang);`
+      : `output.v_tangent = tang;`
 
     wgsl = `struct VertexInput {
 ${inputFields.join('\n')}
@@ -753,6 +866,12 @@ ${transformCode.join('\n')}
 
   // World space normal (after rotation transforms)
   ${worldNormalCode}
+
+  // Tangent and bitangent for normal mapping
+  ${tangentInit}
+  ${worldTangentCode}
+  // Bitangent = cross(normal, tangent) * handedness
+  output.v_bitangent = cross(output.v_worldNormal, output.v_tangent) * tanW;
 
   let cameraPos = vec3f(0.0, 0.0, 2.0);
   output.v_viewDir = normalize(cameraPos - pos);
@@ -792,6 +911,8 @@ ${transformCode.join('\n')}
   output.v_position = vec3f(pos, 0.0);
   output.v_normal = vec3f(0.0, 0.0, 1.0);  // Facing camera
   output.v_worldNormal = vec3f(0.0, 0.0, 1.0);  // Same as normal for 2D
+  output.v_tangent = vec3f(1.0, 0.0, 0.0);
+  output.v_bitangent = vec3f(0.0, 1.0, 0.0);
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);  // Looking at camera
   output.v_depth = 1.0;
 
@@ -819,8 +940,10 @@ struct VertexOutput {
   @location(2) v_position: vec3f,
   @location(3) v_normal: vec3f,
   @location(4) v_worldNormal: vec3f,
-  @location(5) v_viewDir: vec3f,
-  @location(6) v_depth: f32,
+  @location(5) v_tangent: vec3f,
+  @location(6) v_bitangent: vec3f,
+  @location(7) v_viewDir: vec3f,
+  @location(8) v_depth: f32,
 };
 
 struct VertexUniforms {
@@ -840,6 +963,8 @@ fn main(input: VertexInput) -> VertexOutput {
   output.v_position = vec3f(input.position.xy, 0.0);
   output.v_normal = vec3f(0.0, 0.0, 1.0);
   output.v_worldNormal = vec3f(0.0, 0.0, 1.0);
+  output.v_tangent = vec3f(1.0, 0.0, 0.0);
+  output.v_bitangent = vec3f(0.0, 1.0, 0.0);
   output.v_viewDir = vec3f(0.0, 0.0, 1.0);
   output.v_depth = 1.0;
 

@@ -37,7 +37,7 @@ function createComponentProxy(baseName) {
 }
 
 // Main v proxy object
-// Provides access to vertex data: v.position, v.normal, v.worldNormal, v.viewDir, v.depth
+// Provides access to vertex data: v.position, v.normal, v.worldNormal, v.tangent, v.bitangent, v.viewDir, v.depth
 const v = new Proxy({}, {
   get(target, prop) {
     switch (prop) {
@@ -49,6 +49,12 @@ const v = new Proxy({}, {
       case 'worldNormal':
         // World space normal (after rotation transforms)
         return createComponentProxy('v_worldNormal')
+      case 'tangent':
+        // Tangent vector (for normal mapping, in world space)
+        return createComponentProxy('v_tangent')
+      case 'bitangent':
+        // Bitangent vector (for normal mapping, in world space)
+        return createComponentProxy('v_bitangent')
       case 'viewDir':
         return createComponentProxy('v_viewDir')
       case 'depth':

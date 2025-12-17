@@ -21,8 +21,10 @@ const vertexPrefix = `
   	@location(2) v_position : vec3f,
   	@location(3) v_normal : vec3f,
   	@location(4) v_worldNormal : vec3f,
-  	@location(5) v_viewDir : vec3f,
-  	@location(6) v_depth : f32,
+  	@location(5) v_tangent : vec3f,
+  	@location(6) v_bitangent : vec3f,
+  	@location(7) v_viewDir : vec3f,
+  	@location(8) v_depth : f32,
 	 };
 `;
 
@@ -59,6 +61,8 @@ const fragPrefix = `
      output.v_position = vec3f(positions[vertexIndex], 0.0);
      output.v_normal = vec3f(0.0, 0.0, 1.0);
      output.v_worldNormal = vec3f(0.0, 0.0, 1.0);
+     output.v_tangent = vec3f(1.0, 0.0, 0.0);
+     output.v_bitangent = vec3f(0.0, 1.0, 0.0);
      output.v_viewDir = vec3f(0.0, 0.0, 1.0);
      output.v_depth = 1.0;
 
@@ -99,6 +103,7 @@ class SpritePassEntry {
 		this.uvBuffer = undefined;
 		this.faceIdBuffer = undefined;
 		this.normalBuffer = undefined;
+		this.tangentBuffer = undefined;
 		this.vertexCount = 0;
 		this.vertexWgsl = undefined;
 		this.vertexUniforms = [];
@@ -109,6 +114,7 @@ class SpritePassEntry {
 		this.hasExplicitUVs = false;
 		this.hasFaceIds = false;
 		this.hasNormals = false;
+		this.hasTangents = false;
 
 		// Blend mode
 		this.blendMode = 'normal';
@@ -444,7 +450,7 @@ class wgslHydra {
 	async setupSpriteChain(chan, spriteLevel, config) {
 		if (trace) console.timeStamp("setupSpriteChain");
 		const { uniforms, fragShader, vertexWgsl, vertexUniforms, rawVerts, blendMode, primitive, has3D,
-			hasExplicitUVs, hasFaceIds, hasNormals, uvs, faceIds, normals, sprite } = config;
+			hasExplicitUVs, hasFaceIds, hasNormals, hasTangents, uvs, faceIds, normals, tangents, sprite } = config;
 
 		const rpe = this.renderPassInfo[chan];
 		rpe.outputObject = this.outputChannelObjects[chan];
@@ -464,6 +470,7 @@ class wgslHydra {
 		spe.hasExplicitUVs = hasExplicitUVs || false;
 		spe.hasFaceIds = hasFaceIds || false;
 		spe.hasNormals = hasNormals || false;
+		spe.hasTangents = hasTangents || false;
 		spe.sprite = sprite || null;
 
 		// Generate uniform declarations for fragment shader
@@ -529,6 +536,17 @@ class wgslHydra {
 					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 				});
 				this.device.queue.writeBuffer(spe.normalBuffer, 0, normalData);
+			}
+
+			// Create tangent buffer if tangents provided (vec4: xyz = tangent, w = handedness)
+			if (spe.hasTangents && tangents && tangents.length > 0) {
+				const tangentData = new Float32Array(tangents);
+				spe.tangentBuffer = this.device.createBuffer({
+					label: `tangentbuf_c${chan}_s${spriteLevel}`,
+					size: tangentData.byteLength,
+					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+				});
+				this.device.queue.writeBuffer(spe.tangentBuffer, 0, tangentData);
 			}
 
 			// Setup vertex uniform buffer if needed
@@ -619,6 +637,18 @@ class wgslHydra {
 				});
 			}
 
+			// Add tangent buffer layout if tangents (vec4: xyz = tangent, w = handedness)
+			if (spe.hasTangents && spe.tangentBuffer) {
+				bufferLayouts.push({
+					arrayStride: 16, // 4 floats * 4 bytes (tangent vec4)
+					attributes: [{
+						shaderLocation: 4,
+						offset: 0,
+						format: 'float32x4'
+					}]
+				});
+			}
+
 			pipelineDescriptor.vertex.buffers = bufferLayouts;
 		}
 
@@ -653,6 +683,12 @@ class wgslHydra {
 				}
 				if (spe.faceIdBuffer) {
 					spe.faceIdBuffer.destroy();
+				}
+				if (spe.normalBuffer) {
+					spe.normalBuffer.destroy();
+				}
+				if (spe.tangentBuffer) {
+					spe.tangentBuffer.destroy();
 				}
 				if (spe.vertexUniformBuffer) {
 					spe.vertexUniformBuffer.destroy();
@@ -1017,6 +1053,10 @@ class wgslHydra {
 						// Set normal buffer if normals
 						if (spe.hasNormals && spe.normalBuffer) {
 							passEncoder.setVertexBuffer(slot++, spe.normalBuffer);
+						}
+						// Set tangent buffer if tangents
+						if (spe.hasTangents && spe.tangentBuffer) {
+							passEncoder.setVertexBuffer(slot++, spe.tangentBuffer);
 						}
 						passEncoder.draw(spe.vertexCount);
 					} else {
