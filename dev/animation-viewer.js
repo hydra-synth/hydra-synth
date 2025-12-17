@@ -163,9 +163,9 @@ export async function viewAnimations(modelPath, options = {}) {
 
   const currentAnimName = () => animations[currentAnimIndex].name
 
-  // Render
+  // Render - light from front-top-right for better visibility
   solid(0.9, 0.7, 0.5)
-    .diffuse(0, 1, 0, 0.2)
+    .diffuse(0.3, 0.6, 0.8, 0.4)
     .out(o0, model.animate(currentAnimName, cyclingTime)
       .scale(() => zoom)
       .rotateX(() => rotX + Math.PI + (autoRotate ? time * 0.1 : 0))

@@ -48,9 +48,9 @@ class VertexSource {
   }
 
   scale(x = 1, y, z) {
-    // If only one arg, use for all axes
+    // If only one arg, use for all axes (uniform scaling)
     if (y === undefined) y = x
-    if (z === undefined) z = 1
+    if (z === undefined) z = x
     return this._addTransform('scale', { x, y, z })
   }
 

@@ -27,8 +27,9 @@ function createComponentProxy(baseName) {
 
       if (typeof prop === 'string') {
         // Return VaryingRef for the full path
+        // WGSL uses module-scope vars (copied from ourIn at start of main)
         const glslPath = `${baseName}.${prop}`
-        const wgslPath = `ourIn.${baseName}.${prop}`
+        const wgslPath = `${baseName}.${prop}`
         return new VaryingRef(glslPath, wgslPath)
       }
       return undefined
@@ -62,13 +63,14 @@ const v = new Proxy({}, {
         return createComponentProxy('v_viewDir')
       case 'depth':
         // depth is a float, return VaryingRef directly
-        return new VaryingRef('v_depth', 'ourIn.v_depth')
+        // WGSL uses module-scope var (copied from ourIn at start of main)
+        return new VaryingRef('v_depth', 'v_depth')
       case 'uv':
         // uv is available as existing varying
         return createComponentProxy('uv')
       case 'faceId':
-        // faceId for sprite sheet indexing
-        return new VaryingRef('v_faceId', 'ourIn.faceId')
+        // faceId for sprite sheet indexing (note: this one stays ourIn since it's not copied)
+        return new VaryingRef('v_faceId', 'v_faceId')
       default:
         console.warn(`Unknown varying property: v.${prop}`)
         return undefined

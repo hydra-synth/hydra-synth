@@ -176,7 +176,20 @@ GlslSource.prototype.compile = function (transforms) {
 // In our new world, we do not declare uniforms in the fragment header.
 	// let utilityWgsl = [];
 	if (this.isWGSL) {
-		frag =`${Object.values(utilityWgsl).map((transform) => {
+		frag =`
+  // Module-scope vertex data (copied from ourIn at start of main)
+  var<private> v_texcoord: vec2<f32>;
+  var<private> v_faceId: f32;
+  var<private> v_position: vec3<f32>;
+  var<private> v_normal: vec3<f32>;
+  var<private> v_worldNormal: vec3<f32>;
+  var<private> v_tangent: vec3<f32>;
+  var<private> v_bitangent: vec3<f32>;
+  var<private> v_viewDir: vec3<f32>;
+  var<private> v_depth: f32;
+  var<private> v_color: vec4<f32>;
+
+${Object.values(utilityWgsl).map((transform) => {
   //  console.log(transform.glsl)
     return `
             ${transform.wgsl}
@@ -192,6 +205,18 @@ GlslSource.prototype.compile = function (transforms) {
 
   @fragment
   fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
+    // Copy vertex data to module-scope vars for use in functions
+    v_texcoord = ourIn.texcoord;
+    v_faceId = ourIn.faceId;
+    v_position = ourIn.v_position;
+    v_normal = ourIn.v_normal;
+    v_worldNormal = ourIn.v_worldNormal;
+    v_tangent = ourIn.v_tangent;
+    v_bitangent = ourIn.v_bitangent;
+    v_viewDir = ourIn.v_viewDir;
+    v_depth = ourIn.v_depth;
+    v_color = ourIn.v_color;
+
     let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
     var st : vec2<f32>;
 

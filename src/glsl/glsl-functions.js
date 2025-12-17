@@ -1549,7 +1549,7 @@ wgsl:
    return vec4(_c0.rgb * lighting, _c0.a);`,
   wgsl:
 `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
-   let normal = normalize(ourIn.v_worldNormal);
+   let normal = normalize(v_worldNormal);
    let diff = max(0.0, dot(normal, lightDir));
    let lighting = ambient + (1.0 - ambient) * diff;
    return vec4<f32>(_c0.rgb * lighting, _c0.a);`
@@ -1575,8 +1575,8 @@ wgsl:
    float f = pow(1.0 - abs(dot(normal, viewDir)), power) * intensity;
    return vec4(_c0.rgb + f, _c0.a);`,
   wgsl:
-`   let normal = normalize(ourIn.v_worldNormal);
-   let viewDir = normalize(ourIn.v_viewDir);
+`   let normal = normalize(v_worldNormal);
+   let viewDir = normalize(v_viewDir);
    let f = pow(1.0 - abs(dot(normal, viewDir)), power) * intensity;
    return vec4<f32>(_c0.rgb + f, _c0.a);`
 },
@@ -1619,8 +1619,8 @@ wgsl:
    return vec4(_c0.rgb + spec, _c0.a);`,
   wgsl:
 `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
-   let normal = normalize(ourIn.v_worldNormal);
-   let viewDir = normalize(ourIn.v_viewDir);
+   let normal = normalize(v_worldNormal);
+   let viewDir = normalize(v_viewDir);
    let halfDir = normalize(lightDir + viewDir);
    let spec = pow(max(0.0, dot(normal, halfDir)), shininess) * intensity;
    return vec4<f32>(_c0.rgb + spec, _c0.a);`
@@ -1652,7 +1652,7 @@ wgsl:
    return vec4(_c0.rgb * diff, _c0.a);`,
   wgsl:
 `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
-   let normal = normalize(ourIn.v_worldNormal);
+   let normal = normalize(v_worldNormal);
    let diff = dot(normal, lightDir) * 0.5 + 0.5;
    return vec4<f32>(_c0.rgb * diff, _c0.a);`
 },
@@ -1689,7 +1689,7 @@ wgsl:
    return vec4(_c0.rgb * toonShade, _c0.a);`,
   wgsl:
 `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
-   let normal = normalize(ourIn.v_worldNormal);
+   let normal = normalize(v_worldNormal);
    let diff = max(0.0, dot(normal, lightDir));
    let toonShade = floor(diff * levels) / (levels - 1.0);
    return vec4<f32>(_c0.rgb * toonShade, _c0.a);`
@@ -1726,8 +1726,8 @@ wgsl:
    float outline = smoothstep(1.0 - thickness, 1.0, edge);
    return vec4(mix(_c0.rgb, vec3(r, g, b), outline), _c0.a);`,
   wgsl:
-`   let normal = normalize(ourIn.v_worldNormal);
-   let viewDir = normalize(ourIn.v_viewDir);
+`   let normal = normalize(v_worldNormal);
+   let viewDir = normalize(v_viewDir);
    let edge = 1.0 - abs(dot(normal, viewDir));
    let outlineAmt = smoothstep(1.0 - thickness, 1.0, edge);
    return vec4<f32>(mix(_c0.rgb, vec3<f32>(r, g, b), outlineAmt), _c0.a);`
@@ -1823,9 +1823,9 @@ wgsl:
    texNormal = normalize(texNormal);
 
    // Build TBN matrix to transform from tangent space to world space
-   let T = normalize(ourIn.v_tangent);
-   let B = normalize(ourIn.v_bitangent);
-   let N = normalize(ourIn.v_worldNormal);
+   let T = normalize(v_tangent);
+   let B = normalize(v_bitangent);
+   let N = normalize(v_worldNormal);
 
    // Transform normal to world space (manual matrix multiply)
    let worldNormal = normalize(T * texNormal.x + B * texNormal.y + N * texNormal.z);
@@ -1889,14 +1889,14 @@ wgsl:
    return vec4(_c0.rgb * lighting, _c0.a);`,
   wgsl:
 `   // Read normal from texture
-   var texNormal = textureSample(tex, texSampler, ourIn.texcoord).rgb * 2.0 - 1.0;
+   var texNormal = textureSample(tex, texSampler, v_texcoord).rgb * 2.0 - 1.0;
    texNormal = vec3<f32>(texNormal.x * strength, texNormal.y * strength, texNormal.z);
    texNormal = normalize(texNormal);
 
    // Build TBN matrix
-   let T = normalize(ourIn.v_tangent);
-   let B = normalize(ourIn.v_bitangent);
-   let N = normalize(ourIn.v_worldNormal);
+   let T = normalize(v_tangent);
+   let B = normalize(v_bitangent);
+   let N = normalize(v_worldNormal);
 
    // Transform to world space
    let worldNormal = normalize(T * texNormal.x + B * texNormal.y + N * texNormal.z);
