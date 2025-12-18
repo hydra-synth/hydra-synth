@@ -1,5 +1,6 @@
 import {Webcam} from './lib/webcam.js'
 import Screen from './lib/screenmedia.js'
+import { LoadError } from './lib/hydra-error.js'
 
 class HydraSource {
   constructor ({ regl, wgsl, hydraSynth, width, height, chanNum, pb, label = ""}) {
@@ -155,7 +156,17 @@ class HydraSource {
         self.tex = this.makeTexture({ width: self.width, height: self.height, data: self.src, ...params })
 		    self.active = true;
       })
-      .catch(err => console.log('could not get camera', err))
+      .catch(err => {
+        const error = new LoadError(`Could not access camera${index !== undefined ? ` (index ${index})` : ''}`, {
+          originalError: err,
+          suggestion: 'Check camera permissions or try a different camera index'
+        });
+        if (self.hydraSynth && self.hydraSynth._emitError) {
+          self.hydraSynth._emitError(error);
+        } else {
+          console.error(error.toString());
+        }
+      })
   }
 
   initVideo (url = '', params) {
@@ -168,15 +179,29 @@ class HydraSource {
     vid.loop = true
     vid.muted = true // mute in order to load without user interaction
 
-    const onload = vid.addEventListener('loadeddata', () => {
+    vid.addEventListener('loadeddata', () => {
       this.src = vid
       this.width = vid.videoWidth;
       this.height = vid.videoHeight;
       vid.play()
-      self.tex = this.makeTexture({ width: this.width, height: this.height, data: this.src, ...params })
+      this.tex = this.makeTexture({ width: this.width, height: this.height, data: this.src, ...params })
       this.dynamic = true
       this.active = true;
     })
+
+    vid.addEventListener('error', () => {
+      const error = new LoadError(`Could not load video: ${url}`, {
+        url,
+        originalError: vid.error,
+        suggestion: 'Check that the video URL is correct and accessible'
+      });
+      if (this.hydraSynth && this.hydraSynth._emitError) {
+        this.hydraSynth._emitError(error);
+      } else {
+        console.error(error.toString());
+      }
+    })
+
     vid.src = url
   }
 
@@ -187,15 +212,29 @@ class HydraSource {
 	  this.noteTime();
     const img = document.createElement('img')
     img.crossOrigin = 'anonymous'
-    img.src = url
     this.oneShotDone = false;
     let self = this;
+
     img.onload = () => {
       self.src = img
       self.dynamic = false
       self.active = true;
       self.tex = this.makeTexture({ width: self.width, height: self.height, data: self.src, ...params })
     }
+
+    img.onerror = () => {
+      const error = new LoadError(`Could not load image: ${url}`, {
+        url,
+        suggestion: 'Check that the image URL is correct and accessible'
+      });
+      if (self.hydraSynth && self.hydraSynth._emitError) {
+        self.hydraSynth._emitError(error);
+      } else {
+        console.error(error.toString());
+      }
+    }
+
+    img.src = url
   }
 
 
@@ -234,7 +273,17 @@ class HydraSource {
         self.dynamic = true
         //  console.log("received screen input")
       })
-      .catch(err => console.log('could not get screen', err))
+      .catch(err => {
+        const error = new LoadError('Could not capture screen', {
+          originalError: err,
+          suggestion: 'Check screen sharing permissions or try again'
+        });
+        if (self.hydraSynth && self.hydraSynth._emitError) {
+          self.hydraSynth._emitError(error);
+        } else {
+          console.error(error.toString());
+        }
+      })
   }
 
   // cache for the canvases, so we don't create them every time

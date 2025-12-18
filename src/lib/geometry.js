@@ -162,6 +162,9 @@ export function parseObj(objText, options = {}) {
 //   swapYZ: swap Y and Z axes (for Z-up exports like Blender). Default: false (Y-up, WebGL standard)
 export async function loadObj(url, options = {}) {
   const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to load OBJ from ${url}: ${response.status} ${response.statusText}`)
+  }
   const text = await response.text()
   return parseObj(text, options)
 }

@@ -1,6 +1,1146 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+function parseObj(objText, options = {}) {
+  const { swapYZ = false } = options;
+  const vertices = [];
+  const colors = [];
+  const normals = [];
+  const uvs = [];
+  const faces = [];
+  const materialNames = [];
+  const materialToId = /* @__PURE__ */ new Map();
+  let currentMaterial = null;
+  const lines = objText.split("\n");
+  for (const line2 of lines) {
+    const parts = line2.trim().split(/\s+/);
+    if (parts[0] === "v") {
+      const x2 = parseFloat(parts[1]);
+      const y = parseFloat(parts[2]);
+      const z = parseFloat(parts[3]);
+      vertices.push(swapYZ ? [x2, z, y] : [x2, y, z]);
+      if (parts.length >= 7) {
+        colors.push([parseFloat(parts[4]), parseFloat(parts[5]), parseFloat(parts[6])]);
+      }
+    } else if (parts[0] === "vn") {
+      const x2 = parseFloat(parts[1]);
+      const y = parseFloat(parts[2]);
+      const z = parseFloat(parts[3]);
+      normals.push(swapYZ ? [x2, z, y] : [x2, y, z]);
+    } else if (parts[0] === "vt") {
+      uvs.push([parseFloat(parts[1]), parseFloat(parts[2])]);
+    } else if (parts[0] === "usemtl") {
+      const matName = parts.slice(1).join(" ");
+      if (!materialToId.has(matName)) {
+        materialToId.set(matName, materialNames.length);
+        materialNames.push(matName);
+      }
+      currentMaterial = materialToId.get(matName);
+    } else if (parts[0] === "f") {
+      const faceVerts = [];
+      const faceUVs = [];
+      const faceNormals = [];
+      for (let i = 1; i < parts.length; i++) {
+        const indices = parts[i].split("/");
+        faceVerts.push(parseInt(indices[0]) - 1);
+        if (indices[1]) faceUVs.push(parseInt(indices[1]) - 1);
+        if (indices[2]) faceNormals.push(parseInt(indices[2]) - 1);
+      }
+      faces.push({ verts: faceVerts, uvs: faceUVs, normals: faceNormals, material: currentMaterial });
+    }
+  }
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  for (const v2 of vertices) {
+    minX = Math.min(minX, v2[0]);
+    maxX = Math.max(maxX, v2[0]);
+    minY = Math.min(minY, v2[1]);
+    maxY = Math.max(maxY, v2[1]);
+    minZ = Math.min(minZ, v2[2]);
+    maxZ = Math.max(maxZ, v2[2]);
+  }
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const rangeX = maxX - minX;
+  const rangeY = maxY - minY;
+  const rangeZ = maxZ - minZ;
+  const maxRange = Math.max(rangeX, rangeY, rangeZ);
+  const scale = 1 / maxRange;
+  const verts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const outFaceIds = [];
+  const outColors = [];
+  const hasNormals = normals.length > 0;
+  const hasExplicitUVs = uvs.length > 0;
+  const hasMaterials = materialNames.length > 0;
+  const hasColors = colors.length === vertices.length;
+  const defaultQuadUVs = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const defaultTriUVs = [[0, 0], [1, 0], [0.5, 1]];
+  const addVertex = (vertIdx, uv, normalIdx, materialId) => {
+    const v2 = vertices[vertIdx];
+    verts.push((v2[0] - centerX) * scale);
+    verts.push((v2[1] - centerY) * scale);
+    verts.push((v2[2] - centerZ) * scale);
+    if (hasNormals && normalIdx !== void 0) {
+      const n = normals[normalIdx];
+      outNormals.push(n[0], n[1], n[2]);
+    }
+    outUVs.push(uv[0], uv[1]);
+    if (hasMaterials) {
+      outFaceIds.push(materialId !== null ? materialId : 0);
+    }
+    if (hasColors) {
+      const c = colors[vertIdx];
+      outColors.push(c[0], c[1], c[2], 1);
+    }
+  };
+  for (const face of faces) {
+    const fv = face.verts;
+    const fu = face.uvs;
+    const fn = face.normals;
+    const fm = face.material;
+    if (fv.length === 3) {
+      for (let i = 0; i < 3; i++) {
+        const uv = hasExplicitUVs && fu[i] !== void 0 ? uvs[fu[i]] : defaultTriUVs[i];
+        addVertex(fv[i], uv, fn[i], fm);
+      }
+    } else if (fv.length >= 4) {
+      for (let i = 1; i < fv.length - 1; i++) {
+        const uv0 = hasExplicitUVs && fu[0] !== void 0 ? uvs[fu[0]] : defaultQuadUVs[0];
+        const uv1 = hasExplicitUVs && fu[i] !== void 0 ? uvs[fu[i]] : defaultQuadUVs[i];
+        const uv2 = hasExplicitUVs && fu[i + 1] !== void 0 ? uvs[fu[i + 1]] : defaultQuadUVs[i + 1];
+        addVertex(fv[0], uv0, fn[0], fm);
+        addVertex(fv[i], uv1, fn[i], fm);
+        addVertex(fv[i + 1], uv2, fn[i + 1], fm);
+      }
+    }
+  }
+  const vs = new VertexSource(verts);
+  vs.is3D = true;
+  if (outNormals.length > 0) vs.normals = outNormals;
+  if (outUVs.length > 0) vs.uvs = outUVs;
+  if (outFaceIds.length > 0) {
+    vs.faceIds = outFaceIds;
+    vs.materialNames = materialNames;
+  }
+  if (outColors.length > 0) vs.colors = outColors;
+  return vs;
+}
+async function loadObj(url, options = {}) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to load OBJ from ${url}: ${response.status} ${response.statusText}`);
+  }
+  const text = await response.text();
+  return parseObj(text, options);
+}
+function parseGlb(arrayBuffer, options = {}) {
+  const { meshIndex = 0, primitiveIndex } = options;
+  const view = new DataView(arrayBuffer);
+  const magic = view.getUint32(0, true);
+  if (magic !== 1179937895) {
+    throw new Error("Invalid GLB file: bad magic number");
+  }
+  const version2 = view.getUint32(4, true);
+  if (version2 !== 2) {
+    throw new Error(`Unsupported glTF version: ${version2}`);
+  }
+  let jsonChunk = null;
+  let binChunk = null;
+  let offset2 = 12;
+  while (offset2 < arrayBuffer.byteLength) {
+    const chunkLength = view.getUint32(offset2, true);
+    const chunkType = view.getUint32(offset2 + 4, true);
+    const chunkData = new Uint8Array(arrayBuffer, offset2 + 8, chunkLength);
+    if (chunkType === 1313821514) {
+      const decoder = new TextDecoder("utf-8");
+      jsonChunk = JSON.parse(decoder.decode(chunkData));
+    } else if (chunkType === 5130562) {
+      binChunk = chunkData.buffer.slice(chunkData.byteOffset, chunkData.byteOffset + chunkData.byteLength);
+    }
+    offset2 += 8 + chunkLength;
+    if (offset2 % 4 !== 0) offset2 += 4 - offset2 % 4;
+  }
+  if (!jsonChunk) throw new Error("GLB missing JSON chunk");
+  return extractMeshFromGltf(jsonChunk, binChunk, meshIndex, primitiveIndex);
+}
+function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
+  var _a;
+  const mesh = (_a = gltf.meshes) == null ? void 0 : _a[meshIndex];
+  if (!mesh) throw new Error(`Mesh ${meshIndex} not found`);
+  const readAccessor = (accessorIndex) => {
+    const accessor = gltf.accessors[accessorIndex];
+    const bufferView = gltf.bufferViews[accessor.bufferView];
+    const componentType = accessor.componentType;
+    const count = accessor.count;
+    const type = accessor.type;
+    const typeComponents = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+    const components = typeComponents[type] || 1;
+    const TypedArray = {
+      5120: Int8Array,
+      // BYTE
+      5121: Uint8Array,
+      // UNSIGNED_BYTE
+      5122: Int16Array,
+      // SHORT
+      5123: Uint16Array,
+      // UNSIGNED_SHORT
+      5125: Uint32Array,
+      // UNSIGNED_INT
+      5126: Float32Array
+      // FLOAT
+    }[componentType];
+    if (!TypedArray) throw new Error(`Unsupported component type: ${componentType}`);
+    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
+    const byteStride = bufferView.byteStride || 0;
+    if (byteStride === 0 || byteStride === components * TypedArray.BYTES_PER_ELEMENT) {
+      return new TypedArray(binBuffer, byteOffset, count * components);
+    }
+    const result = new TypedArray(count * components);
+    const srcView = new DataView(binBuffer);
+    for (let i = 0; i < count; i++) {
+      const srcOffset = byteOffset + i * byteStride;
+      for (let j = 0; j < components; j++) {
+        if (TypedArray === Float32Array) {
+          result[i * components + j] = srcView.getFloat32(srcOffset + j * 4, true);
+        } else if (TypedArray === Uint16Array) {
+          result[i * components + j] = srcView.getUint16(srcOffset + j * 2, true);
+        } else if (TypedArray === Uint32Array) {
+          result[i * components + j] = srcView.getUint32(srcOffset + j * 4, true);
+        }
+      }
+    }
+    return result;
+  };
+  const primitives = primitiveIndex !== void 0 ? [mesh.primitives[primitiveIndex]] : mesh.primitives;
+  if (!primitives || primitives.length === 0) {
+    throw new Error(`No primitives found in mesh ${meshIndex}`);
+  }
+  const verts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const outTangents = [];
+  const outColors = [];
+  const outJoints = [];
+  const outWeights = [];
+  let hasAnyUVs = false;
+  let hasAnySkinning = false;
+  for (const primitive of primitives) {
+    const positionAccessor = primitive.attributes.POSITION;
+    if (positionAccessor === void 0) continue;
+    const positions = readAccessor(positionAccessor);
+    const normals = primitive.attributes.NORMAL !== void 0 ? readAccessor(primitive.attributes.NORMAL) : null;
+    const uvs = primitive.attributes.TEXCOORD_0 !== void 0 ? readAccessor(primitive.attributes.TEXCOORD_0) : null;
+    const tangents = primitive.attributes.TANGENT !== void 0 ? readAccessor(primitive.attributes.TANGENT) : null;
+    const colors = primitive.attributes.COLOR_0 !== void 0 ? readAccessor(primitive.attributes.COLOR_0) : null;
+    let colorStride = 0;
+    if (colors && primitive.attributes.COLOR_0 !== void 0) {
+      const colorAccessor = gltf.accessors[primitive.attributes.COLOR_0];
+      colorStride = colorAccessor.type === "VEC4" ? 4 : 3;
+    }
+    const joints = primitive.attributes.JOINTS_0 !== void 0 ? readAccessor(primitive.attributes.JOINTS_0) : null;
+    const weights = primitive.attributes.WEIGHTS_0 !== void 0 ? readAccessor(primitive.attributes.WEIGHTS_0) : null;
+    if (uvs) hasAnyUVs = true;
+    if (joints && weights) hasAnySkinning = true;
+    const indices = primitive.indices !== void 0 ? readAccessor(primitive.indices) : null;
+    const addVertex = (idx) => {
+      verts.push(positions[idx * 3], positions[idx * 3 + 1], positions[idx * 3 + 2]);
+      if (normals) {
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2]);
+      }
+      if (uvs) {
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
+      }
+      if (tangents) {
+        outTangents.push(tangents[idx * 4], tangents[idx * 4 + 1], tangents[idx * 4 + 2], tangents[idx * 4 + 3]);
+      }
+      if (colors) {
+        if (colorStride === 4) {
+          outColors.push(colors[idx * 4], colors[idx * 4 + 1], colors[idx * 4 + 2], colors[idx * 4 + 3]);
+        } else {
+          outColors.push(colors[idx * 3], colors[idx * 3 + 1], colors[idx * 3 + 2], 1);
+        }
+      }
+      if (joints && weights) {
+        outJoints.push(joints[idx * 4], joints[idx * 4 + 1], joints[idx * 4 + 2], joints[idx * 4 + 3]);
+        outWeights.push(weights[idx * 4], weights[idx * 4 + 1], weights[idx * 4 + 2], weights[idx * 4 + 3]);
+      }
+    };
+    if (indices) {
+      for (let i = 0; i < indices.length; i++) {
+        addVertex(indices[i]);
+      }
+    } else {
+      const vertexCount = positions.length / 3;
+      for (let i = 0; i < vertexCount; i++) {
+        addVertex(i);
+      }
+    }
+  }
+  if (verts.length === 0) {
+    throw new Error("No vertex data found in mesh");
+  }
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < verts.length; i += 3) {
+    minX = Math.min(minX, verts[i]);
+    maxX = Math.max(maxX, verts[i]);
+    minY = Math.min(minY, verts[i + 1]);
+    maxY = Math.max(maxY, verts[i + 1]);
+    minZ = Math.min(minZ, verts[i + 2]);
+    maxZ = Math.max(maxZ, verts[i + 2]);
+  }
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const rangeX = maxX - minX;
+  const rangeY = maxY - minY;
+  const rangeZ = maxZ - minZ;
+  const maxRange = Math.max(rangeX, rangeY, rangeZ);
+  const scale = maxRange > 0 ? 1 / maxRange : 1;
+  for (let i = 0; i < verts.length; i += 3) {
+    verts[i] = (verts[i] - centerX) * scale;
+    verts[i + 1] = (verts[i + 1] - centerY) * scale;
+    verts[i + 2] = (verts[i + 2] - centerZ) * scale;
+  }
+  if (!hasAnyUVs) {
+    for (let i = 0; i < verts.length; i += 3) {
+      const x2 = verts[i], y = verts[i + 1], z = verts[i + 2];
+      const u = 0.5 + Math.atan2(z, x2) / (2 * Math.PI);
+      const v2 = 0.5 + Math.asin(Math.max(-1, Math.min(1, y))) / Math.PI;
+      outUVs.push(u, v2);
+    }
+  }
+  const vs = new VertexSource(verts);
+  vs.is3D = true;
+  if (outNormals.length > 0) vs.normals = outNormals;
+  if (outUVs.length > 0) vs.uvs = outUVs;
+  if (outTangents.length > 0) vs.tangents = outTangents;
+  if (outColors.length > 0) vs.colors = outColors;
+  if (hasAnySkinning) {
+    vs.joints = outJoints;
+    vs.weights = outWeights;
+  }
+  vs._gltf = gltf;
+  vs._binBuffer = binBuffer;
+  if (hasAnySkinning) {
+    vs._normCenter = [centerX, centerY, centerZ];
+    vs._normScale = scale;
+  }
+  return vs;
+}
+async function loadGlb(url, options = {}) {
+  var _a;
+  const { extractTextures = true, ...parseOptions } = options;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to load GLB from ${url}: ${response.status} ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength < 12) {
+    throw new Error(`Invalid GLB file from ${url}: file too small (${arrayBuffer.byteLength} bytes)`);
+  }
+  const model = parseGlb(arrayBuffer, parseOptions);
+  if (extractTextures) {
+    const textures = await extractGlbTextures(arrayBuffer);
+    model.texture = ((_a = textures[0]) == null ? void 0 : _a.image) || null;
+    model.textures = textures.map((t) => t.image);
+  }
+  return model;
+}
+async function extractGlbTextures(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  const magic = view.getUint32(0, true);
+  if (magic !== 1179937895) throw new Error("Invalid GLB");
+  let jsonChunk = null;
+  let binStart = 0;
+  let offset2 = 12;
+  while (offset2 < arrayBuffer.byteLength) {
+    const chunkLength = view.getUint32(offset2, true);
+    const chunkType = view.getUint32(offset2 + 4, true);
+    if (chunkType === 1313821514) {
+      const chunkData = new Uint8Array(arrayBuffer, offset2 + 8, chunkLength);
+      jsonChunk = JSON.parse(new TextDecoder().decode(chunkData));
+    } else if (chunkType === 5130562) {
+      binStart = offset2 + 8;
+    }
+    offset2 += 8 + chunkLength;
+    if (offset2 % 4 !== 0) offset2 += 4 - offset2 % 4;
+  }
+  if (!jsonChunk || !jsonChunk.images) return [];
+  const textures = [];
+  for (let i = 0; i < jsonChunk.images.length; i++) {
+    const imgDef = jsonChunk.images[i];
+    if (imgDef.bufferView === void 0) continue;
+    const bv = jsonChunk.bufferViews[imgDef.bufferView];
+    const imgBytes = new Uint8Array(arrayBuffer, binStart + (bv.byteOffset || 0), bv.byteLength);
+    let mimeType = imgDef.mimeType;
+    if (!mimeType) {
+      if (imgBytes[0] === 137 && imgBytes[1] === 80) mimeType = "image/png";
+      else if (imgBytes[0] === 255 && imgBytes[1] === 216) mimeType = "image/jpeg";
+      else mimeType = "image/png";
+    }
+    const blob = new Blob([imgBytes], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = url;
+    });
+    textures.push({ image: img, index: i, blobUrl: url });
+  }
+  return textures;
+}
+async function createGlbSpriteSheet(urls, options = {}) {
+  const { cellSize = 256 } = options;
+  const results = await Promise.all(urls.map(async (url) => {
+    var _a;
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const model = parseGlb(arrayBuffer, options);
+    const textures = await extractGlbTextures(arrayBuffer);
+    return { model, texture: ((_a = textures[0]) == null ? void 0 : _a.image) || null };
+  }));
+  const count = results.length;
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const canvas = document.createElement("canvas");
+  canvas.width = cols * cellSize;
+  canvas.height = rows * cellSize;
+  const ctx = canvas.getContext("2d");
+  results.forEach((r, i) => {
+    if (r.texture) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      ctx.drawImage(r.texture, col * cellSize, row * cellSize, cellSize, cellSize);
+    }
+  });
+  const models = results.map((r, i) => {
+    r.model.spriteIndex = i;
+    return r.model;
+  });
+  return { canvas, models, cols, rows, cellSize };
+}
+function extractSkeleton(gltf, binBuffer, skinIndex = 0) {
+  if (!gltf.skins || !gltf.skins[skinIndex]) return null;
+  const skin = gltf.skins[skinIndex];
+  const joints = skin.joints;
+  let inverseBindMatrices = null;
+  if (skin.inverseBindMatrices !== void 0) {
+    const accessor = gltf.accessors[skin.inverseBindMatrices];
+    const bufferView = gltf.bufferViews[accessor.bufferView];
+    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
+    const byteLength = accessor.count * 16 * 4;
+    const slice = binBuffer.slice(byteOffset, byteOffset + byteLength);
+    inverseBindMatrices = new Float32Array(slice);
+  }
+  const jointData = joints.map((nodeIndex, i) => {
+    const node = gltf.nodes[nodeIndex];
+    return {
+      index: i,
+      nodeIndex,
+      name: node.name || `joint_${i}`,
+      children: node.children || [],
+      // Local transform (TRS)
+      translation: node.translation || [0, 0, 0],
+      rotation: node.rotation || [0, 0, 0, 1],
+      // quaternion
+      scale: node.scale || [1, 1, 1],
+      // Inverse bind matrix (16 floats)
+      inverseBindMatrix: inverseBindMatrices ? Array.from(inverseBindMatrices.slice(i * 16, i * 16 + 16)) : identityMatrix()
+    };
+  });
+  return {
+    joints: jointData,
+    jointCount: joints.length,
+    jointNodeIndices: joints
+  };
+}
+function extractAnimations(gltf, binBuffer) {
+  if (!gltf.animations) return [];
+  const readAccessor = (accessorIndex) => {
+    const accessor = gltf.accessors[accessorIndex];
+    const bufferView = gltf.bufferViews[accessor.bufferView];
+    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
+    return new Float32Array(binBuffer, byteOffset, accessor.count * (accessor.type === "SCALAR" ? 1 : accessor.type === "VEC3" ? 3 : accessor.type === "VEC4" ? 4 : 1));
+  };
+  return gltf.animations.map((anim, animIndex) => {
+    const channels = anim.channels.map((channel) => {
+      const sampler = anim.samplers[channel.sampler];
+      const times = readAccessor(sampler.input);
+      const values = readAccessor(sampler.output);
+      return {
+        targetNode: channel.target.node,
+        targetPath: channel.target.path,
+        // 'translation', 'rotation', 'scale'
+        interpolation: sampler.interpolation || "LINEAR",
+        times: Array.from(times),
+        values: Array.from(values)
+      };
+    });
+    const duration = channels.reduce((max, ch) => Math.max(max, ch.times[ch.times.length - 1] || 0), 0);
+    return {
+      name: anim.name || `animation_${animIndex}`,
+      duration,
+      channels
+    };
+  });
+}
+function identityMatrix() {
+  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+}
+function multiplyMatrices(a2, b) {
+  const result = new Array(16);
+  for (let col = 0; col < 4; col++) {
+    for (let row = 0; row < 4; row++) {
+      result[col * 4 + row] = a2[0 * 4 + row] * b[col * 4 + 0] + a2[1 * 4 + row] * b[col * 4 + 1] + a2[2 * 4 + row] * b[col * 4 + 2] + a2[3 * 4 + row] * b[col * 4 + 3];
+    }
+  }
+  return result;
+}
+function trsToMatrix(t, r, s) {
+  const [tx, ty, tz] = t;
+  const [qx, qy, qz, qw] = r;
+  const [sx, sy, sz] = s;
+  const xx = qx * qx, yy = qy * qy, zz = qz * qz;
+  const xy = qx * qy, xz = qx * qz, yz = qy * qz;
+  const wx = qw * qx, wy = qw * qy, wz = qw * qz;
+  const m0 = (1 - 2 * (yy + zz)) * sx;
+  const m1 = 2 * (xy + wz) * sx;
+  const m2 = 2 * (xz - wy) * sx;
+  const m4 = 2 * (xy - wz) * sy;
+  const m5 = (1 - 2 * (xx + zz)) * sy;
+  const m6 = 2 * (yz + wx) * sy;
+  const m8 = 2 * (xz + wy) * sz;
+  const m9 = 2 * (yz - wx) * sz;
+  const m10 = (1 - 2 * (xx + yy)) * sz;
+  return [
+    m0,
+    m1,
+    m2,
+    0,
+    // column 0
+    m4,
+    m5,
+    m6,
+    0,
+    // column 1
+    m8,
+    m9,
+    m10,
+    0,
+    // column 2
+    tx,
+    ty,
+    tz,
+    1
+    // column 3 (translation)
+  ];
+}
+function transformPoint(m, p) {
+  const x2 = p[0], y = p[1], z = p[2];
+  return [
+    m[0] * x2 + m[4] * y + m[8] * z + m[12],
+    m[1] * x2 + m[5] * y + m[9] * z + m[13],
+    m[2] * x2 + m[6] * y + m[10] * z + m[14]
+  ];
+}
+function transformNormal(m, n) {
+  const x2 = n[0], y = n[1], z = n[2];
+  const nx = m[0] * x2 + m[4] * y + m[8] * z;
+  const ny = m[1] * x2 + m[5] * y + m[9] * z;
+  const nz = m[2] * x2 + m[6] * y + m[10] * z;
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  return len > 0 ? [nx / len, ny / len, nz / len] : [0, 1, 0];
+}
+function sampleAnimation(channel, time) {
+  const { times, values, targetPath, interpolation } = channel;
+  const componentCount = targetPath === "rotation" ? 4 : 3;
+  if (time <= times[0]) {
+    return values.slice(0, componentCount);
+  }
+  if (time >= times[times.length - 1]) {
+    const start = (times.length - 1) * componentCount;
+    return values.slice(start, start + componentCount);
+  }
+  let i = 0;
+  while (i < times.length - 1 && times[i + 1] < time) i++;
+  const t0 = times[i], t1 = times[i + 1];
+  const alpha = (time - t0) / (t1 - t0);
+  const v0Start = i * componentCount;
+  const v1Start = (i + 1) * componentCount;
+  if (interpolation === "STEP") {
+    return values.slice(v0Start, v0Start + componentCount);
+  }
+  if (targetPath === "rotation") {
+    return slerpQuat(
+      values.slice(v0Start, v0Start + 4),
+      values.slice(v1Start, v1Start + 4),
+      alpha
+    );
+  } else {
+    const result = [];
+    for (let j = 0; j < componentCount; j++) {
+      result.push(values[v0Start + j] * (1 - alpha) + values[v1Start + j] * alpha);
+    }
+    return result;
+  }
+}
+function slerpQuat(q1, q2, t) {
+  let dot = q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3];
+  if (dot < 0) {
+    q2 = [-q2[0], -q2[1], -q2[2], -q2[3]];
+    dot = -dot;
+  }
+  if (dot > 0.9995) {
+    const result = [
+      q1[0] + t * (q2[0] - q1[0]),
+      q1[1] + t * (q2[1] - q1[1]),
+      q1[2] + t * (q2[2] - q1[2]),
+      q1[3] + t * (q2[3] - q1[3])
+    ];
+    const len = Math.sqrt(result[0] ** 2 + result[1] ** 2 + result[2] ** 2 + result[3] ** 2);
+    return result.map((v2) => v2 / len);
+  }
+  const theta0 = Math.acos(dot);
+  const theta = theta0 * t;
+  const sinTheta = Math.sin(theta);
+  const sinTheta0 = Math.sin(theta0);
+  const s0 = Math.cos(theta) - dot * sinTheta / sinTheta0;
+  const s1 = sinTheta / sinTheta0;
+  return [
+    s0 * q1[0] + s1 * q2[0],
+    s0 * q1[1] + s1 * q2[1],
+    s0 * q1[2] + s1 * q2[2],
+    s0 * q1[3] + s1 * q2[3]
+  ];
+}
+function computeSkinningMatrices(skeleton, animations, clipName, time, gltf, normCenter = null, normScale = 1) {
+  if (!skeleton) return null;
+  const clip = animations.find((a2) => a2.name === clipName) || animations[0];
+  if (!clip) return null;
+  const nodeToJoint = /* @__PURE__ */ new Map();
+  skeleton.joints.forEach((joint, i) => {
+    nodeToJoint.set(joint.nodeIndex, i);
+  });
+  const localTransforms = skeleton.joints.map((joint, jointIdx) => {
+    let t = [...joint.translation];
+    let r = [...joint.rotation];
+    let s = [...joint.scale];
+    for (const channel of clip.channels) {
+      if (channel.targetNode === joint.nodeIndex) {
+        const sampled = sampleAnimation(channel, time);
+        if (channel.targetPath === "translation") t = sampled;
+        else if (channel.targetPath === "rotation") r = sampled;
+        else if (channel.targetPath === "scale") s = sampled;
+      }
+    }
+    return trsToMatrix(t, r, s);
+  });
+  const worldTransforms = new Array(skeleton.joints.length);
+  const parentMap = /* @__PURE__ */ new Map();
+  gltf.nodes.forEach((node, nodeIdx) => {
+    if (node.children) {
+      node.children.forEach((childIdx) => parentMap.set(childIdx, nodeIdx));
+    }
+  });
+  const computeWorld = (jointIndex) => {
+    if (worldTransforms[jointIndex]) return worldTransforms[jointIndex];
+    const joint = skeleton.joints[jointIndex];
+    const parentNodeIndex = parentMap.get(joint.nodeIndex);
+    if (parentNodeIndex !== void 0 && nodeToJoint.has(parentNodeIndex)) {
+      const parentJointIndex = nodeToJoint.get(parentNodeIndex);
+      const parentWorld = computeWorld(parentJointIndex);
+      worldTransforms[jointIndex] = multiplyMatrices(parentWorld, localTransforms[jointIndex]);
+    } else {
+      worldTransforms[jointIndex] = localTransforms[jointIndex];
+    }
+    return worldTransforms[jointIndex];
+  };
+  const rawMatrices = skeleton.joints.map((joint, i) => {
+    const globalTransform = computeWorld(i);
+    return multiplyMatrices(globalTransform, joint.inverseBindMatrix);
+  });
+  if (normCenter) {
+    const [cx, cy, cz] = normCenter;
+    const s = normScale;
+    const invS = 1 / s;
+    return rawMatrices.map((M) => {
+      const MN = [
+        M[0] * invS,
+        M[1] * invS,
+        M[2] * invS,
+        M[3],
+        M[4] * invS,
+        M[5] * invS,
+        M[6] * invS,
+        M[7],
+        M[8] * invS,
+        M[9] * invS,
+        M[10] * invS,
+        M[11],
+        M[0] * cx + M[4] * cy + M[8] * cz + M[12],
+        M[1] * cx + M[5] * cy + M[9] * cz + M[13],
+        M[2] * cx + M[6] * cy + M[10] * cz + M[14],
+        M[3] * cx + M[7] * cy + M[11] * cz + M[15]
+      ];
+      return [
+        s * MN[0],
+        s * MN[1],
+        s * MN[2],
+        MN[3],
+        s * MN[4],
+        s * MN[5],
+        s * MN[6],
+        MN[7],
+        s * MN[8],
+        s * MN[9],
+        s * MN[10],
+        MN[11],
+        s * MN[12] - cx * s,
+        s * MN[13] - cy * s,
+        s * MN[14] - cz * s,
+        MN[15]
+      ];
+    });
+  }
+  return rawMatrices;
+}
+function applySkinning(vertices, normals, joints, weights, skinningMatrices) {
+  const vertexCount = vertices.length / 3;
+  const skinnedVerts = new Array(vertices.length);
+  const skinnedNormals = normals ? new Array(normals.length) : null;
+  for (let v2 = 0; v2 < vertexCount; v2++) {
+    const vi = v2 * 3;
+    const ji = v2 * 4;
+    const pos = [vertices[vi], vertices[vi + 1], vertices[vi + 2]];
+    const norm = normals ? [normals[vi], normals[vi + 1], normals[vi + 2]] : null;
+    let skinnedPos = [0, 0, 0];
+    let skinnedNorm = normals ? [0, 0, 0] : null;
+    for (let i = 0; i < 4; i++) {
+      const jointIndex = joints[ji + i];
+      const weight = weights[ji + i];
+      if (weight > 0 && skinningMatrices[jointIndex]) {
+        const mat = skinningMatrices[jointIndex];
+        const transformedPos = transformPoint(mat, pos);
+        skinnedPos[0] += transformedPos[0] * weight;
+        skinnedPos[1] += transformedPos[1] * weight;
+        skinnedPos[2] += transformedPos[2] * weight;
+        if (normals) {
+          const transformedNorm = transformNormal(mat, norm);
+          skinnedNorm[0] += transformedNorm[0] * weight;
+          skinnedNorm[1] += transformedNorm[1] * weight;
+          skinnedNorm[2] += transformedNorm[2] * weight;
+        }
+      }
+    }
+    skinnedVerts[vi] = skinnedPos[0];
+    skinnedVerts[vi + 1] = skinnedPos[1];
+    skinnedVerts[vi + 2] = skinnedPos[2];
+    if (normals) {
+      const len = Math.sqrt(skinnedNorm[0] ** 2 + skinnedNorm[1] ** 2 + skinnedNorm[2] ** 2);
+      skinnedNormals[vi] = len > 0 ? skinnedNorm[0] / len : 0;
+      skinnedNormals[vi + 1] = len > 0 ? skinnedNorm[1] / len : 1;
+      skinnedNormals[vi + 2] = len > 0 ? skinnedNorm[2] / len : 0;
+    }
+  }
+  return { vertices: skinnedVerts, normals: skinnedNormals };
+}
+function tri(size = 1, centerX = 0, centerY = 0) {
+  const h = size * Math.sqrt(3) / 2;
+  const verts = [
+    centerX,
+    centerY + h * 2 / 3,
+    centerX - size / 2,
+    centerY - h / 3,
+    centerX + size / 2,
+    centerY - h / 3
+  ];
+  return new VertexSource(verts);
+}
+function quad(width = 1, height = 1, centerX = 0, centerY = 0) {
+  const hw = width / 2, hh = height / 2;
+  const verts = [
+    // Triangle 1
+    centerX - hw,
+    centerY - hh,
+    centerX + hw,
+    centerY - hh,
+    centerX + hw,
+    centerY + hh,
+    // Triangle 2
+    centerX - hw,
+    centerY - hh,
+    centerX + hw,
+    centerY + hh,
+    centerX - hw,
+    centerY + hh
+  ];
+  return new VertexSource(verts);
+}
+function poly(sides, radius = 1, centerX = 0, centerY = 0) {
+  const verts = [];
+  for (let i = 0; i < sides; i++) {
+    const a1 = i / sides * Math.PI * 2 - Math.PI / 2;
+    const a2 = (i + 1) / sides * Math.PI * 2 - Math.PI / 2;
+    verts.push(centerX, centerY);
+    verts.push(centerX + Math.cos(a1) * radius, centerY + Math.sin(a1) * radius);
+    verts.push(centerX + Math.cos(a2) * radius, centerY + Math.sin(a2) * radius);
+  }
+  return new VertexSource(verts);
+}
+function circle(radius = 1, centerX = 0, centerY = 0, segments = 32) {
+  return poly(segments, radius, centerX, centerY);
+}
+function line(x1, y1, x2, y2, thickness = 0.02) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const nx = -dy / len * thickness / 2;
+  const ny = dx / len * thickness / 2;
+  const verts = [
+    x1 + nx,
+    y1 + ny,
+    x1 - nx,
+    y1 - ny,
+    x2 - nx,
+    y2 - ny,
+    x1 + nx,
+    y1 + ny,
+    x2 - nx,
+    y2 - ny,
+    x2 + nx,
+    y2 + ny
+  ];
+  return new VertexSource(verts);
+}
+function ring(outerRadius = 1, innerRadius = 0.5, centerX = 0, centerY = 0, segments = 32) {
+  const verts = [];
+  for (let i = 0; i < segments; i++) {
+    const a1 = i / segments * Math.PI * 2;
+    const a2 = (i + 1) / segments * Math.PI * 2;
+    const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
+    const cos2 = Math.cos(a2), sin2 = Math.sin(a2);
+    verts.push(centerX + cos1 * innerRadius, centerY + sin1 * innerRadius);
+    verts.push(centerX + cos1 * outerRadius, centerY + sin1 * outerRadius);
+    verts.push(centerX + cos2 * outerRadius, centerY + sin2 * outerRadius);
+    verts.push(centerX + cos1 * innerRadius, centerY + sin1 * innerRadius);
+    verts.push(centerX + cos2 * outerRadius, centerY + sin2 * outerRadius);
+    verts.push(centerX + cos2 * innerRadius, centerY + sin2 * innerRadius);
+  }
+  return new VertexSource(verts);
+}
+function cube(size = 0.5) {
+  const s = size;
+  const corners = [
+    [-s, -s, s],
+    // 0: front-bottom-left
+    [s, -s, s],
+    // 1: front-bottom-right
+    [s, s, s],
+    // 2: front-top-right
+    [-s, s, s],
+    // 3: front-top-left
+    [-s, -s, -s],
+    // 4: back-bottom-left
+    [s, -s, -s],
+    // 5: back-bottom-right
+    [s, s, -s],
+    // 6: back-top-right
+    [-s, s, -s]
+    // 7: back-top-left
+  ];
+  const faces = [
+    { indices: [0, 1, 2, 0, 2, 3], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // front (0)
+    { indices: [5, 4, 7, 5, 7, 6], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // back (1)
+    { indices: [3, 2, 6, 3, 6, 7], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // top (2)
+    { indices: [4, 5, 1, 4, 1, 0], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // bottom (3)
+    { indices: [1, 5, 6, 1, 6, 2], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
+    // right (4)
+    { indices: [4, 0, 3, 4, 3, 7], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] }
+    // left (5)
+  ];
+  const verts = [];
+  const uvs = [];
+  const faceIds = [];
+  for (let faceIdx = 0; faceIdx < faces.length; faceIdx++) {
+    const face = faces[faceIdx];
+    for (let i = 0; i < face.indices.length; i++) {
+      verts.push(...corners[face.indices[i]]);
+      uvs.push(...face.uvs[i]);
+      faceIds.push(faceIdx);
+    }
+  }
+  const vs = new VertexSource(verts);
+  vs.uvs = uvs;
+  vs.faceIds = faceIds;
+  vs.is3D = true;
+  return vs;
+}
+function sphere(radius = 0.5, segments = 32, rings = 16) {
+  const verts = [];
+  const normals = [];
+  const uvs = [];
+  for (let ring2 = 0; ring2 <= rings; ring2++) {
+    const theta = ring2 / rings * Math.PI;
+    const sinTheta = Math.sin(theta);
+    const cosTheta = Math.cos(theta);
+    for (let seg = 0; seg <= segments; seg++) {
+      const phi = seg / segments * Math.PI * 2;
+      const sinPhi = Math.sin(phi);
+      const cosPhi = Math.cos(phi);
+      const nx = sinTheta * cosPhi;
+      const ny = cosTheta;
+      const nz = sinTheta * sinPhi;
+      const x2 = nx * radius;
+      const y = ny * radius;
+      const z = nz * radius;
+      const u = seg / segments;
+      const v2 = ring2 / rings;
+      verts.push(x2, y, z);
+      normals.push(nx, ny, nz);
+      uvs.push(u, v2);
+    }
+  }
+  const outVerts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const stride = segments + 1;
+  for (let ring2 = 0; ring2 < rings; ring2++) {
+    for (let seg = 0; seg < segments; seg++) {
+      const i0 = ring2 * stride + seg;
+      const i1 = i0 + 1;
+      const i2 = i0 + stride;
+      const i3 = i2 + 1;
+      const indices = [i0, i2, i1, i1, i2, i3];
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2]);
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2]);
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
+      }
+    }
+  }
+  const vs = new VertexSource(outVerts);
+  vs.normals = outNormals;
+  vs.uvs = outUVs;
+  vs.is3D = true;
+  return vs;
+}
+function plane(width = 1, height = 1, subdivisionsX = 1, subdivisionsY = 1) {
+  const verts = [];
+  const normals = [];
+  const uvs = [];
+  const halfW = width / 2;
+  const halfH = height / 2;
+  for (let y = 0; y <= subdivisionsY; y++) {
+    for (let x2 = 0; x2 <= subdivisionsX; x2++) {
+      const u = x2 / subdivisionsX;
+      const v2 = y / subdivisionsY;
+      const px = -halfW + u * width;
+      const pz = -halfH + v2 * height;
+      verts.push(px, 0, pz);
+      normals.push(0, 1, 0);
+      uvs.push(u, v2);
+    }
+  }
+  const outVerts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const stride = subdivisionsX + 1;
+  for (let y = 0; y < subdivisionsY; y++) {
+    for (let x2 = 0; x2 < subdivisionsX; x2++) {
+      const i0 = y * stride + x2;
+      const i1 = i0 + 1;
+      const i2 = i0 + stride;
+      const i3 = i2 + 1;
+      const indices = [i0, i2, i1, i1, i2, i3];
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2]);
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2]);
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
+      }
+    }
+  }
+  const vs = new VertexSource(outVerts);
+  vs.normals = outNormals;
+  vs.uvs = outUVs;
+  vs.is3D = true;
+  return vs;
+}
+function torus(radius = 0.4, tubeRadius = 0.15, radialSegments = 32, tubularSegments = 16) {
+  const verts = [];
+  const normals = [];
+  const uvs = [];
+  for (let i = 0; i <= radialSegments; i++) {
+    const u = i / radialSegments;
+    const theta = u * Math.PI * 2;
+    for (let j = 0; j <= tubularSegments; j++) {
+      const v2 = j / tubularSegments;
+      const phi = v2 * Math.PI * 2;
+      const x2 = (radius + tubeRadius * Math.cos(phi)) * Math.cos(theta);
+      const y = tubeRadius * Math.sin(phi);
+      const z = (radius + tubeRadius * Math.cos(phi)) * Math.sin(theta);
+      const cx = radius * Math.cos(theta);
+      const cz = radius * Math.sin(theta);
+      const nx = x2 - cx;
+      const ny = y;
+      const nz = z - cz;
+      const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      verts.push(x2, y, z);
+      normals.push(nx / len, ny / len, nz / len);
+      uvs.push(u, v2);
+    }
+  }
+  const outVerts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const stride = tubularSegments + 1;
+  for (let i = 0; i < radialSegments; i++) {
+    for (let j = 0; j < tubularSegments; j++) {
+      const i0 = i * stride + j;
+      const i1 = i0 + 1;
+      const i2 = i0 + stride;
+      const i3 = i2 + 1;
+      const indices = [i0, i1, i2, i1, i3, i2];
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2]);
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2]);
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
+      }
+    }
+  }
+  const vs = new VertexSource(outVerts);
+  vs.normals = outNormals;
+  vs.uvs = outUVs;
+  vs.is3D = true;
+  return vs;
+}
+function cylinder(radius = 0.3, height = 1, radialSegments = 32, heightSegments = 1, caps = true) {
+  const verts = [];
+  const normals = [];
+  const uvs = [];
+  const halfHeight = height / 2;
+  for (let y = 0; y <= heightSegments; y++) {
+    const v2 = y / heightSegments;
+    const py = -halfHeight + v2 * height;
+    for (let i = 0; i <= radialSegments; i++) {
+      const u = i / radialSegments;
+      const theta = u * Math.PI * 2;
+      const cosT = Math.cos(theta);
+      const sinT = Math.sin(theta);
+      verts.push(cosT * radius, py, sinT * radius);
+      normals.push(cosT, 0, sinT);
+      uvs.push(u, v2);
+    }
+  }
+  const outVerts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const stride = radialSegments + 1;
+  for (let y = 0; y < heightSegments; y++) {
+    for (let i = 0; i < radialSegments; i++) {
+      const i0 = y * stride + i;
+      const i1 = i0 + 1;
+      const i2 = i0 + stride;
+      const i3 = i2 + 1;
+      const indices = [i0, i2, i1, i1, i2, i3];
+      for (const idx of indices) {
+        outVerts.push(verts[idx * 3], verts[idx * 3 + 1], verts[idx * 3 + 2]);
+        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2]);
+        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
+      }
+    }
+  }
+  if (caps) {
+    for (let i = 0; i < radialSegments; i++) {
+      const theta1 = i / radialSegments * Math.PI * 2;
+      const theta2 = (i + 1) / radialSegments * Math.PI * 2;
+      outVerts.push(0, halfHeight, 0);
+      outNormals.push(0, 1, 0);
+      outUVs.push(0.5, 0.5);
+      outVerts.push(Math.cos(theta2) * radius, halfHeight, Math.sin(theta2) * radius);
+      outNormals.push(0, 1, 0);
+      outUVs.push(0.5 + Math.cos(theta2) * 0.5, 0.5 + Math.sin(theta2) * 0.5);
+      outVerts.push(Math.cos(theta1) * radius, halfHeight, Math.sin(theta1) * radius);
+      outNormals.push(0, 1, 0);
+      outUVs.push(0.5 + Math.cos(theta1) * 0.5, 0.5 + Math.sin(theta1) * 0.5);
+    }
+    for (let i = 0; i < radialSegments; i++) {
+      const theta1 = i / radialSegments * Math.PI * 2;
+      const theta2 = (i + 1) / radialSegments * Math.PI * 2;
+      outVerts.push(0, -halfHeight, 0);
+      outNormals.push(0, -1, 0);
+      outUVs.push(0.5, 0.5);
+      outVerts.push(Math.cos(theta1) * radius, -halfHeight, Math.sin(theta1) * radius);
+      outNormals.push(0, -1, 0);
+      outUVs.push(0.5 + Math.cos(theta1) * 0.5, 0.5 + Math.sin(theta1) * 0.5);
+      outVerts.push(Math.cos(theta2) * radius, -halfHeight, Math.sin(theta2) * radius);
+      outNormals.push(0, -1, 0);
+      outUVs.push(0.5 + Math.cos(theta2) * 0.5, 0.5 + Math.sin(theta2) * 0.5);
+    }
+  }
+  const vs = new VertexSource(outVerts);
+  vs.normals = outNormals;
+  vs.uvs = outUVs;
+  vs.is3D = true;
+  return vs;
+}
+function cone(radius = 0.3, height = 1, radialSegments = 32, caps = true) {
+  const outVerts = [];
+  const outNormals = [];
+  const outUVs = [];
+  const halfHeight = height / 2;
+  const apex = halfHeight;
+  const base = -halfHeight;
+  const slopeAngle = Math.atan2(radius, height);
+  const ny = Math.sin(slopeAngle);
+  const nxz = Math.cos(slopeAngle);
+  for (let i = 0; i < radialSegments; i++) {
+    const theta1 = i / radialSegments * Math.PI * 2;
+    const theta2 = (i + 1) / radialSegments * Math.PI * 2;
+    const cosT1 = Math.cos(theta1), sinT1 = Math.sin(theta1);
+    const cosT2 = Math.cos(theta2), sinT2 = Math.sin(theta2);
+    outVerts.push(0, apex, 0);
+    const midTheta = (theta1 + theta2) / 2;
+    outNormals.push(Math.cos(midTheta) * nxz, ny, Math.sin(midTheta) * nxz);
+    outUVs.push(0.5, 0);
+    outVerts.push(cosT1 * radius, base, sinT1 * radius);
+    outNormals.push(cosT1 * nxz, ny, sinT1 * nxz);
+    outUVs.push(i / radialSegments, 1);
+    outVerts.push(cosT2 * radius, base, sinT2 * radius);
+    outNormals.push(cosT2 * nxz, ny, sinT2 * nxz);
+    outUVs.push((i + 1) / radialSegments, 1);
+  }
+  if (caps) {
+    for (let i = 0; i < radialSegments; i++) {
+      const theta1 = i / radialSegments * Math.PI * 2;
+      const theta2 = (i + 1) / radialSegments * Math.PI * 2;
+      outVerts.push(0, base, 0);
+      outNormals.push(0, -1, 0);
+      outUVs.push(0.5, 0.5);
+      outVerts.push(Math.cos(theta1) * radius, base, Math.sin(theta1) * radius);
+      outNormals.push(0, -1, 0);
+      outUVs.push(0.5 + Math.cos(theta1) * 0.5, 0.5 + Math.sin(theta1) * 0.5);
+      outVerts.push(Math.cos(theta2) * radius, base, Math.sin(theta2) * radius);
+      outNormals.push(0, -1, 0);
+      outUVs.push(0.5 + Math.cos(theta2) * 0.5, 0.5 + Math.sin(theta2) * 0.5);
+    }
+  }
+  const vs = new VertexSource(outVerts);
+  vs.normals = outNormals;
+  vs.uvs = outUVs;
+  vs.is3D = true;
+  return vs;
+}
 class VertexSource {
   constructor(vertices) {
     this.vertices = vertices;
@@ -35,7 +1175,7 @@ class VertexSource {
   }
   scale(x2 = 1, y, z) {
     if (y === void 0) y = x2;
-    if (z === void 0) z = 1;
+    if (z === void 0) z = x2;
     return this._addTransform("scale", { x: x2, y, z });
   }
   offset(x2 = 0, y = 0, z = 0) {
@@ -97,6 +1237,184 @@ class VertexSource {
     }
     this.vertices = repeated;
     return this;
+  }
+  // 3D grid instancing with faceId support
+  // Creates a grid of copies, each with unique faceId for variation
+  // nx, ny, nz: number of copies in each direction
+  // spacing: distance between copies (or {x, y, z} object)
+  grid(nx = 2, ny = 2, nz = 1, spacing = 1) {
+    const sx = typeof spacing === "object" ? spacing.x || 1 : spacing;
+    const sy = typeof spacing === "object" ? spacing.y || 1 : spacing;
+    const sz = typeof spacing === "object" ? spacing.z || 1 : spacing;
+    const orig = this.vertices;
+    const stride = this.is3D ? 3 : 2;
+    const vertexCount = orig.length / stride;
+    const maxVertices = 5e6;
+    const totalInstances = nx * ny * nz;
+    const totalVertices = vertexCount * totalInstances;
+    if (totalVertices > maxVertices) {
+      const maxInstances = Math.floor(maxVertices / vertexCount);
+      const scale = Math.cbrt(maxInstances / totalInstances);
+      const newNx = Math.max(1, Math.floor(nx * scale));
+      const newNy = Math.max(1, Math.floor(ny * scale));
+      const newNz = Math.max(1, Math.floor(nz * scale));
+      console.warn(`grid(${nx}, ${ny}, ${nz}) would create ${totalVertices.toLocaleString()} vertices. Limiting to grid(${newNx}, ${newNy}, ${newNz}) to prevent crash. Use lower-poly geometry (e.g., sphere(0.1, 8, 4)) for large grids.`);
+      nx = newNx;
+      ny = newNy;
+      nz = newNz;
+    }
+    const newVerts = [];
+    const newNormals = this.normals ? [] : null;
+    const newUVs = this.uvs ? [] : null;
+    const newColors = this.colors ? [] : null;
+    const newFaceIds = [];
+    const offsetX = -((nx - 1) * sx) / 2;
+    const offsetY = -((ny - 1) * sy) / 2;
+    const offsetZ = -((nz - 1) * sz) / 2;
+    let instanceId = 0;
+    for (let iz = 0; iz < nz; iz++) {
+      for (let iy = 0; iy < ny; iy++) {
+        for (let ix = 0; ix < nx; ix++) {
+          const dx = offsetX + ix * sx;
+          const dy = offsetY + iy * sy;
+          const dz = offsetZ + iz * sz;
+          for (let v2 = 0; v2 < vertexCount; v2++) {
+            const vi = v2 * stride;
+            newVerts.push(orig[vi] + dx, orig[vi + 1] + dy);
+            if (stride === 3) newVerts.push(orig[vi + 2] + dz);
+            if (this.normals) {
+              const ni = v2 * 3;
+              newNormals.push(this.normals[ni], this.normals[ni + 1], this.normals[ni + 2]);
+            }
+            if (this.uvs) {
+              const ui = v2 * 2;
+              newUVs.push(this.uvs[ui], this.uvs[ui + 1]);
+            }
+            if (this.colors) {
+              const ci = v2 * 4;
+              newColors.push(this.colors[ci], this.colors[ci + 1], this.colors[ci + 2], this.colors[ci + 3]);
+            }
+            newFaceIds.push(instanceId);
+          }
+          instanceId++;
+        }
+      }
+    }
+    this.vertices = newVerts;
+    if (newNormals) this.normals = newNormals;
+    if (newUVs) this.uvs = newUVs;
+    if (newColors) this.colors = newColors;
+    this.faceIds = newFaceIds;
+    this.instanceCount = nx * ny * nz;
+    return this;
+  }
+  // Scatter instances randomly
+  // count: number of instances
+  // range: {x, y, z} spread range (centered at origin)
+  // seed: optional random seed for reproducibility
+  scatter(count = 10, range = { x: 2, y: 2, z: 0 }, seed = 0) {
+    const random = () => {
+      seed = seed * 1103515245 + 12345 & 2147483647;
+      return seed / 2147483647;
+    };
+    const orig = this.vertices;
+    const stride = this.is3D ? 3 : 2;
+    const vertexCount = orig.length / stride;
+    const maxVertices = 5e6;
+    const totalVertices = vertexCount * count;
+    if (totalVertices > maxVertices) {
+      const newCount = Math.floor(maxVertices / vertexCount);
+      console.warn(`scatter(${count}) would create ${totalVertices.toLocaleString()} vertices. Limiting to scatter(${newCount}) to prevent crash. Use lower-poly geometry for large scatter counts.`);
+      count = newCount;
+    }
+    const newVerts = [];
+    const newNormals = this.normals ? [] : null;
+    const newUVs = this.uvs ? [] : null;
+    const newColors = this.colors ? [] : null;
+    const newFaceIds = [];
+    for (let i = 0; i < count; i++) {
+      const dx = (random() - 0.5) * range.x;
+      const dy = (random() - 0.5) * range.y;
+      const dz = (random() - 0.5) * (range.z || 0);
+      for (let v2 = 0; v2 < vertexCount; v2++) {
+        const vi = v2 * stride;
+        newVerts.push(orig[vi] + dx, orig[vi + 1] + dy);
+        if (stride === 3) newVerts.push(orig[vi + 2] + dz);
+        if (this.normals) {
+          const ni = v2 * 3;
+          newNormals.push(this.normals[ni], this.normals[ni + 1], this.normals[ni + 2]);
+        }
+        if (this.uvs) {
+          const ui = v2 * 2;
+          newUVs.push(this.uvs[ui], this.uvs[ui + 1]);
+        }
+        if (this.colors) {
+          const ci = v2 * 4;
+          newColors.push(this.colors[ci], this.colors[ci + 1], this.colors[ci + 2], this.colors[ci + 3]);
+        }
+        newFaceIds.push(i);
+      }
+    }
+    this.vertices = newVerts;
+    if (newNormals) this.normals = newNormals;
+    if (newUVs) this.uvs = newUVs;
+    if (newColors) this.colors = newColors;
+    this.faceIds = newFaceIds;
+    this.instanceCount = count;
+    return this;
+  }
+  // ========== Animation ==========
+  // Animate a skinned model using embedded animation clips
+  // clipName: name of animation clip (or uses first clip if not found)
+  // timeFunc: function returning current time, e.g., () => time
+  // Returns new VertexSource with animated vertices (called each frame)
+  animate(clipName = null, timeFunc = () => 0) {
+    if (!this.joints || !this.weights || !this._gltf) {
+      console.warn("animate() called on model without skinning data");
+      return this;
+    }
+    if (!this._skeleton) {
+      this._skeleton = extractSkeleton(this._gltf, this._binBuffer);
+      this._animations = extractAnimations(this._gltf, this._binBuffer);
+      if (this._animations.length > 0) {
+        console.log(
+          `Loaded ${this._animations.length} animation(s):`,
+          this._animations.map((a2) => `${a2.name} (${a2.duration.toFixed(2)}s)`).join(", ")
+        );
+      }
+    }
+    if (!this._skeleton || this._animations.length === 0) {
+      console.warn("Model has no skeleton or animations");
+      return this;
+    }
+    const animated = new VertexSource([...this.vertices]);
+    animated.is3D = this.is3D;
+    animated.normals = this.normals ? [...this.normals] : null;
+    animated.uvs = this.uvs ? [...this.uvs] : null;
+    animated.tangents = this.tangents ? [...this.tangents] : null;
+    animated.colors = this.colors ? [...this.colors] : null;
+    animated.faceIds = this.faceIds ? [...this.faceIds] : null;
+    animated.transforms = [...this.transforms];
+    animated._animClip = clipName;
+    animated._animTimeFunc = timeFunc;
+    animated._skeleton = this._skeleton;
+    animated._animations = this._animations;
+    animated._gltf = this._gltf;
+    animated._originalVerts = this.vertices;
+    animated._originalNormals = this.normals;
+    animated.joints = this.joints;
+    animated.weights = this.weights;
+    animated._normCenter = this._normCenter;
+    animated._normScale = this._normScale;
+    return animated;
+  }
+  // Get list of available animation clip names
+  getAnimations() {
+    if (!this._gltf) return [];
+    if (!this._animations) {
+      this._animations = extractAnimations(this._gltf, this._binBuffer);
+    }
+    return this._animations.map((a2) => ({ name: a2.name, duration: a2.duration }));
   }
 }
 function generateVertexGlsl(vertexSource, precision, options = {}) {
@@ -1270,12 +2588,31 @@ Output.prototype.registerSprite = function(spriteLevel, config) {
     blend: BLEND_MODES$1[blendMode] || BLEND_MODES$1.normal,
     depth: { enable: has3D, func: "less" }
   });
-  this.sprites.set(spriteLevel, {
+  const spriteConfig = {
     drawCommand,
     positionBuffer,
+    normalBuffer,
     blendMode,
     has3D
-  });
+  };
+  if (vertexSource && vertexSource._animTimeFunc) {
+    spriteConfig.animation = {
+      skeleton: vertexSource._skeleton,
+      animations: vertexSource._animations,
+      clipName: vertexSource._animClip,
+      timeFunc: vertexSource._animTimeFunc,
+      originalVerts: vertexSource._originalVerts || vertexSource.vertices,
+      originalNormals: vertexSource._originalNormals || vertexSource.normals,
+      joints: vertexSource.joints,
+      weights: vertexSource.weights,
+      gltf: vertexSource._gltf,
+      normCenter: vertexSource._normCenter,
+      // For denormalize/renormalize during skinning
+      normScale: vertexSource._normScale,
+      is3D: has3D
+    };
+  }
+  this.sprites.set(spriteLevel, spriteConfig);
 };
 Output.prototype.clearSprites = function() {
   for (const [level, sprite] of this.sprites) {
@@ -1327,6 +2664,43 @@ Output.prototype._renderSprites = function(props) {
         depth: needs3D ? 1 : void 0,
         framebuffer: targetFbo
       });
+    }
+    if (sprite.animation) {
+      const anim = sprite.animation;
+      const time = typeof anim.timeFunc === "function" ? anim.timeFunc() : 0;
+      const clipName = typeof anim.clipName === "function" ? anim.clipName() : anim.clipName;
+      const clip = anim.animations.find((a2) => a2.name === clipName) || anim.animations[0];
+      const loopedTime = clip ? time % clip.duration : time;
+      const skinningMatrices = computeSkinningMatrices(
+        anim.skeleton,
+        anim.animations,
+        clipName,
+        loopedTime,
+        anim.gltf,
+        anim.normCenter,
+        anim.normScale
+      );
+      if (skinningMatrices) {
+        const skinned = applySkinning(
+          anim.originalVerts,
+          anim.originalNormals,
+          anim.joints,
+          anim.weights,
+          skinningMatrices
+        );
+        const skinnedVec3 = [];
+        for (let j = 0; j < skinned.vertices.length; j += 3) {
+          skinnedVec3.push([skinned.vertices[j], skinned.vertices[j + 1], skinned.vertices[j + 2]]);
+        }
+        sprite.positionBuffer(skinnedVec3);
+        if (sprite.normalBuffer && skinned.normals) {
+          const skinnedNormals = [];
+          for (let j = 0; j < skinned.normals.length; j += 3) {
+            skinnedNormals.push([skinned.normals[j], skinned.normals[j + 1], skinned.normals[j + 2]]);
+          }
+          sprite.normalBuffer(skinnedNormals);
+        }
+      }
     }
     targetFbo.use(() => {
       sprite.drawCommand(props);
@@ -1654,6 +3028,59 @@ function Screen(options) {
     }).catch((err) => reject(err));
   });
 }
+class HydraError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "HydraError";
+    this.type = details.type || "unknown";
+    this.line = details.line;
+    this.column = details.column;
+    this.source = details.source;
+    this.suggestion = details.suggestion;
+    this.url = details.url;
+    this.originalError = details.originalError;
+  }
+  // Format for console display
+  toString() {
+    let str = `[Hydra ${this.type}] ${this.message}`;
+    if (this.line != null) {
+      str += ` (line ${this.line}${this.column != null ? `:${this.column}` : ""})`;
+    }
+    if (this.suggestion) {
+      str += `
+  Suggestion: ${this.suggestion}`;
+    }
+    return str;
+  }
+  // Format for UI display
+  toUserMessage() {
+    return {
+      title: this.type.charAt(0).toUpperCase() + this.type.slice(1) + " Error",
+      message: this.message,
+      line: this.line,
+      column: this.column,
+      suggestion: this.suggestion
+    };
+  }
+}
+let SyntaxError$1 = class SyntaxError2 extends HydraError {
+  constructor(message, details = {}) {
+    super(message, { ...details, type: "syntax" });
+    this.name = "HydraSyntaxError";
+  }
+};
+class LoadError extends HydraError {
+  constructor(message, details = {}) {
+    super(message, { ...details, type: "load" });
+    this.name = "HydraLoadError";
+  }
+}
+class RuntimeError extends HydraError {
+  constructor(message, details = {}) {
+    super(message, { ...details, type: "runtime" });
+    this.name = "HydraRuntimeError";
+  }
+}
 class HydraSource {
   constructor({ regl: regl2, wgsl, hydraSynth, width, height, chanNum, pb, label = "" }) {
     // cache for the canvases, so we don't create them every time
@@ -1791,7 +3218,17 @@ class HydraSource {
       self2.height = self2.src.videoHeight;
       self2.tex = this.makeTexture({ width: self2.width, height: self2.height, data: self2.src, ...params });
       self2.active = true;
-    }).catch((err) => console.log("could not get camera", err));
+    }).catch((err) => {
+      const error = new LoadError(`Could not access camera${index !== void 0 ? ` (index ${index})` : ""}`, {
+        originalError: err,
+        suggestion: "Check camera permissions or try a different camera index"
+      });
+      if (self2.hydraSynth && self2.hydraSynth._emitError) {
+        self2.hydraSynth._emitError(error);
+      } else {
+        console.error(error.toString());
+      }
+    });
   }
   initVideo(url = "", params) {
     this.what = "initVideo";
@@ -1807,9 +3244,21 @@ class HydraSource {
       this.width = vid.videoWidth;
       this.height = vid.videoHeight;
       vid.play();
-      self.tex = this.makeTexture({ width: this.width, height: this.height, data: this.src, ...params });
+      this.tex = this.makeTexture({ width: this.width, height: this.height, data: this.src, ...params });
       this.dynamic = true;
       this.active = true;
+    });
+    vid.addEventListener("error", () => {
+      const error = new LoadError(`Could not load video: ${url}`, {
+        url,
+        originalError: vid.error,
+        suggestion: "Check that the video URL is correct and accessible"
+      });
+      if (this.hydraSynth && this.hydraSynth._emitError) {
+        this.hydraSynth._emitError(error);
+      } else {
+        console.error(error.toString());
+      }
     });
     vid.src = url;
   }
@@ -1819,7 +3268,6 @@ class HydraSource {
     this.noteTime();
     const img = document.createElement("img");
     img.crossOrigin = "anonymous";
-    img.src = url;
     this.oneShotDone = false;
     let self2 = this;
     img.onload = () => {
@@ -1828,6 +3276,18 @@ class HydraSource {
       self2.active = true;
       self2.tex = this.makeTexture({ width: self2.width, height: self2.height, data: self2.src, ...params });
     };
+    img.onerror = () => {
+      const error = new LoadError(`Could not load image: ${url}`, {
+        url,
+        suggestion: "Check that the image URL is correct and accessible"
+      });
+      if (self2.hydraSynth && self2.hydraSynth._emitError) {
+        self2.hydraSynth._emitError(error);
+      } else {
+        console.error(error.toString());
+      }
+    };
+    img.src = url;
   }
   initStream(streamName, params) {
     let self2 = this;
@@ -1857,7 +3317,17 @@ class HydraSource {
       self2.tex = self2.regl.texture({ data: self2.src, ...params });
       this.active = true;
       self2.dynamic = true;
-    }).catch((err) => console.log("could not get screen", err));
+    }).catch((err) => {
+      const error = new LoadError("Could not capture screen", {
+        originalError: err,
+        suggestion: "Check screen sharing permissions or try again"
+      });
+      if (self2.hydraSynth && self2.hydraSynth._emitError) {
+        self2.hydraSynth._emitError(error);
+      } else {
+        console.error(error.toString());
+      }
+    });
   }
   // Creates a canvas and returns the 2d context
   initCanvas(width = 1e3, height = 1e3) {
@@ -3012,7 +4482,7 @@ function createComponentProxy(baseName) {
     get(target, prop) {
       if (typeof prop === "string") {
         const glslPath = `${baseName}.${prop}`;
-        const wgslPath = `ourIn.${baseName}.${prop}`;
+        const wgslPath = `${baseName}.${prop}`;
         return new VaryingRef(glslPath, wgslPath);
       }
       return void 0;
@@ -3037,11 +4507,11 @@ const v = new Proxy({}, {
       case "viewDir":
         return createComponentProxy("v_viewDir");
       case "depth":
-        return new VaryingRef("v_depth", "ourIn.v_depth");
+        return new VaryingRef("v_depth", "v_depth");
       case "uv":
         return createComponentProxy("uv");
       case "faceId":
-        return new VaryingRef("v_faceId", "ourIn.faceId");
+        return new VaryingRef("v_faceId", "v_faceId");
       default:
         console.warn(`Unknown varying property: v.${prop}`);
         return void 0;
@@ -3716,7 +5186,20 @@ GlslSource.prototype.compile = function(transforms) {
   });
   let frag;
   if (this.isWGSL) {
-    frag = `${Object.values(utilityWgsl).map((transform) => {
+    frag = `
+  // Module-scope vertex data (copied from ourIn at start of main)
+  var<private> v_texcoord: vec2<f32>;
+  var<private> v_faceId: f32;
+  var<private> v_position: vec3<f32>;
+  var<private> v_normal: vec3<f32>;
+  var<private> v_worldNormal: vec3<f32>;
+  var<private> v_tangent: vec3<f32>;
+  var<private> v_bitangent: vec3<f32>;
+  var<private> v_viewDir: vec3<f32>;
+  var<private> v_depth: f32;
+  var<private> v_color: vec4<f32>;
+
+${Object.values(utilityWgsl).map((transform) => {
       return `
             ${transform.wgsl}
           `;
@@ -3731,6 +5214,18 @@ GlslSource.prototype.compile = function(transforms) {
 
   @fragment
   fn main(ourIn: VertexOutput) -> @location(0) vec4<f32> {
+    // Copy vertex data to module-scope vars for use in functions
+    v_texcoord = ourIn.texcoord;
+    v_faceId = ourIn.faceId;
+    v_position = ourIn.v_position;
+    v_normal = ourIn.v_normal;
+    v_worldNormal = ourIn.v_worldNormal;
+    v_tangent = ourIn.v_tangent;
+    v_bitangent = ourIn.v_bitangent;
+    v_viewDir = ourIn.v_viewDir;
+    v_depth = ourIn.v_depth;
+    v_color = ourIn.v_color;
+
     let c : vec4<f32> = vec4<f32>(1.0, 0.0, 0.0, 1);
     var st : vec2<f32>;
 
@@ -5161,7 +6656,7 @@ const glslFunctions = () => [
    float lighting = ambient + (1.0 - ambient) * diff;
    return vec4(_c0.rgb * lighting, _c0.a);`,
     wgsl: `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
-   let normal = normalize(ourIn.v_worldNormal);
+   let normal = normalize(v_worldNormal);
    let diff = max(0.0, dot(normal, lightDir));
    let lighting = ambient + (1.0 - ambient) * diff;
    return vec4<f32>(_c0.rgb * lighting, _c0.a);`
@@ -5185,10 +6680,321 @@ const glslFunctions = () => [
    vec3 viewDir = normalize(v_viewDir);
    float f = pow(1.0 - abs(dot(normal, viewDir)), power) * intensity;
    return vec4(_c0.rgb + f, _c0.a);`,
-    wgsl: `   let normal = normalize(ourIn.v_worldNormal);
-   let viewDir = normalize(ourIn.v_viewDir);
+    wgsl: `   let normal = normalize(v_worldNormal);
+   let viewDir = normalize(v_viewDir);
    let f = pow(1.0 - abs(dot(normal, viewDir)), power) * intensity;
    return vec4<f32>(_c0.rgb + f, _c0.a);`
+  },
+  {
+    name: "specular",
+    type: "color",
+    inputs: [
+      {
+        type: "float",
+        name: "lx",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "ly",
+        default: 1
+      },
+      {
+        type: "float",
+        name: "lz",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "shininess",
+        default: 32
+      },
+      {
+        type: "float",
+        name: "intensity",
+        default: 1
+      }
+    ],
+    glsl: `   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   vec3 normal = normalize(v_worldNormal);
+   vec3 viewDir = normalize(v_viewDir);
+   vec3 halfDir = normalize(lightDir + viewDir);
+   float spec = pow(max(0.0, dot(normal, halfDir)), shininess) * intensity;
+   return vec4(_c0.rgb + spec, _c0.a);`,
+    wgsl: `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let normal = normalize(v_worldNormal);
+   let viewDir = normalize(v_viewDir);
+   let halfDir = normalize(lightDir + viewDir);
+   let spec = pow(max(0.0, dot(normal, halfDir)), shininess) * intensity;
+   return vec4<f32>(_c0.rgb + spec, _c0.a);`
+  },
+  {
+    name: "halfLambert",
+    type: "color",
+    inputs: [
+      {
+        type: "float",
+        name: "lx",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "ly",
+        default: 1
+      },
+      {
+        type: "float",
+        name: "lz",
+        default: 0
+      }
+    ],
+    glsl: `   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   vec3 normal = normalize(v_worldNormal);
+   float diff = dot(normal, lightDir) * 0.5 + 0.5;
+   return vec4(_c0.rgb * diff, _c0.a);`,
+    wgsl: `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let normal = normalize(v_worldNormal);
+   let diff = dot(normal, lightDir) * 0.5 + 0.5;
+   return vec4<f32>(_c0.rgb * diff, _c0.a);`
+  },
+  {
+    name: "toon",
+    type: "color",
+    inputs: [
+      {
+        type: "float",
+        name: "lx",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "ly",
+        default: 1
+      },
+      {
+        type: "float",
+        name: "lz",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "levels",
+        default: 4
+      }
+    ],
+    glsl: `   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   vec3 normal = normalize(v_worldNormal);
+   float diff = max(0.0, dot(normal, lightDir));
+   float toonShade = floor(diff * levels) / (levels - 1.0);
+   return vec4(_c0.rgb * toonShade, _c0.a);`,
+    wgsl: `   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let normal = normalize(v_worldNormal);
+   let diff = max(0.0, dot(normal, lightDir));
+   let toonShade = floor(diff * levels) / (levels - 1.0);
+   return vec4<f32>(_c0.rgb * toonShade, _c0.a);`
+  },
+  {
+    name: "outline",
+    type: "color",
+    inputs: [
+      {
+        type: "float",
+        name: "thickness",
+        default: 0.3
+      },
+      {
+        type: "float",
+        name: "r",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "g",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "b",
+        default: 0
+      }
+    ],
+    glsl: `   vec3 normal = normalize(v_worldNormal);
+   vec3 viewDir = normalize(v_viewDir);
+   float edge = 1.0 - abs(dot(normal, viewDir));
+   float outline = smoothstep(1.0 - thickness, 1.0, edge);
+   return vec4(mix(_c0.rgb, vec3(r, g, b), outline), _c0.a);`,
+    wgsl: `   let normal = normalize(v_worldNormal);
+   let viewDir = normalize(v_viewDir);
+   let edge = 1.0 - abs(dot(normal, viewDir));
+   let outlineAmt = smoothstep(1.0 - thickness, 1.0, edge);
+   return vec4<f32>(mix(_c0.rgb, vec3<f32>(r, g, b), outlineAmt), _c0.a);`
+  },
+  {
+    name: "vscale",
+    type: "src",
+    inputs: [
+      {
+        type: "float",
+        name: "value",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "scale",
+        default: 1
+      },
+      {
+        type: "float",
+        name: "offset",
+        default: 0
+      }
+    ],
+    glsl: `   float v = value * scale + offset;
+   return vec4(v, v, v, 1.0);`,
+    wgsl: `   let v = value * scale + offset;
+   return vec4<f32>(v, v, v, 1.0);`
+  },
+  {
+    name: "vcolor",
+    type: "src",
+    inputs: [
+      {
+        type: "float",
+        name: "value",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "scale",
+        default: 0.1
+      }
+    ],
+    glsl: `   float t = fract(value * scale);
+   // Rainbow color from hue
+   vec3 c = abs(mod(t * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0;
+   return vec4(clamp(c, 0.0, 1.0), 1.0);`,
+    wgsl: `   let t = fract(value * scale);
+   // Rainbow color from hue
+   let c = abs((t * 6.0 + vec3<f32>(0.0, 4.0, 2.0)) % 6.0 - 3.0) - 1.0;
+   return vec4<f32>(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);`
+  },
+  {
+    name: "normalMap",
+    type: "src",
+    inputs: [
+      {
+        type: "sampler2D",
+        name: "tex"
+      },
+      {
+        type: "float",
+        name: "strength",
+        default: 1
+      }
+    ],
+    glsl: `   // Read normal from texture (stored as RGB in tangent space)
+   vec3 texNormal = texture2D(tex, _st).rgb * 2.0 - 1.0;
+   texNormal.xy *= strength;
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix to transform from tangent space to world space
+   vec3 T = normalize(v_tangent);
+   vec3 B = normalize(v_bitangent);
+   vec3 N = normalize(v_worldNormal);
+   mat3 TBN = mat3(T, B, N);
+
+   // Transform normal to world space
+   vec3 worldNormal = normalize(TBN * texNormal);
+
+   // Output as color (remapped to 0-1 range for visualization)
+   return vec4(worldNormal * 0.5 + 0.5, 1.0);`,
+    wgsl: `   // Read normal from texture (stored as RGB in tangent space)
+   var texNormal = textureSample(tex, texSampler, _st).rgb * 2.0 - 1.0;
+   texNormal = vec3<f32>(texNormal.x * strength, texNormal.y * strength, texNormal.z);
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix to transform from tangent space to world space
+   let T = normalize(v_tangent);
+   let B = normalize(v_bitangent);
+   let N = normalize(v_worldNormal);
+
+   // Transform normal to world space (manual matrix multiply)
+   let worldNormal = normalize(T * texNormal.x + B * texNormal.y + N * texNormal.z);
+
+   // Output as color (remapped to 0-1 range for visualization)
+   return vec4<f32>(worldNormal * 0.5 + 0.5, 1.0);`
+  },
+  {
+    name: "normalMapDiffuse",
+    type: "color",
+    inputs: [
+      {
+        type: "sampler2D",
+        name: "tex"
+      },
+      {
+        type: "float",
+        name: "lx",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "ly",
+        default: 1
+      },
+      {
+        type: "float",
+        name: "lz",
+        default: 0
+      },
+      {
+        type: "float",
+        name: "ambient",
+        default: 0.2
+      },
+      {
+        type: "float",
+        name: "strength",
+        default: 1
+      }
+    ],
+    glsl: `   // Read normal from texture
+   vec3 texNormal = texture2D(tex, uv).rgb * 2.0 - 1.0;
+   texNormal.xy *= strength;
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix
+   vec3 T = normalize(v_tangent);
+   vec3 B = normalize(v_bitangent);
+   vec3 N = normalize(v_worldNormal);
+   mat3 TBN = mat3(T, B, N);
+
+   // Transform to world space
+   vec3 worldNormal = normalize(TBN * texNormal);
+
+   // Diffuse lighting with perturbed normal
+   vec3 lightDir = normalize(vec3(lx, ly, lz));
+   float diff = max(0.0, dot(worldNormal, lightDir));
+   float lighting = ambient + (1.0 - ambient) * diff;
+   return vec4(_c0.rgb * lighting, _c0.a);`,
+    wgsl: `   // Read normal from texture
+   var texNormal = textureSample(tex, texSampler, v_texcoord).rgb * 2.0 - 1.0;
+   texNormal = vec3<f32>(texNormal.x * strength, texNormal.y * strength, texNormal.z);
+   texNormal = normalize(texNormal);
+
+   // Build TBN matrix
+   let T = normalize(v_tangent);
+   let B = normalize(v_bitangent);
+   let N = normalize(v_worldNormal);
+
+   // Transform to world space
+   let worldNormal = normalize(T * texNormal.x + B * texNormal.y + N * texNormal.z);
+
+   // Diffuse lighting with perturbed normal
+   let lightDir = normalize(vec3<f32>(lx, ly, lz));
+   let diff = max(0.0, dot(worldNormal, lightDir));
+   let lighting = ambient + (1.0 - ambient) * diff;
+   return vec4<f32>(_c0.rgb * lighting, _c0.a);`
   }
 ];
 class GeneratorFactory {
@@ -23666,6 +25472,7 @@ function requireAstravel() {
 var astravelExports = requireAstravel();
 const watchListArray = ["time", "fps", "speed", "bpm"];
 const watchList = new Set(watchListArray);
+const WRAPPER_LINE_OFFSET = 1;
 function Deglobalize(textIn, prefix) {
   let textCleaned = textIn.replace(/[\u200B-\u200D\uFEFF]/g, "");
   let text = "async function* f() {\n" + textCleaned + "\n}";
@@ -23686,7 +25493,8 @@ function Deglobalize(textIn, prefix) {
     ast = Parser.parse(
       text,
       {
-        locations: false,
+        locations: true,
+        // Enable location tracking for error reporting
         ecmaVersion: "latest",
         allowReserved: true,
         allowAwaitOutsideFunction: true,
@@ -23694,9 +25502,16 @@ function Deglobalize(textIn, prefix) {
       }
     );
   } catch (err) {
-    console.log("Deglobalize err: " + err);
-    console.log(textCleaned);
-    return textCleaned;
+    const line2 = err.loc ? err.loc.line - WRAPPER_LINE_OFFSET : null;
+    const column = err.loc ? err.loc.column : null;
+    const lines = textCleaned.split("\n");
+    const errorLine = line2 && line2 > 0 && line2 <= lines.length ? lines[line2 - 1] : null;
+    throw new SyntaxError$1(err.message, {
+      line: line2,
+      column,
+      source: errorLine,
+      originalError: err
+    });
   }
   let state = {
     refTab: []
@@ -23722,543 +25537,6 @@ function stripOutStuff(inp) {
   if (firstX === -1 || lastX === -1) return inp;
   let outp = inp.substring(firstX + 1, lastX);
   return outp;
-}
-function parseObj(objText, options = {}) {
-  const { swapYZ = false } = options;
-  const vertices = [];
-  const colors = [];
-  const normals = [];
-  const uvs = [];
-  const faces = [];
-  const materialNames = [];
-  const materialToId = /* @__PURE__ */ new Map();
-  let currentMaterial = null;
-  const lines = objText.split("\n");
-  for (const line2 of lines) {
-    const parts = line2.trim().split(/\s+/);
-    if (parts[0] === "v") {
-      const x2 = parseFloat(parts[1]);
-      const y = parseFloat(parts[2]);
-      const z = parseFloat(parts[3]);
-      vertices.push(swapYZ ? [x2, z, y] : [x2, y, z]);
-      if (parts.length >= 7) {
-        colors.push([parseFloat(parts[4]), parseFloat(parts[5]), parseFloat(parts[6])]);
-      }
-    } else if (parts[0] === "vn") {
-      const x2 = parseFloat(parts[1]);
-      const y = parseFloat(parts[2]);
-      const z = parseFloat(parts[3]);
-      normals.push(swapYZ ? [x2, z, y] : [x2, y, z]);
-    } else if (parts[0] === "vt") {
-      uvs.push([parseFloat(parts[1]), parseFloat(parts[2])]);
-    } else if (parts[0] === "usemtl") {
-      const matName = parts.slice(1).join(" ");
-      if (!materialToId.has(matName)) {
-        materialToId.set(matName, materialNames.length);
-        materialNames.push(matName);
-      }
-      currentMaterial = materialToId.get(matName);
-    } else if (parts[0] === "f") {
-      const faceVerts = [];
-      const faceUVs = [];
-      const faceNormals = [];
-      for (let i = 1; i < parts.length; i++) {
-        const indices = parts[i].split("/");
-        faceVerts.push(parseInt(indices[0]) - 1);
-        if (indices[1]) faceUVs.push(parseInt(indices[1]) - 1);
-        if (indices[2]) faceNormals.push(parseInt(indices[2]) - 1);
-      }
-      faces.push({ verts: faceVerts, uvs: faceUVs, normals: faceNormals, material: currentMaterial });
-    }
-  }
-  let minX = Infinity, maxX = -Infinity;
-  let minY = Infinity, maxY = -Infinity;
-  let minZ = Infinity, maxZ = -Infinity;
-  for (const v2 of vertices) {
-    minX = Math.min(minX, v2[0]);
-    maxX = Math.max(maxX, v2[0]);
-    minY = Math.min(minY, v2[1]);
-    maxY = Math.max(maxY, v2[1]);
-    minZ = Math.min(minZ, v2[2]);
-    maxZ = Math.max(maxZ, v2[2]);
-  }
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-  const centerZ = (minZ + maxZ) / 2;
-  const rangeX = maxX - minX;
-  const rangeY = maxY - minY;
-  const rangeZ = maxZ - minZ;
-  const maxRange = Math.max(rangeX, rangeY, rangeZ);
-  const scale = 1 / maxRange;
-  const verts = [];
-  const outNormals = [];
-  const outUVs = [];
-  const outFaceIds = [];
-  const outColors = [];
-  const hasNormals = normals.length > 0;
-  const hasExplicitUVs = uvs.length > 0;
-  const hasMaterials = materialNames.length > 0;
-  const hasColors = colors.length === vertices.length;
-  const defaultQuadUVs = [[0, 0], [1, 0], [1, 1], [0, 1]];
-  const defaultTriUVs = [[0, 0], [1, 0], [0.5, 1]];
-  const addVertex = (vertIdx, uv, normalIdx, materialId) => {
-    const v2 = vertices[vertIdx];
-    verts.push((v2[0] - centerX) * scale);
-    verts.push((v2[1] - centerY) * scale);
-    verts.push((v2[2] - centerZ) * scale);
-    if (hasNormals && normalIdx !== void 0) {
-      const n = normals[normalIdx];
-      outNormals.push(n[0], n[1], n[2]);
-    }
-    outUVs.push(uv[0], uv[1]);
-    if (hasMaterials) {
-      outFaceIds.push(materialId !== null ? materialId : 0);
-    }
-    if (hasColors) {
-      const c = colors[vertIdx];
-      outColors.push(c[0], c[1], c[2], 1);
-    }
-  };
-  for (const face of faces) {
-    const fv = face.verts;
-    const fu = face.uvs;
-    const fn = face.normals;
-    const fm = face.material;
-    if (fv.length === 3) {
-      for (let i = 0; i < 3; i++) {
-        const uv = hasExplicitUVs && fu[i] !== void 0 ? uvs[fu[i]] : defaultTriUVs[i];
-        addVertex(fv[i], uv, fn[i], fm);
-      }
-    } else if (fv.length >= 4) {
-      for (let i = 1; i < fv.length - 1; i++) {
-        const uv0 = hasExplicitUVs && fu[0] !== void 0 ? uvs[fu[0]] : defaultQuadUVs[0];
-        const uv1 = hasExplicitUVs && fu[i] !== void 0 ? uvs[fu[i]] : defaultQuadUVs[i];
-        const uv2 = hasExplicitUVs && fu[i + 1] !== void 0 ? uvs[fu[i + 1]] : defaultQuadUVs[i + 1];
-        addVertex(fv[0], uv0, fn[0], fm);
-        addVertex(fv[i], uv1, fn[i], fm);
-        addVertex(fv[i + 1], uv2, fn[i + 1], fm);
-      }
-    }
-  }
-  const vs = new VertexSource(verts);
-  vs.is3D = true;
-  if (outNormals.length > 0) vs.normals = outNormals;
-  if (outUVs.length > 0) vs.uvs = outUVs;
-  if (outFaceIds.length > 0) {
-    vs.faceIds = outFaceIds;
-    vs.materialNames = materialNames;
-  }
-  if (outColors.length > 0) vs.colors = outColors;
-  return vs;
-}
-async function loadObj(url, options = {}) {
-  const response = await fetch(url);
-  const text = await response.text();
-  return parseObj(text, options);
-}
-function parseGlb(arrayBuffer, options = {}) {
-  const { meshIndex = 0, primitiveIndex } = options;
-  const view = new DataView(arrayBuffer);
-  const magic = view.getUint32(0, true);
-  if (magic !== 1179937895) {
-    throw new Error("Invalid GLB file: bad magic number");
-  }
-  const version2 = view.getUint32(4, true);
-  if (version2 !== 2) {
-    throw new Error(`Unsupported glTF version: ${version2}`);
-  }
-  let jsonChunk = null;
-  let binChunk = null;
-  let offset2 = 12;
-  while (offset2 < arrayBuffer.byteLength) {
-    const chunkLength = view.getUint32(offset2, true);
-    const chunkType = view.getUint32(offset2 + 4, true);
-    const chunkData = new Uint8Array(arrayBuffer, offset2 + 8, chunkLength);
-    if (chunkType === 1313821514) {
-      const decoder = new TextDecoder("utf-8");
-      jsonChunk = JSON.parse(decoder.decode(chunkData));
-    } else if (chunkType === 5130562) {
-      binChunk = chunkData.buffer.slice(chunkData.byteOffset, chunkData.byteOffset + chunkData.byteLength);
-    }
-    offset2 += 8 + chunkLength;
-    if (offset2 % 4 !== 0) offset2 += 4 - offset2 % 4;
-  }
-  if (!jsonChunk) throw new Error("GLB missing JSON chunk");
-  return extractMeshFromGltf(jsonChunk, binChunk, meshIndex, primitiveIndex);
-}
-function extractMeshFromGltf(gltf, binBuffer, meshIndex, primitiveIndex) {
-  var _a;
-  const mesh = (_a = gltf.meshes) == null ? void 0 : _a[meshIndex];
-  if (!mesh) throw new Error(`Mesh ${meshIndex} not found`);
-  const readAccessor = (accessorIndex) => {
-    const accessor = gltf.accessors[accessorIndex];
-    const bufferView = gltf.bufferViews[accessor.bufferView];
-    const componentType = accessor.componentType;
-    const count = accessor.count;
-    const type = accessor.type;
-    const typeComponents = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
-    const components = typeComponents[type] || 1;
-    const TypedArray = {
-      5120: Int8Array,
-      // BYTE
-      5121: Uint8Array,
-      // UNSIGNED_BYTE
-      5122: Int16Array,
-      // SHORT
-      5123: Uint16Array,
-      // UNSIGNED_SHORT
-      5125: Uint32Array,
-      // UNSIGNED_INT
-      5126: Float32Array
-      // FLOAT
-    }[componentType];
-    if (!TypedArray) throw new Error(`Unsupported component type: ${componentType}`);
-    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
-    const byteStride = bufferView.byteStride || 0;
-    if (byteStride === 0 || byteStride === components * TypedArray.BYTES_PER_ELEMENT) {
-      return new TypedArray(binBuffer, byteOffset, count * components);
-    }
-    const result = new TypedArray(count * components);
-    const srcView = new DataView(binBuffer);
-    for (let i = 0; i < count; i++) {
-      const srcOffset = byteOffset + i * byteStride;
-      for (let j = 0; j < components; j++) {
-        if (TypedArray === Float32Array) {
-          result[i * components + j] = srcView.getFloat32(srcOffset + j * 4, true);
-        } else if (TypedArray === Uint16Array) {
-          result[i * components + j] = srcView.getUint16(srcOffset + j * 2, true);
-        } else if (TypedArray === Uint32Array) {
-          result[i * components + j] = srcView.getUint32(srcOffset + j * 4, true);
-        }
-      }
-    }
-    return result;
-  };
-  const primitives = primitiveIndex !== void 0 ? [mesh.primitives[primitiveIndex]] : mesh.primitives;
-  if (!primitives || primitives.length === 0) {
-    throw new Error(`No primitives found in mesh ${meshIndex}`);
-  }
-  const verts = [];
-  const outNormals = [];
-  const outUVs = [];
-  const outTangents = [];
-  const outColors = [];
-  let hasAnyUVs = false;
-  for (const primitive of primitives) {
-    const positionAccessor = primitive.attributes.POSITION;
-    if (positionAccessor === void 0) continue;
-    const positions = readAccessor(positionAccessor);
-    const normals = primitive.attributes.NORMAL !== void 0 ? readAccessor(primitive.attributes.NORMAL) : null;
-    const uvs = primitive.attributes.TEXCOORD_0 !== void 0 ? readAccessor(primitive.attributes.TEXCOORD_0) : null;
-    const tangents = primitive.attributes.TANGENT !== void 0 ? readAccessor(primitive.attributes.TANGENT) : null;
-    const colors = primitive.attributes.COLOR_0 !== void 0 ? readAccessor(primitive.attributes.COLOR_0) : null;
-    let colorStride = 0;
-    if (colors && primitive.attributes.COLOR_0 !== void 0) {
-      const colorAccessor = accessors[primitive.attributes.COLOR_0];
-      colorStride = colorAccessor.type === "VEC4" ? 4 : 3;
-    }
-    if (uvs) hasAnyUVs = true;
-    const indices = primitive.indices !== void 0 ? readAccessor(primitive.indices) : null;
-    const addVertex = (idx) => {
-      verts.push(positions[idx * 3], positions[idx * 3 + 1], positions[idx * 3 + 2]);
-      if (normals) {
-        outNormals.push(normals[idx * 3], normals[idx * 3 + 1], normals[idx * 3 + 2]);
-      }
-      if (uvs) {
-        outUVs.push(uvs[idx * 2], uvs[idx * 2 + 1]);
-      }
-      if (tangents) {
-        outTangents.push(tangents[idx * 4], tangents[idx * 4 + 1], tangents[idx * 4 + 2], tangents[idx * 4 + 3]);
-      }
-      if (colors) {
-        if (colorStride === 4) {
-          outColors.push(colors[idx * 4], colors[idx * 4 + 1], colors[idx * 4 + 2], colors[idx * 4 + 3]);
-        } else {
-          outColors.push(colors[idx * 3], colors[idx * 3 + 1], colors[idx * 3 + 2], 1);
-        }
-      }
-    };
-    if (indices) {
-      for (let i = 0; i < indices.length; i++) {
-        addVertex(indices[i]);
-      }
-    } else {
-      const vertexCount = positions.length / 3;
-      for (let i = 0; i < vertexCount; i++) {
-        addVertex(i);
-      }
-    }
-  }
-  if (verts.length === 0) {
-    throw new Error("No vertex data found in mesh");
-  }
-  let minX = Infinity, maxX = -Infinity;
-  let minY = Infinity, maxY = -Infinity;
-  let minZ = Infinity, maxZ = -Infinity;
-  for (let i = 0; i < verts.length; i += 3) {
-    minX = Math.min(minX, verts[i]);
-    maxX = Math.max(maxX, verts[i]);
-    minY = Math.min(minY, verts[i + 1]);
-    maxY = Math.max(maxY, verts[i + 1]);
-    minZ = Math.min(minZ, verts[i + 2]);
-    maxZ = Math.max(maxZ, verts[i + 2]);
-  }
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-  const centerZ = (minZ + maxZ) / 2;
-  const rangeX = maxX - minX;
-  const rangeY = maxY - minY;
-  const rangeZ = maxZ - minZ;
-  const maxRange = Math.max(rangeX, rangeY, rangeZ);
-  const scale = maxRange > 0 ? 1 / maxRange : 1;
-  for (let i = 0; i < verts.length; i += 3) {
-    verts[i] = (verts[i] - centerX) * scale;
-    verts[i + 1] = (verts[i + 1] - centerY) * scale;
-    verts[i + 2] = (verts[i + 2] - centerZ) * scale;
-  }
-  if (!hasAnyUVs) {
-    for (let i = 0; i < verts.length; i += 3) {
-      const x2 = verts[i], y = verts[i + 1], z = verts[i + 2];
-      const u = 0.5 + Math.atan2(z, x2) / (2 * Math.PI);
-      const v2 = 0.5 + Math.asin(Math.max(-1, Math.min(1, y))) / Math.PI;
-      outUVs.push(u, v2);
-    }
-  }
-  const vs = new VertexSource(verts);
-  vs.is3D = true;
-  if (outNormals.length > 0) vs.normals = outNormals;
-  if (outUVs.length > 0) vs.uvs = outUVs;
-  if (outTangents.length > 0) vs.tangents = outTangents;
-  if (outColors.length > 0) vs.colors = outColors;
-  return vs;
-}
-async function loadGlb(url, options = {}) {
-  var _a;
-  const { extractTextures = true, ...parseOptions } = options;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to load GLB from ${url}: ${response.status} ${response.statusText}`);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  if (arrayBuffer.byteLength < 12) {
-    throw new Error(`Invalid GLB file from ${url}: file too small (${arrayBuffer.byteLength} bytes)`);
-  }
-  const model = parseGlb(arrayBuffer, parseOptions);
-  if (extractTextures) {
-    const textures = await extractGlbTextures(arrayBuffer);
-    model.texture = ((_a = textures[0]) == null ? void 0 : _a.image) || null;
-    model.textures = textures.map((t) => t.image);
-  }
-  return model;
-}
-async function extractGlbTextures(arrayBuffer) {
-  const view = new DataView(arrayBuffer);
-  const magic = view.getUint32(0, true);
-  if (magic !== 1179937895) throw new Error("Invalid GLB");
-  let jsonChunk = null;
-  let binStart = 0;
-  let offset2 = 12;
-  while (offset2 < arrayBuffer.byteLength) {
-    const chunkLength = view.getUint32(offset2, true);
-    const chunkType = view.getUint32(offset2 + 4, true);
-    if (chunkType === 1313821514) {
-      const chunkData = new Uint8Array(arrayBuffer, offset2 + 8, chunkLength);
-      jsonChunk = JSON.parse(new TextDecoder().decode(chunkData));
-    } else if (chunkType === 5130562) {
-      binStart = offset2 + 8;
-    }
-    offset2 += 8 + chunkLength;
-    if (offset2 % 4 !== 0) offset2 += 4 - offset2 % 4;
-  }
-  if (!jsonChunk || !jsonChunk.images) return [];
-  const textures = [];
-  for (let i = 0; i < jsonChunk.images.length; i++) {
-    const imgDef = jsonChunk.images[i];
-    if (imgDef.bufferView === void 0) continue;
-    const bv = jsonChunk.bufferViews[imgDef.bufferView];
-    const imgBytes = new Uint8Array(arrayBuffer, binStart + (bv.byteOffset || 0), bv.byteLength);
-    let mimeType = imgDef.mimeType;
-    if (!mimeType) {
-      if (imgBytes[0] === 137 && imgBytes[1] === 80) mimeType = "image/png";
-      else if (imgBytes[0] === 255 && imgBytes[1] === 216) mimeType = "image/jpeg";
-      else mimeType = "image/png";
-    }
-    const blob = new Blob([imgBytes], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const img = await new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = reject;
-      image.src = url;
-    });
-    textures.push({ image: img, index: i, blobUrl: url });
-  }
-  return textures;
-}
-async function createGlbSpriteSheet(urls, options = {}) {
-  const { cellSize = 256 } = options;
-  const results = await Promise.all(urls.map(async (url) => {
-    var _a;
-    const response = await fetch(url);
-    const arrayBuffer = await response.arrayBuffer();
-    const model = parseGlb(arrayBuffer, options);
-    const textures = await extractGlbTextures(arrayBuffer);
-    return { model, texture: ((_a = textures[0]) == null ? void 0 : _a.image) || null };
-  }));
-  const count = results.length;
-  const cols = Math.ceil(Math.sqrt(count));
-  const rows = Math.ceil(count / cols);
-  const canvas = document.createElement("canvas");
-  canvas.width = cols * cellSize;
-  canvas.height = rows * cellSize;
-  const ctx = canvas.getContext("2d");
-  results.forEach((r, i) => {
-    if (r.texture) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      ctx.drawImage(r.texture, col * cellSize, row * cellSize, cellSize, cellSize);
-    }
-  });
-  const models = results.map((r, i) => {
-    r.model.spriteIndex = i;
-    return r.model;
-  });
-  return { canvas, models, cols, rows, cellSize };
-}
-function tri(size = 1, centerX = 0, centerY = 0) {
-  const h = size * Math.sqrt(3) / 2;
-  const verts = [
-    centerX,
-    centerY + h * 2 / 3,
-    centerX - size / 2,
-    centerY - h / 3,
-    centerX + size / 2,
-    centerY - h / 3
-  ];
-  return new VertexSource(verts);
-}
-function quad(width = 1, height = 1, centerX = 0, centerY = 0) {
-  const hw = width / 2, hh = height / 2;
-  const verts = [
-    // Triangle 1
-    centerX - hw,
-    centerY - hh,
-    centerX + hw,
-    centerY - hh,
-    centerX + hw,
-    centerY + hh,
-    // Triangle 2
-    centerX - hw,
-    centerY - hh,
-    centerX + hw,
-    centerY + hh,
-    centerX - hw,
-    centerY + hh
-  ];
-  return new VertexSource(verts);
-}
-function poly(sides, radius = 1, centerX = 0, centerY = 0) {
-  const verts = [];
-  for (let i = 0; i < sides; i++) {
-    const a1 = i / sides * Math.PI * 2 - Math.PI / 2;
-    const a2 = (i + 1) / sides * Math.PI * 2 - Math.PI / 2;
-    verts.push(centerX, centerY);
-    verts.push(centerX + Math.cos(a1) * radius, centerY + Math.sin(a1) * radius);
-    verts.push(centerX + Math.cos(a2) * radius, centerY + Math.sin(a2) * radius);
-  }
-  return new VertexSource(verts);
-}
-function circle(radius = 1, centerX = 0, centerY = 0, segments = 32) {
-  return poly(segments, radius, centerX, centerY);
-}
-function line(x1, y1, x2, y2, thickness = 0.02) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  const nx = -dy / len * thickness / 2;
-  const ny = dx / len * thickness / 2;
-  const verts = [
-    x1 + nx,
-    y1 + ny,
-    x1 - nx,
-    y1 - ny,
-    x2 - nx,
-    y2 - ny,
-    x1 + nx,
-    y1 + ny,
-    x2 - nx,
-    y2 - ny,
-    x2 + nx,
-    y2 + ny
-  ];
-  return new VertexSource(verts);
-}
-function ring(outerRadius = 1, innerRadius = 0.5, centerX = 0, centerY = 0, segments = 32) {
-  const verts = [];
-  for (let i = 0; i < segments; i++) {
-    const a1 = i / segments * Math.PI * 2;
-    const a2 = (i + 1) / segments * Math.PI * 2;
-    const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
-    const cos2 = Math.cos(a2), sin2 = Math.sin(a2);
-    verts.push(centerX + cos1 * innerRadius, centerY + sin1 * innerRadius);
-    verts.push(centerX + cos1 * outerRadius, centerY + sin1 * outerRadius);
-    verts.push(centerX + cos2 * outerRadius, centerY + sin2 * outerRadius);
-    verts.push(centerX + cos1 * innerRadius, centerY + sin1 * innerRadius);
-    verts.push(centerX + cos2 * outerRadius, centerY + sin2 * outerRadius);
-    verts.push(centerX + cos2 * innerRadius, centerY + sin2 * innerRadius);
-  }
-  return new VertexSource(verts);
-}
-function cube(size = 0.5) {
-  const s = size;
-  const corners = [
-    [-s, -s, s],
-    // 0: front-bottom-left
-    [s, -s, s],
-    // 1: front-bottom-right
-    [s, s, s],
-    // 2: front-top-right
-    [-s, s, s],
-    // 3: front-top-left
-    [-s, -s, -s],
-    // 4: back-bottom-left
-    [s, -s, -s],
-    // 5: back-bottom-right
-    [s, s, -s],
-    // 6: back-top-right
-    [-s, s, -s]
-    // 7: back-top-left
-  ];
-  const faces = [
-    { indices: [0, 1, 2, 0, 2, 3], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
-    // front (0)
-    { indices: [5, 4, 7, 5, 7, 6], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
-    // back (1)
-    { indices: [3, 2, 6, 3, 6, 7], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
-    // top (2)
-    { indices: [4, 5, 1, 4, 1, 0], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
-    // bottom (3)
-    { indices: [1, 5, 6, 1, 6, 2], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] },
-    // right (4)
-    { indices: [4, 0, 3, 4, 3, 7], uvs: [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] }
-    // left (5)
-  ];
-  const verts = [];
-  const uvs = [];
-  const faceIds = [];
-  for (let faceIdx = 0; faceIdx < faces.length; faceIdx++) {
-    const face = faces[faceIdx];
-    for (let i = 0; i < face.indices.length; i++) {
-      verts.push(...corners[face.indices[i]]);
-      uvs.push(...face.uvs[i]);
-      faceIds.push(faceIdx);
-    }
-  }
-  const vs = new VertexSource(verts);
-  vs.uvs = uvs;
-  vs.faceIds = faceIds;
-  vs.is3D = true;
-  return vs;
 }
 class SpriteSheet {
   constructor(options = {}) {
@@ -24509,10 +25787,13 @@ class HydraRenderer {
     // add your own functions on init
     gpuDevice = null,
     // Optional shared GPUDevice for zero-copy texture sharing
-    preserveDrawingBuffer = false
+    preserveDrawingBuffer = false,
     // Enable for Syphon/pixel readback
+    onError = null
+    // Callback for error reporting: (error: HydraError) => void
   } = {}) {
     this.preserveDrawingBuffer = preserveDrawingBuffer;
+    this.onError = onError;
     ArrayUtils.init();
     this.pb = pb;
     this.width = width;
@@ -24554,6 +25835,11 @@ class HydraRenderer {
       line,
       ring,
       cube,
+      sphere,
+      plane,
+      torus,
+      cylinder,
+      cone,
       loadObj,
       loadGlb,
       parseGlb,
@@ -24630,7 +25916,13 @@ class HydraRenderer {
   }
   async eval(codeIn) {
     if (this.resetOut) this.synth.render(this.o[0]);
-    let code = Deglobalize(codeIn, "_h");
+    let code;
+    try {
+      code = Deglobalize(codeIn, "_h");
+    } catch (err) {
+      this._emitError(err);
+      return;
+    }
     let h = this.synth;
     let keys = Object.keys(h);
     let values = [];
@@ -24644,8 +25936,10 @@ class HydraRenderer {
       this.done = false;
       this.generatorFunction = fn(...values);
     } catch (err) {
-      console.log("Error compiling generator function");
-      console.log(err);
+      this._emitError(new SyntaxError$1(err.message, {
+        originalError: err,
+        suggestion: "Check your code syntax"
+      }));
       this.generatorFunctionTimer = -1;
       return;
     }
@@ -24654,8 +25948,9 @@ class HydraRenderer {
       let reply = await this.generatorFunction.next();
       this.planNext(reply);
     } catch (err) {
-      console.log("Error calling initial generator function.next()");
-      console.log(err);
+      this._emitError(new RuntimeError(err.message, {
+        originalError: err
+      }));
       delete this.generatorFunction;
       return;
     }
@@ -24672,8 +25967,9 @@ class HydraRenderer {
         let reply = await f.next();
         this.planNext(reply);
       } catch (err) {
-        console.log("Error calling generator function.next()");
-        console.log(err);
+        this._emitError(new RuntimeError(err.message, {
+          originalError: err
+        }));
         this.generatorFunctionTimer = -1;
         delete this.generatorFunction;
       }
@@ -24708,6 +26004,23 @@ class HydraRenderer {
     }
     if (this.synth && this.synth.a) {
       this.synth.a.destroy();
+    }
+  }
+  // Emit an error to the onError callback and console
+  _emitError(error) {
+    if (!(error instanceof HydraError)) {
+      error = new RuntimeError(error.message || String(error), { originalError: error });
+    }
+    console.error(error.toString());
+    if (error.originalError) {
+      console.error("Original error:", error.originalError);
+    }
+    if (this.onError) {
+      try {
+        this.onError(error);
+      } catch (e) {
+        console.error("Error in onError callback:", e);
+      }
     }
   }
   hush() {
@@ -24775,7 +26088,6 @@ class HydraRenderer {
     this.height = height;
     this.sandbox.set("width", width);
     this.sandbox.set("height", height);
-    console.log(this.width);
     this.o.forEach((output) => {
       output.resize(width, height);
     });

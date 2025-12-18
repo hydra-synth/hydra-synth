@@ -16,6 +16,7 @@ import {Deglobalize} from './Deglobalize.js';
 import { tri, quad, poly, circle, line, ring, cube, sphere, plane, torus, cylinder, cone, loadObj, loadGlb, parseGlb, extractGlbTextures, createGlbSpriteSheet } from './lib/geometry.js';
 import { spriteSheet, spriteAtlas, parseAseprite, loadAseprite } from './lib/sprite-sheet.js';
 import { v } from './lib/varying-proxy.js';
+import { HydraError, SyntaxError as HydraSyntaxError, ShaderError, LoadError, RuntimeError } from './lib/hydra-error.js';
 
 const AsyncGeneratorFunction = async function* () {}.constructor;
 
@@ -47,9 +48,11 @@ class HydraRenderer {
     resetOut = true,
     extendTransforms = {}, // add your own functions on init
     gpuDevice = null,  // Optional shared GPUDevice for zero-copy texture sharing
-    preserveDrawingBuffer = false  // Enable for Syphon/pixel readback
+    preserveDrawingBuffer = false,  // Enable for Syphon/pixel readback
+    onError = null  // Callback for error reporting: (error: HydraError) => void
   } = {}) {
     this.preserveDrawingBuffer = preserveDrawingBuffer;
+    this.onError = onError;  // Error callback for user-facing error display
 
     ArrayUtils.init()
 
@@ -218,11 +221,20 @@ class HydraRenderer {
 
 
   async eval(codeIn) {
-  	
+
   	if (this.resetOut) this.synth.render(this.o[0])
-  	// Reset 
-    let code = Deglobalize(codeIn, '_h');
-    // convert all keys in h into strings
+
+  	// Parse and transform code (handles global variable prefixing)
+  	let code;
+  	try {
+  	  code = Deglobalize(codeIn, '_h');
+  	} catch (err) {
+  	  // Deglobalize throws HydraSyntaxError with adjusted line numbers
+  	  this._emitError(err);
+  	  return;
+  	}
+
+    // Convert all keys in synth into parameter names
     let h = this.synth;
     let keys = Object.keys(h);
     let values = [];
@@ -232,13 +244,18 @@ class HydraRenderer {
     values.push(h);
     keys.push("_h"); // _h used for fixing-up primitive-valued 'global' references, like "time".
     values.push(h);
+
+    // Create and execute the generator function
     try {
     	let fn = new AsyncGeneratorFunction(...keys, code);
     	this.done = false;
     	this.generatorFunction = fn(...values);
     } catch (err) {
-    	console.log("Error compiling generator function");
-    	console.log(err);
+    	// Error creating the generator function (syntax error in generated code)
+    	this._emitError(new HydraSyntaxError(err.message, {
+    	  originalError: err,
+    	  suggestion: 'Check your code syntax'
+    	}));
     	this.generatorFunctionTimer = -1;
     	return;
     }
@@ -247,8 +264,10 @@ class HydraRenderer {
     	let reply = await this.generatorFunction.next();
     	this.planNext(reply);
     } catch (err) {
-    	console.log("Error calling initial generator function.next()");
-    	console.log(err);
+    	// Runtime error during initial execution
+    	this._emitError(new RuntimeError(err.message, {
+    	  originalError: err
+    	}));
     	delete this.generatorFunction;
     	return;
     }
@@ -266,8 +285,10 @@ class HydraRenderer {
 		let reply = await f.next();
 		this.planNext(reply);
 	} catch (err) {
-    	console.log("Error calling generator function.next()");
-    	console.log(err);
+		// Runtime error during generator execution
+		this._emitError(new RuntimeError(err.message, {
+		  originalError: err
+		}));
     	this.generatorFunctionTimer = -1;
     	delete this.generatorFunction;
 	}
@@ -312,6 +333,29 @@ class HydraRenderer {
 // 			cancelAnimationFrame();
 // 		}
  }
+
+  // Emit an error to the onError callback and console
+  _emitError(error) {
+    // Ensure it's a HydraError
+    if (!(error instanceof HydraError)) {
+      error = new RuntimeError(error.message || String(error), { originalError: error })
+    }
+
+    // Log to console with formatting
+    console.error(error.toString())
+    if (error.originalError) {
+      console.error('Original error:', error.originalError)
+    }
+
+    // Call user callback if provided
+    if (this.onError) {
+      try {
+        this.onError(error)
+      } catch (e) {
+        console.error('Error in onError callback:', e)
+      }
+    }
+  }
 
   hush() {
   	this.regenInfo = [];
@@ -387,7 +431,6 @@ class HydraRenderer {
     this.height = height // ?
     this.sandbox.set('width', width)
     this.sandbox.set('height', height)
-    console.log(this.width)
     this.o.forEach((output) => {
       output.resize(width, height)
     })
@@ -732,3 +775,6 @@ class HydraRenderer {
 }
 
 export default HydraRenderer
+
+// Export error classes for consumers to check error types
+export { HydraError, HydraSyntaxError, ShaderError, LoadError, RuntimeError }

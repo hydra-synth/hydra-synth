@@ -1,9 +1,13 @@
 import {Parser} from "acorn";
 import {generate}  from "astring";
 import { defaultTraveler, attachComments, makeTraveler } from 'astravel';
+import { SyntaxError as HydraSyntaxError } from './lib/hydra-error.js';
 
 const watchListArray = ["time", "fps", "speed", "bpm"];
 const watchList = new Set(watchListArray);
+
+// Line offset from wrapper: 'async function* f() {\n' adds 1 line
+const WRAPPER_LINE_OFFSET = 1;
 
 // Function to convert all instances of global variables on the watchlist to be
 // preceeded by a prefix like "_h.", which converts from a global variable to a member expression
@@ -33,7 +37,7 @@ function Deglobalize(textIn, prefix) {
    let ast;
    try {
      ast = Parser.parse(text, {
-     			locations: false,
+     			locations: true,  // Enable location tracking for error reporting
      			ecmaVersion: "latest",
      			allowReserved: true,
      			allowAwaitOutsideFunction: true,
@@ -41,9 +45,20 @@ function Deglobalize(textIn, prefix) {
         }
       );
    } catch (err) {
-    console.log("Deglobalize err: " + err);
-    console.log(textCleaned);
-    return textCleaned;
+    // Adjust line number for the wrapper we added
+    const line = err.loc ? err.loc.line - WRAPPER_LINE_OFFSET : null;
+    const column = err.loc ? err.loc.column : null;
+
+    // Extract a snippet around the error for context
+    const lines = textCleaned.split('\n');
+    const errorLine = line && line > 0 && line <= lines.length ? lines[line - 1] : null;
+
+    throw new HydraSyntaxError(err.message, {
+      line,
+      column,
+      source: errorLine,
+      originalError: err
+    });
   }
 		let state = {
     	refTab: []

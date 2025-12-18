@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Error Handling Test</title>
+  <style>
+    body { font-family: monospace; margin: 20px; background: #1a1a2e; color: #eee; }
+    #output { white-space: pre-wrap; background: #16213e; padding: 15px; border-radius: 5px; }
+    .error { color: #ff6b6b; }
+    .success { color: #51cf66; }
+    button { margin: 5px; padding: 8px 16px; cursor: pointer; }
+    canvas { display: block; margin: 10px 0; border: 1px solid #333; }
+  </style>
+</head>
+<body>
+  <h2>Hydra Error Handling Test</h2>
+  <div>
+    <button onclick="testSyntaxError()">Test Syntax Error</button>
+    <button onclick="testRuntimeError()">Test Runtime Error</button>
+    <button onclick="testImageError()">Test Image Load Error</button>
+    <button onclick="testValidCode()">Test Valid Code</button>
+  </div>
+  <canvas id="canvas" width="400" height="300"></canvas>
+  <div id="output"></div>
+
+  <script type="module">
+    import HydraRenderer, { HydraError, HydraSyntaxError, LoadError, RuntimeError } from '../src/hydra-synth.js'
+
+    const output = document.getElementById('output')
+
+    function log(msg, isError = false) {
+      const line = document.createElement('div')
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`
+      line.className = isError ? 'error' : 'success'
+      output.appendChild(line)
+      output.scrollTop = output.scrollHeight
+    }
+
+    // Create Hydra instance with error callback
+    const hydra = new HydraRenderer({
+      canvas: document.getElementById('canvas'),
+      detectAudio: false,
+      onError: (error) => {
+        log(`onError callback received: ${error.toString()}`, true)
+        log(`  Type: ${error.type}`, true)
+        if (error.line) log(`  Line: ${error.line}`, true)
+        if (error.suggestion) log(`  Suggestion: ${error.suggestion}`, true)
+      }
+    })
+
+    log('Hydra initialized with onError callback')
+
+    // Make test functions available globally
+    window.testSyntaxError = async () => {
+      log('Testing syntax error (missing parenthesis)...')
+      await hydra.eval('osc(10.out(o0)')  // Missing )
+    }
+
+    window.testRuntimeError = async () => {
+      log('Testing runtime error (undefined function)...')
+      await hydra.eval('undefinedFunction()')
+    }
+
+    window.testImageError = () => {
+      log('Testing image load error (bad URL)...')
+      hydra.s[0].initImage('http://localhost:9999/nonexistent.jpg')
+    }
+
+    window.testValidCode = async () => {
+      log('Testing valid code...')
+      await hydra.eval('osc(10, 0.1, 1.2).out(o0)')
+      log('Valid code executed successfully!')
+    }
+  </script>
+</body>
+</html>
