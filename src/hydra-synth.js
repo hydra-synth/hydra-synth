@@ -1,6 +1,6 @@
 
 import Output from './output.js'
-import loop from 'raf-loop'
+import loop from './lib/animation-loop.js'
 import Source from './hydra-source.js'
 import MouseTools from './lib/mouse.js'
 import Audio from './lib/audio.js'
@@ -121,7 +121,7 @@ class HydraRenderer {
 
     if(detectAudio) this._initAudio()
 
-    if(autoLoop) loop(this.tick.bind(this)).start()
+  if(autoLoop) loop(this.tick.bind(this)).start()
 
     // final argument is properties that the user can set, all others are treated as read-only
     this.sandbox = new Sandbox(this.synth, makeGlobal, ['speed', 'update', 'afterUpdate', 'bpm', 'fps'])
