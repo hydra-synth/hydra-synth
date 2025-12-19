@@ -2431,7 +2431,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.createAnimationLoop = createAnimationLoop;
 exports.default = _default;
-// Minimal internal replacement for the removed 'raf-loop' dependency.
+// Replacement for the removed 'raf-loop' dependency.
 // Usage: const loop = createAnimationLoop(cb); loop.start();
 // Provides only start() and stop(), matching existing usage pattern.
 function createAnimationLoop(cb) {
@@ -2439,12 +2439,12 @@ function createAnimationLoop(cb) {
   let lastTime = null;
   function frame(t) {
     if (rafId == null) return;
-    const dt = lastTime == null ? 0 : t - lastTime;
+    const dt = t - lastTime;
     lastTime = t;
     try {
       cb(dt);
     } catch (e) {
-      console.warn('[hydra-synth] loop error:', e);
+      console.warn('animation loop error:', e);
     }
     rafId = requestAnimationFrame(frame);
   }
@@ -2452,7 +2452,7 @@ function createAnimationLoop(cb) {
     start() {
       if (rafId != null) return;
       if (typeof requestAnimationFrame === 'undefined') return;
-      lastTime = null;
+      lastTime = performance.now();
       rafId = requestAnimationFrame(frame);
     },
     stop() {

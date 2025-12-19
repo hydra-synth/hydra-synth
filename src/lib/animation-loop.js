@@ -7,7 +7,7 @@ export function createAnimationLoop (cb) {
 
   function frame (t) {
     if (rafId == null) return
-    const dt = lastTime == null ? 0 : (t - lastTime)
+    const dt = t - lastTime
     lastTime = t
     try { cb(dt) } catch (e) { console.warn('animation loop error:', e) }
     rafId = requestAnimationFrame(frame)
@@ -17,7 +17,7 @@ export function createAnimationLoop (cb) {
     start () {
       if (rafId != null) return
       if (typeof requestAnimationFrame === 'undefined') return
-      lastTime = null
+      lastTime = performance.now()
       rafId = requestAnimationFrame(frame)
     },
     stop () {
