@@ -68,7 +68,18 @@ GlslSource.prototype.compile = function (transforms) {
   var uniforms = {}
   shaderInfo.uniforms.forEach((uniform) => { uniforms[uniform.name] = uniform.value })
 
-  var frag = `
+  // Use renderer's buildShader hook if available (plugin architecture)
+  // Otherwise fall back to built-in GLSL generation
+  const renderer = this.synth && this.synth.renderer
+  var frag
+
+  if (renderer && typeof renderer.buildShader === 'function') {
+    frag = renderer.buildShader(shaderInfo, {
+      precision: this.defaultOutput.precision
+    })
+  } else {
+    // Fallback: built-in GLSL generation
+    frag = `
   precision ${this.defaultOutput.precision} float;
   ${Object.values(shaderInfo.uniforms).map((uniform) => {
     let type = uniform.type
@@ -105,6 +116,7 @@ GlslSource.prototype.compile = function (transforms) {
     gl_FragColor = c;
   }
   `
+  }
 
   return {
     frag: frag,
