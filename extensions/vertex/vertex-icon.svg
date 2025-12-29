@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60">
+  <!-- Background -->
+  <rect width="60" height="60" fill="#1a1a2e"/>
+
+  <!-- 3D Cube - back faces -->
+  <polygon points="30,8 48,18 48,38 30,48 12,38 12,18" fill="none" stroke="#4a4a6a" stroke-width="1"/>
+
+  <!-- Cube left face -->
+  <polygon points="12,18 30,28 30,48 12,38" fill="#ff6b9d" opacity="0.8"/>
+
+  <!-- Cube right face -->
+  <polygon points="48,18 30,28 30,48 48,38" fill="#c44569" opacity="0.9"/>
+
+  <!-- Cube top face -->
+  <polygon points="12,18 30,8 48,18 30,28" fill="#ff8a5c" opacity="0.9"/>
+
+  <!-- Vertex points -->
+  <circle cx="30" cy="8" r="2.5" fill="#00fff5"/>
+  <circle cx="12" cy="18" r="2.5" fill="#00fff5"/>
+  <circle cx="48" cy="18" r="2.5" fill="#00fff5"/>
+  <circle cx="30" cy="28" r="2" fill="#00fff5"/>
+  <circle cx="12" cy="38" r="2.5" fill="#00fff5"/>
+  <circle cx="48" cy="38" r="2.5" fill="#00fff5"/>
+  <circle cx="30" cy="48" r="2.5" fill="#00fff5"/>
+
+  <!-- Edge highlights -->
+  <line x1="30" y1="8" x2="12" y2="18" stroke="#00fff5" stroke-width="1" opacity="0.6"/>
+  <line x1="30" y1="8" x2="48" y2="18" stroke="#00fff5" stroke-width="1" opacity="0.6"/>
+  <line x1="30" y1="28" x2="30" y2="48" stroke="#00fff5" stroke-width="1" opacity="0.4"/>
+</svg>

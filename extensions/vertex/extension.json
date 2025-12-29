@@ -1,0 +1,12 @@
+{
+  "name": "hydra-vertex",
+  "description": "3D vertex shader extension - adds geometry primitives (cube, sphere, torus), vertex transforms (rotate, scale), lighting (diffuse, specular, fresnel), model loading (GLB/OBJ), and WebGPU support",
+  "documentation": "https://github.com/jamiefaye/hydra-synth/tree/extensions/extensions/vertex",
+  "author": "Jamie Faye Fenton",
+  "thumbnail": "vertex-icon.svg",
+  "load": "await import('https://www.fentonia.com/hydra-extensions/vertex/index.js').then(m => m.install(window.hydraSynth))",
+  "examples": [
+    "https://hydra.ojack.xyz/?code=JTJGJTJGJTIwM0QlMjBzcGhlcmUlMjB3aXRoJTIwbGlnaHRpbmclMEFvc2MoMTAlMkMlMjAwLjElMkMlMjAxKS5kaWZmdXNlKDAlMkMlMjAxJTJDJTIwMCkub3V0KG8wJTJDJTIwc3BoZXJlKCkucGVyc3BlY3RpdmUoNjApLnJvdGF0ZVkoKCklMjAlM0QlM0UlMjB0aW1lKSk=",
+    "https://hydra.ojack.xyz/?code=JTJGJTJGJTIwR3JpZCUyMG9mJTIwY3ViZXMlMEFvc2MoMTApLmRpZmZ1c2UoMCUyQyUyMDElMkMlMjAwKS5vdXQobzAlMkMlMjBjdWJlKDAuMSkuZ3JpZCgzJTJDJTIwMyUyQyUyMDMlMkMlMjAwLjMpLnBlcnNwZWN0aXZlKDYwKS5yb3RhdGVZKCgpJTIwJTNEJTNFJTIwdGltZSkp"
+  ]
+}

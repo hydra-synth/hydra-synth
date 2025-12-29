@@ -12,6 +12,12 @@
     "./src/glsl/glsl-functions.js": {
       "import": "./src/glsl/glsl-functions.js",
       "require": "./src/glsl/glsl-functions.js"
+    },
+    "./extensions/vertex": {
+      "import": "./extensions/vertex/index.js"
+    },
+    "./extensions/vertex/webgpu": {
+      "import": "./extensions/vertex/index-webgpu.js"
     }
   },
   "unpkg": "./dist/hydra-synth.js",
