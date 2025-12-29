@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hydra Vertex Extension Test (Core + Install)</title>
+    <style>
+      body { margin: 0; background: black; }
+      canvas { width: 100vw; height: 100vh; }
+      #status { position: fixed; top: 10px; left: 10px; color: white; font-family: monospace; z-index: 100; }
+      #controls { position: fixed; bottom: 10px; left: 10px; color: white; font-family: monospace; z-index: 100; }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading...</div>
+    <div id="controls">
+      Press 1-4 to switch patterns
+    </div>
+    <script type="module">
+      // Test: Core hydra-synth + vertex extension install()
+      // This validates the renderer interface works with vertex extension
+      import HydraRenderer from '../src/hydra-synth.js'
+      import { install } from '../extensions/vertex/index.js'
+
+      window.onload = async () => {
+        const status = document.getElementById('status')
+
+        try {
+          status.textContent = 'Creating core Hydra...'
+
+          // Create hydra instance using core (with new renderer interface)
+          const hydra = new HydraRenderer({
+            detectAudio: false,
+            makeGlobal: true,
+            useWGSL: false
+          })
+
+          await hydra.ready()
+
+          // Install vertex extension on top
+          status.textContent = 'Installing vertex extension...'
+          const success = install(hydra)
+
+          if (!success) {
+            throw new Error('Vertex extension install failed')
+          }
+
+          // Log info
+          console.log('Hydra:', hydra)
+          console.log('Renderer:', hydra.renderer)
+          console.log('Renderer capabilities:', hydra.renderer.capabilities)
+          status.textContent = `Core + Vertex Extension (${hydra.renderer.capabilities.name})`
+
+          // Test 2D pattern first
+          osc(10, 0.1, 1).out(o0)
+
+          // Keyboard controls
+          document.addEventListener('keydown', (e) => {
+            switch (e.key) {
+              case '1':
+                // 2D pattern
+                osc(10, 0.1, 1).out(o0)
+                status.textContent = 'Pattern 1: osc (2D)'
+                break
+              case '2':
+                // 2D with modulation
+                osc(20, 0.05, 1.5).rotate(0.1).modulate(noise(3), 0.2).out(o0)
+                status.textContent = 'Pattern 2: osc + noise (2D)'
+                break
+              case '3':
+                // 3D - simple sphere
+                osc(10).out(o0, sphere().perspective(60).rotateY(() => time))
+                status.textContent = 'Pattern 3: sphere (3D)'
+                break
+              case '4':
+                // 3D - cube with texture
+                noise(5).colorama(0.5).out(o0, cube().perspective(60).rotateX(() => time * 0.5).rotateY(() => time))
+                status.textContent = 'Pattern 4: textured cube (3D)'
+                break
+            }
+          })
+
+          console.log('Hydra + Vertex initialized successfully')
+          status.textContent += ' - Press 1-4 (1-2: 2D, 3-4: 3D)'
+
+        } catch (e) {
+          console.error('Error:', e)
+          status.textContent = 'Error: ' + e.message
+        }
+      }
+    </script>
+  </body>
+</html>
