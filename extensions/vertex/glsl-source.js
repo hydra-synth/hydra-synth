@@ -30,8 +30,12 @@ function wrapWgslFunction(transform) {
   if (!t) return transform.transform.wgsl || ''
 
   // Get inputs from the original transform definition
+  // Note: processGlsl mutates obj.inputs to include base args (e.g., _c1 for combine types)
+  // We filter those out since they're already in t.args
   const originalInputs = transform.transform.inputs || []
-  const allArgs = [...t.args, ...originalInputs.map(inp => ({
+  const baseArgNames = new Set(t.args.map(a => a.name))
+  const userInputs = originalInputs.filter(inp => !baseArgNames.has(inp.name))
+  const allArgs = [...t.args, ...userInputs.map(inp => ({
     type: toWgslType(inp.type),
     name: inp.name
   }))]
