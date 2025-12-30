@@ -6,13 +6,15 @@ class GeneratorFactory {
       defaultUniforms,
       defaultOutput,
       extendTransforms = [],
-      changeListener = (() => {})
+      changeListener = (() => {}),
+      renderer = null
     } = {}
     ) {
     this.defaultOutput = defaultOutput
     this.defaultUniforms = defaultUniforms
     this.changeListener = changeListener
     this.extendTransforms = extendTransforms
+    this.renderer = renderer
     this.generators = {}
     this.init()
   }
