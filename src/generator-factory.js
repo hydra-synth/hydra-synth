@@ -53,6 +53,7 @@ class GeneratorFactory {
         defaultUniforms: this.defaultUniforms,
         synth: self
       })
+      markAsHydraFunction(func, method)
       this.generators[method] = func
       this.changeListener({type: 'add', synth: this, method})
       return func
@@ -61,6 +62,7 @@ class GeneratorFactory {
         this.transforms.push({name: method, transform: transform, userArgs: args, synth: self})
         return this
       }
+      markAsHydraFunction(this.sourceClass.prototype[method], method)
     }
     return undefined
   }
@@ -69,6 +71,13 @@ class GeneratorFactory {
     var processedGlsl = processGlsl(obj)
     if(processedGlsl) this._addMethod(obj.name, processedGlsl)
   }
+}
+
+// tags generators and transform methods so that format-arguments.js can
+// detect when one is passed as an argument without being called (issue #150)
+function markAsHydraFunction (func, name) {
+  func.isHydraFunction = true
+  func.hydraFunctionName = name
 }
 
 const typeLookup = {
