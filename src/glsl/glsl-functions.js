@@ -345,7 +345,8 @@ export default () => [
     }
   ],
   glsl:
-`   vec4 c2 = pow(_c0, vec4(gamma));
+`   // pow() is undefined for negative bases (e.g. noise() output), so clamp first
+   vec4 c2 = pow(max(_c0, vec4(0.0)), vec4(gamma));
    c2 *= vec4(bins);
    c2 = floor(c2);
    c2/= vec4(bins);
