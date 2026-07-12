@@ -58,7 +58,10 @@ export default function formatArguments(transform, startIndex, synthContext) {
     if (userArgs.length > index) {
       typedArg.value = userArgs[index]
 
-      if (typedArg.type === 'vec4') {
+      // numeric arrays are valid vec4 values (issue #204), everything else
+      // non-texture is rejected
+      const isNumericArray = Array.isArray(typedArg.value) && typedArg.value.every((value) => typeof value === 'number')
+      if (typedArg.type === 'vec4' && !isNumericArray) {
         if (!(typedArg.value.type === "GlslSource" || typedArg.value.getTexture)) {
           throw new Error("Arguments must be a texture or GlslSource")
         }
@@ -87,17 +90,18 @@ export default function formatArguments(transform, startIndex, synthContext) {
 
         typedArg.isUniform = true
       } else if (userArgs[index].constructor === Array) {
-        //   if (typedArg.vecLen > 0) { // expected input is a vector, not a scalar
-        //     typedArg.isUniform = true
-        //     typedArg.value = fillArrayWithDefaults(typedArg.value, typedArg.vecLen)
-        //  } else {
-        //  console.log("is Array")
-        // filter out values that are not a number
-        // const filteredArray = userArgs[index].filter((val) => typeof val === 'number')
-        // typedArg.value = (context, props, batchId) => arrayUtils.getValue(filteredArray)(props)
-        typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
-        typedArg.isUniform = true
-        // }
+        if (typedArg.vecLen > 0) {
+          // an array for a vector input becomes a glsl literal further down,
+          // not a sequence over time as it would for a scalar input
+          typedArg.value = fillArrayWithDefaults(typedArg.value.slice(), typedArg.vecLen)
+        } else {
+          //  console.log("is Array")
+          // filter out values that are not a number
+          // const filteredArray = userArgs[index].filter((val) => typeof val === 'number')
+          // typedArg.value = (context, props, batchId) => arrayUtils.getValue(filteredArray)(props)
+          typedArg.value = (context, props, batchId) => arrayUtils.getValue(userArgs[index])(props)
+          typedArg.isUniform = true
+        }
       }
     }
 
