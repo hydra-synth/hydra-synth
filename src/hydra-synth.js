@@ -80,11 +80,8 @@ class HydraRenderer {
       //   console.warn('[hydra-synth warning]\nConstructor was provided an invalid floating point precision value of "' + precision + '". Using default value of "mediump" instead.')
       // }
     } else {
-      let isIOS =
-    (/iPad|iPhone|iPod/.test(navigator.platform) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) &&
-    !window.MSStream;
-      this.precision = isIOS ? 'highp' : 'mediump'
+      // default is chosen in _initRegl, once the WebGL context exists
+      this.precision = null
     }
 
 
@@ -260,6 +257,16 @@ class HydraRenderer {
       //   'oes_texture_float_linear'
      //]
    })
+
+    if (!this.precision) {
+      // Default to highp where fragment shaders support it. Some drivers
+      // execute mediump as real fp16 (e.g. Chrome's ANGLE-on-Vulkan path),
+      // which overflows the noise() permutation hash and degrades the time
+      // uniform as it grows (issue #207).
+      const gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl')
+      const highpFormat = gl && gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT)
+      this.precision = highpFormat && highpFormat.precision > 0 ? 'highp' : 'mediump'
+    }
 
     // This clears the color buffer to black and the depth buffer to 1
     this.regl.clear({
