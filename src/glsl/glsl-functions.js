@@ -747,6 +747,127 @@ export default () => [
   glsl:
 `   return vec4(abs(_c0.rgb-_c1.rgb), max(_c0.a, _c1.a));`
 },
+// Porter-Duff compositing operators (https://www.w3.org/TR/compositing-1/#porterduffcompositingoperators).
+// The chained color _c0 is the destination (bottom layer), the argument _c1 the source (top layer).
+// The trivial clear/copy/destination operators are omitted: copy and destination are no-ops in a
+// chain, and a glsl function named src would collide with hydra's src().
+{
+  name: 'srcOver',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, 1.0, 1.0 - _c1.a), amount);`
+},
+{
+  name: 'dstOver',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, 1.0 - _c0.a, 1.0), amount);`
+},
+{
+  name: 'srcIn',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, _c0.a, 0.0), amount);`
+},
+{
+  name: 'dstIn',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, 0.0, _c1.a), amount);`
+},
+{
+  name: 'srcOut',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, 1.0 - _c0.a, 0.0), amount);`
+},
+{
+  name: 'dstOut',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, 0.0, 1.0 - _c1.a), amount);`
+},
+{
+  name: 'srcAtop',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, _c0.a, 1.0 - _c1.a), amount);`
+},
+{
+  name: 'dstAtop',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, 1.0 - _c0.a, _c1.a), amount);`
+},
+{
+  name: 'xor',
+  type: 'combine',
+  inputs: [
+    {
+      type: 'float',
+      name: 'amount',
+      default: 1,
+    }
+  ],
+  glsl:
+`   return mix(_c0, _composite(_c1, _c0, 1.0 - _c0.a, 1.0 - _c1.a), amount);`
+},
 {
   name: 'modulate',
   type: 'combineCoord',
