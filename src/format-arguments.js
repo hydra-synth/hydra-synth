@@ -126,6 +126,9 @@ export default function formatArguments(transform, startIndex, synthContext) {
       } else if (input.type === 'sampler2D') {
         // typedArg.tex = typedArg.value
         var x = typedArg.value
+        if (!x || typeof x.getTexture !== 'function') {
+          throw new Error(`${transform.name}() expects a texture source (such as s0 or o0) for argument "${input.name}", but received ${x}`)
+        }
         typedArg.value = () => (x.getTexture())
         typedArg.isUniform = true
       } else {
