@@ -9,6 +9,7 @@ import ArrayUtils from './lib/array-utils.js'
 // import strudel from './lib/strudel.js'
 import Sandbox from './eval-sandbox.js'
 import Generator from './generator-factory.js'
+import { setDebug, debugLog } from './lib/log.js'
 import regl from 'regl'
 // const window = global.window
 
@@ -30,8 +31,11 @@ class HydraRenderer {
     enableStreamCapture = true,
     canvas,
     precision,
-    extendTransforms = {} // add your own functions on init
+    extendTransforms = {}, // add your own functions on init
+    debug = false // enable non-error console logging
   } = {}) {
+
+    setDebug(debug)
 
     ArrayUtils.init()
 
@@ -153,7 +157,7 @@ class HydraRenderer {
    const p = new Promise((res, rej) => {
      var script = document.createElement("script");
      script.onload = function () {
-       console.log(`loaded script ${url}`);
+       debugLog(`loaded script ${url}`);
        res();
      };
      script.onerror = (err) => {
@@ -174,7 +178,7 @@ class HydraRenderer {
     this.height = height // ?
     this.sandbox.set('width', width)
     this.sandbox.set('height', height)
-    console.log(this.width)
+    debugLog(this.width)
     this.o.forEach((output) => {
       output.resize(width, height)
     })
@@ -182,7 +186,7 @@ class HydraRenderer {
       source.resize(width, height)
     })
     this.regl._refresh()
-     console.log(this.canvas.width)
+     debugLog(this.canvas.width)
   }
 
   canvasToImage (callback) {
@@ -199,7 +203,7 @@ class HydraRenderer {
           delete self.imageCallback
         } else {
           a.href = URL.createObjectURL(blob)
-          console.log(a.href)
+          debugLog(a.href)
           a.click()
         }
     }, 'image/png')

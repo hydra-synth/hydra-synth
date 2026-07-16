@@ -74,6 +74,8 @@ If `opts` is specified, the default options (shown below) will be overridden.
   precision: null  // force precision of shaders, can be 'highp', 'mediump', or 'lowp' (recommended for ios). When no precision is specified, will use highp for ios, and mediump for everything else.
 
   pb = null, // instance of rtc-patch-bay to use for streaming
+
+  debug: false, // if true, logs internal details (such as resolution changes and loaded scripts) to the console. Errors are always logged
 }
 
 ```

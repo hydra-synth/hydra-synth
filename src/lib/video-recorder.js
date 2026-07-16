@@ -1,3 +1,5 @@
+import { debugLog } from './log.js'
+
 class VideoRecorder {
   constructor(stream) {
     this.mediaSource = new MediaSource()
@@ -10,9 +12,9 @@ class VideoRecorder {
 
     let self = this
     this.mediaSource.addEventListener('sourceopen', () => {
-      console.log('MediaSource opened');
+      debugLog('MediaSource opened');
       self.sourceBuffer = self.mediaSource.addSourceBuffer('video/webm; codecs="vp8"');
-      console.log('Source buffer: ', sourceBuffer);
+      debugLog('Source buffer: ', self.sourceBuffer);
     })
   }
 
@@ -44,11 +46,11 @@ class VideoRecorder {
        }
      }
    }
-   console.log('Created MediaRecorder', this.mediaRecorder, 'with options', options);
+   debugLog('Created MediaRecorder', this.mediaRecorder, 'with options', options);
    this.mediaRecorder.onstop = this._handleStop.bind(this)
    this.mediaRecorder.ondataavailable = this._handleDataAvailable.bind(this)
    this.mediaRecorder.start(100) // collect 100ms of data
-   console.log('MediaRecorder started', this.mediaRecorder)
+   debugLog('MediaRecorder started', this.mediaRecorder)
  }
 
   
