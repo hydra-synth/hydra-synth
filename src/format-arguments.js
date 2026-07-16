@@ -58,6 +58,11 @@ export default function formatArguments(transform, startIndex, synthContext) {
     if (userArgs.length > index) {
       typedArg.value = userArgs[index]
 
+      if (typeof typedArg.value === 'function' && typedArg.value.isHydraFunction) {
+        const name = typedArg.value.hydraFunctionName
+        throw new Error(`${transform.name}() received the hydra function ${name} without parentheses for argument "${input.name}" - did you mean ${name}()?`)
+      }
+
       if (typedArg.type === 'vec4') {
         if (!(typedArg.value.type === "GlslSource" || typedArg.value.getTexture)) {
           throw new Error("Arguments must be a texture or GlslSource")
