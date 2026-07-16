@@ -71,7 +71,7 @@ If `opts` is specified, the default options (shown below) will be overridden.
 
   extendTransforms: [] // An array of transforms to be added to the synth, or an object representing a single transform
 
-  precision: null  // force precision of shaders, can be 'highp', 'mediump', or 'lowp' (recommended for ios). When no precision is specified, will use highp for ios, and mediump for everything else.
+  precision: null  // force precision of shaders, can be 'highp', 'mediump', or 'lowp'. When no precision is specified, will use highp if the context supports it in fragment shaders, and mediump otherwise.
 
   pb = null, // instance of rtc-patch-bay to use for streaming
 
