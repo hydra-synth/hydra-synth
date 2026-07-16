@@ -88,6 +88,19 @@ export default {
   },
 
 
+  // Generalized Porter-Duff compositing: result = src*srcFactor + dst*dstFactor,
+  // computed with premultiplied alpha as the operators require, while inputs and
+  // output use straight alpha like the rest of hydra.
+  _composite: {
+    type: 'util',
+    glsl: `vec4 _composite(vec4 src, vec4 dst, float srcFactor, float dstFactor){
+      vec4 s = vec4(src.rgb * src.a, src.a);
+      vec4 d = vec4(dst.rgb * dst.a, dst.a);
+      vec4 result = s * srcFactor + d * dstFactor;
+      result.rgb /= max(result.a, 1.0e-10);
+      return result;
+    }`
+  },
   _rgbToHsv: {
     type: 'util',
     glsl: `vec3 _rgbToHsv(vec3 c){
