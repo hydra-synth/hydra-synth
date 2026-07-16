@@ -1020,15 +1020,15 @@ export default () => [
     {
       type: 'vec4',
       name: 'scale',
-      default: 1,
+      default: [1, 1, 1, 1],
     }
   ],
   glsl:
-`   vec4 v = _c0 * s;
-   return v.r + v.g + v.b + v.a;
+`   vec4 v = _c0 * scale;
+   return vec4(vec3(v.r + v.g + v.b + v.a), _c0.a);
    }
-   float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is not overloaded
-   vec2 v = _st.xy * s.xy;
+   float sum(vec2 _st, vec4 scale) { // vec4 is not a typo, because argument type is not overloaded
+   vec2 v = _st.xy * scale.xy;
    return v.x + v.y;`
 },
 {
