@@ -29,7 +29,6 @@ const ensure_decimal_dot = (val) => {
 }
 
 
-
 export default function formatArguments(transform, startIndex, synthContext) {
   const defaultArgs = transform.transform.inputs
   const userArgs = transform.userArgs
@@ -58,6 +57,10 @@ export default function formatArguments(transform, startIndex, synthContext) {
     if (userArgs.length > index) {
       typedArg.value = userArgs[index]
 
+      if (typeof typedArg.value === 'function' && typedArg.value.isHydraFunction) {
+        const name = typedArg.value.hydraFunctionName
+        throw new Error(`${transform.name}() received the hydra function ${name} without parentheses for argument "${input.name}" - did you mean ${name}()?`)
+      }
       // numeric arrays are valid vec4 values (issue #204), everything else
       // non-texture is rejected
       const isNumericArray = Array.isArray(typedArg.value) && typedArg.value.every((value) => typeof value === 'number')
@@ -130,6 +133,9 @@ export default function formatArguments(transform, startIndex, synthContext) {
       } else if (input.type === 'sampler2D') {
         // typedArg.tex = typedArg.value
         var x = typedArg.value
+        if (!x || typeof x.getTexture !== 'function') {
+          throw new Error(`${transform.name}() expects a texture source (such as s0 or o0) for argument "${input.name}", but received ${x}`)
+        }
         typedArg.value = () => (x.getTexture())
         typedArg.isUniform = true
       } else {
@@ -152,4 +158,3 @@ export default function formatArguments(transform, startIndex, synthContext) {
     return typedArg
   })
 }
-

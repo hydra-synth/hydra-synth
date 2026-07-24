@@ -1,5 +1,6 @@
 import Webcam from './lib/webcam.js'
 import Screen from './lib/screenmedia.js'
+import { debugLog } from './lib/log.js'
 
 class HydraSource {
   constructor ({ regl, width, height, pb, label = ""}) {
@@ -136,7 +137,7 @@ class HydraSource {
     //  console.log(this.src, this.tex.width, this.tex.height)
     if (this.src && this.dynamic === true) {
       if (this.src.videoWidth && this.src.videoWidth !== this.tex.width) {
-        console.log(
+        debugLog(
           this.src.videoWidth,
           this.src.videoHeight,
           this.tex.width,
